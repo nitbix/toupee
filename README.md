@@ -1,3 +1,4 @@
 # toupee
-A library for Deep Learning Ensembles
-Based on Theano/numpy/scipy
+A library for Deep Learning Ensembles, based on Theano/numpy/scipy.
+
+Originally derived from a precursor of PDNN by Yajie Miao.
