@@ -67,39 +67,37 @@ class MLP(object):
         """
 
         self.hiddenLayers = []
-        chain_n_in = params.n_in
-        chain_input_shape = None
-        chain_in = input
+        self.chain_n_in = params.n_in
+        self.chain_input_shape = None
+        self.chain_in = input
         prev_dim = None
         self.params = params
         self.rng = rng
-
-
         layer_number = 0
-        for layer_type,desc in params.n_hidden:
+
+        def make_layer(layer_type,desc):
             if(layer_type == 'flat'):
-                #TODO: Activations aren't read in as objects as of yet
                 n_this,drop_this,name_this,activation_this = desc
-                l = layers.FlatLayer(rng=rng, inputs=chain_in.flatten(ndim=2),
-                                n_in=numpy.prod(chain_n_in), n_out=numpy.prod(n_this),
+                l = layers.FlatLayer(rng=rng, inputs=self.chain_in.flatten(ndim=2),
+                                n_in=numpy.prod(self.chain_n_in), n_out=numpy.prod(n_this),
                                 activation=activation_this,dropout_rate=drop_this,
                                 layer_name=name_this)
-                chain_n_in = n_this
-                l.output_shape = chain_n_in
-                chain_in=l.output
-                self.hiddenLayers.append(l)
+                self.chain_n_in = n_this
+                l.output_shape = self.chain_n_in
+                self.chain_in=l.output
+                return l
             elif(layer_type == 'conv'):
                 input_shape,filter_shape,pool_size,drop_this,name_this,activation_this,pooling = desc
                 if input_shape is None:
-                    if chain_input_shape is None:
+                    if self.chain_input_shape is None:
                         raise Exception("must specify first input shape")
-                    input_shape = chain_input_shape
+                    input_shape = self.chain_input_shape
                 else:
-                    chain_input_shape = input_shape
+                    self.chain_input_shape = input_shape
                 if prev_dim is None:
                     prev_dim = (input_shape[1],input_shape[2],input_shape[3])
                 l = layers.ConvolutionalLayer(rng=rng,
-                                       inputs=chain_in, 
+                                       inputs=self.chain_in, 
                                        input_shape=input_shape, 
                                        filter_shape=filter_shape,
                                        pool_size=pool_size,
@@ -111,53 +109,113 @@ class MLP(object):
                 curr_map_number = filter_shape[0]
                 output_dim_x = (dim_x - filter_shape[2] + 1) / pool_size[0]
                 output_dim_y = (dim_y - filter_shape[3] + 1) / pool_size[1]
-                chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
-                l.output_shape = chain_n_in
+                self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
+                l.output_shape = self.chain_n_in
                 prev_dim = (curr_map_number,output_dim_x,output_dim_y)
-                chain_in = l.output
-                chain_input_shape = [chain_input_shape[0],
+                self.chain_in = l.output
+                self.chain_input_shape = [self.chain_input_shape[0],
                         curr_map_number,
                         output_dim_x,
                         output_dim_y]
-                self.hiddenLayers.append(l)
+                return l
 
-            def pretrain(pretraining_set,supervised = False):
-                if(supervised):
+        for layer_type,desc in params.n_hidden:
+            l = make_layer(layer_type,desc)
+            self.hiddenLayers.append(l)
+
+            def pretrain(pretraining_set,supervised = False, reverse = False):
+                self.backup_first = None
+                if reverse:
                     pretraining_set_x, pretraining_set_y = pretraining_set
-                    x_pretraining = x
-                    y_pretraining = y
-                    self.make_top_layer(self.params.n_out,chain_in,chain_n_in,rng)
-                else:
-                    pretraining_set_x = pretraining_set
-                    pretraining_set_y = pretraining_set
-                    ptylen = pretraining_set.get_value(borrow=True).shape[1]
+                    pretraining_set_y = sharedX(
+                            data.one_hot(pretraining_set_y.eval()))
                     x_pretraining = x
                     y_pretraining = T.matrix('y_pretraining')
-                    self.make_top_layer(ptylen, chain_in, chain_n_in, rng,
-                            'flat', activation_this)
-                ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
-                n_batches =  ptxlen / self.params.batch_size
-                train_model = self.train_function(index, pretraining_set_x,
-                    pretraining_set_y, x_pretraining, y_pretraining)
-                for p in range(self.params.pretraining_passes):
-                    print "... pretraining layer {0}, pass {1}".format(layer_number,p)
-                    for minibatch_index in xrange(n_batches):
-                        #print "...... minibatch {0} / {1}".format(minibatch_index,n_batches)
-                        minibatch_avg_cost = train_model(minibatch_index,1)
+                    reversedLayers = []
+                    self.chain_in_back = self.chain_in
+                    self.chain_n_in_back = self.chain_n_in
+                    self.chain_in = y_pretraining
+                    self.chain_n_in = self.params.n_out
+                    backup = self.hiddenLayers
+                    for layer_type,desc in reversed(params.n_hidden):
+                        l = make_layer(layer_type,desc)
+                        reversedLayers.append(l)
+                    self.hiddenLayers = reversedLayers
+
+#                    first = layers.FlatLayer(rng=rng,
+#                                inputs=y_pretraining.flatten(ndim=2),
+#                                n_in=self.params.n_out,
+#                                n_out=chain_n_out,
+#                                activation=self.hiddenLayers[0].activation,
+#                                dropout_rate=self.hiddenLayers[0].dropout_rate,
+#                                layer_name=self.hiddenLayers[0].layer_name + '_rev')
+#                    backup_first = copy.copy(self.hiddenLayers[0])
+#                    self.hiddenLayers[0] = first
+#                    rt_chain_in = first.output
+#                    for l in self.hiddenLayers[1:]:
+#                        l.inputs = rt_chain_in
+#                        l.rejoin()
+#                        rt_chain_in = l.output
+#                    rt_chain_n_in = self.hiddenLayers[-1].n_out
+                    self.make_top_layer(self.params.n_in, self.chain_in,
+                            self.chain_n_in, rng, 'flat',
+                            reversedLayers[0].activation)
+                    train_model = self.train_function(index, pretraining_set_y,
+                        pretraining_set_x, y_pretraining, x_pretraining)
+                    ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
+                    n_batches =  ptxlen / self.params.batch_size
+                    for p in range(self.params.pretraining_passes):
+                        print "... reverse training layer {0}, pass {1}".format(layer_number,p)
+                        for minibatch_index in xrange(n_batches):
+                            minibatch_avg_cost = train_model(minibatch_index,1)
+                    self.hiddenLayers = backup
+                    self.chain_in= self.chain_in_back 
+                    self.chain_n_in= self.chain_n_in_back 
+                    for i,l in enumerate(self.hiddenLayers):
+                        l.W = reversedLayers[i].W
+                    rt_chain_in = input
+                    for l in self.hiddenLayers:
+                        l.inputs = rt_chain_in
+                        l.rejoin()
+                        rt_chain_in = l.output
+                else:
+                    if(supervised):
+                        pretraining_set_x, pretraining_set_y = pretraining_set
+                        x_pretraining = x
+                        y_pretraining = y
+                        self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
+                    else:
+                        pretraining_set_x = pretraining_set
+                        pretraining_set_y = pretraining_set
+                        ptylen = pretraining_set.get_value(borrow=True).shape[1]
+                        x_pretraining = x
+                        y_pretraining = T.matrix('y_pretraining')
+                        self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, rng,
+                                'flat', activation_this)
+                    train_model = self.train_function(index, pretraining_set_x,
+                        pretraining_set_y, x_pretraining, y_pretraining)
+                    ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
+                    n_batches =  ptxlen / self.params.batch_size
+                    for p in range(self.params.pretraining_passes):
+                        print "... pretraining layer {0}, pass {1}".format(layer_number,p)
+                        for minibatch_index in xrange(n_batches):
+                            minibatch_avg_cost = train_model(minibatch_index,1)
 
             if pretraining_set is not None:
+                mode = params.pretraining
+                reverse = mode == 'reverse'
                 if not isinstance(pretraining_set,tuple):
                     #unsupervised
-                    pretrain(pretraining_set,False)
+                    pretrain(pretraining_set,False,reverse)
                 elif len(pretraining_set) == 2:
                     #supervised
-                    pretrain(pretraining_set,True)
+                    pretrain(pretraining_set,True,reverse)
                 elif len(pretraining_set) == 3:
                     #both
-                    pretrain(pretraining_set[2],False)
+                    pretrain(pretraining_set[2],False,reverse)
                     pretrain((pretraining_set[0],pretraining_set[1]),True)
             layer_number += 1
-        self.make_top_layer(self.params.n_out,chain_in,chain_n_in,rng)
+        self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
 
     def make_top_layer(self, n_out, chain_in, chain_n_in, rng, layer_type='log', 
             activation=None, name_this='temp_top'):
@@ -170,7 +228,7 @@ class MLP(object):
                 input=chain_in.flatten(ndim=2),
                 n_in=numpy.prod(chain_n_in),
                 n_out=n_out)
-            self.negative_log_likelihood = self.logRegressionLayer.negative_log_likelihood
+            self.cost_function = self.params.cost_function
             self.p_y_given_x = self.logRegressionLayer.p_y_given_x
             self.errors = self.logRegressionLayer.errors
             self.y_pred = self.logRegressionLayer.y_pred
@@ -180,7 +238,7 @@ class MLP(object):
                 n_in=numpy.prod(chain_n_in), n_out=n_out,
                 activation=activation,dropout_rate=0,
                 layer_name=name_this)
-            self.negative_log_likelihood = self.logRegressionLayer.MSE
+            self.cost_function = cost_functions.MSE()
 
         self.L1 = sum([abs(hiddenLayer.W).sum()
                     for hiddenLayer in self.hiddenLayers]) \
@@ -188,8 +246,6 @@ class MLP(object):
         self.L2_sqr = sum([(hiddenLayer.W ** 2).sum() for hiddenLayer in
                         self.hiddenLayers]) \
                     + (self.logRegressionLayer.W ** 2).sum()
-
-
         p = self.logRegressionLayer.params
         for hiddenLayer in self.hiddenLayers:
             p += hiddenLayer.params
@@ -203,7 +259,7 @@ class MLP(object):
                 y: eval_set_y[index * self.params.batch_size:(index + 1) * self.params.batch_size]})
 
     def train_function(self, index, train_set_x, train_set_y, x, y):
-        self.cost = self.negative_log_likelihood(y) \
+        self.cost = self.cost_function(self.logRegressionLayer,y) \
              + self.params.L1_reg * self.L1 \
              + self.params.L2_reg * self.L2_sqr
         gparams = []
@@ -224,11 +280,6 @@ class MLP(object):
                 include_prob = 1.
             mask = theano_rng.binomial(p=include_prob,
                                        size=param.shape,dtype=param.dtype)    
-            try:
-                scipy.misc.imsave('dropoutmask-{0}.jpg'.format(param),mask.eval()
-                        * 256)
-            except:
-                pass
             new_update = self.params.update_rule(param, self.params.learning_rate, gparam, mask, updates,
                     self.cost,previous_cost)
             updates.append((param, new_update))
@@ -240,7 +291,8 @@ class MLP(object):
                     x: train_set_x[index * self.params.batch_size:(index + 1) *
                         self.params.batch_size],
                     y: train_set_y[index * self.params.batch_size:(index + 1) *
-                        self.params.batch_size]})
+                        self.params.batch_size]
+                })
 
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     train_set_x, train_set_y = dataset[0]
