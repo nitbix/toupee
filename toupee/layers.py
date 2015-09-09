@@ -22,13 +22,14 @@ class Layer:
         self.inputs = inputs
         self.dropout_rate=dropout_rate
         self.layer_name=layer_name
+        self.activation = activation
 
         if W is None:
             W_values = numpy.asarray(rng.uniform(
                     low=-numpy.sqrt(6. / (n_in + n_out)),
                     high=numpy.sqrt(6. / (n_in + n_out)),
                     size=(n_in, n_out)), dtype=theano.config.floatX)
-            if activation == theano.tensor.nnet.sigmoid:
+            if self.activation == theano.tensor.nnet.sigmoid:
                 W_values *= 4
             W = theano.shared(value=W_values, name=layer_name + '_W', borrow=True)
 
@@ -38,23 +39,14 @@ class Layer:
 
         self.W = W
         self.b = b
-        self.y = T.dot(inputs, self.W) + self.b
+        self.n_in = n_in
+        self.n_out = n_out
+        self.y = T.dot(self.inputs, self.W) + self.b
         self.params = [self.W, self.b]
 
-    def MSE(self, y):
-        """Return a float representing the number of errors in the minibatch
-        over the total number of examples of the minibatch ; zero one
-        loss over the size of the minibatch
-
-        :type y: theano.tensor.TensorType
-        :param y: corresponds to a vector that gives for each example the
-                  correct label
-        """
-
-        if y.ndim != self.y.ndim:
-            raise TypeError('y should have the same shape as self.y',
-                ('y', y.type, 'y_pred', self.y.type))
-        return T.mean((self.y - y) ** 2)
+    def rejoin(self):
+        self.y = T.dot(self.inputs, self.W) + self.b
+        self.params = [self.W, self.b]
 
 class FlatLayer(Layer):
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
@@ -100,6 +92,12 @@ class FlatLayer(Layer):
         self.output = (lin_output if activation is None
                        else activation(lin_output))
         # parameters of the model
+
+    def rejoin(self):
+        Layer.rejoin(self)
+        lin_output = T.dot(self.inputs, self.W) * (1 - self.dropout_rate) + self.b
+        self.output = (lin_output if self.activation is None
+                       else self.activation(lin_output))
 
 class ConvolutionalLayer(Layer):
     """
