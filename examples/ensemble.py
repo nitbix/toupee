@@ -1,4 +1,15 @@
 #!/usr/bin/python
+"""
+Run a MLP experiment from a yaml file
+
+Alan Mosca
+Department of Computer Science and Information Systems
+Birkbeck, University of London
+
+All code released under GPLv2.0 licensing.
+"""
+__docformat__ = 'restructedtext en'
+
 
 import gc
 import sys
