@@ -33,38 +33,13 @@ import config
 import cost_functions
 
 class MLP(object):
-    """Multi-Layer Perceptron Class
-
-    A multilayer perceptron is a feedforward artificial neural network model
-    that has one layer or more of hidden units and nonlinear activations.
-    Intermediate layers usually have as activation function tanh or the
-    sigmoid function (defined here by a ``HiddenLayer`` class)  while the
-    top layer is a softamx layer (defined here by a ``LogisticRegression``
-    class).
+    """
+    Multi-Layer Perceptron (or any other kind of ANN if the layers exist)
     """
 
     def __init__(self, params, rng, input, index, x, y, pretraining_set = None):
-        """Initialize the parameters for the multilayer perceptron
-
-        :type rng: numpy.random.RandomState
-        :param rng: a random number generator used to initialize weights
-
-        :type input: theano.tensor.TensorType
-        :param input: symbolic variable that describes the input of the
-        architecture (one minibatch)
-
-        :type n_in: int
-        :param n_in: number of input units, the dimension of the space in
-        which the datapoints lie
-
-        :type n_hidden: (int,int) array
-        :param n_hidden: number of hidden units and dropout rate for each hidden
-        layer
-
-        :type n_out: int
-        :param n_out: number of output units, the dimension of the space in
-        which the labels lie
-
+        """
+        Initialize the parameters for the multilayer perceptron
         """
 
         self.hiddenLayers = []
@@ -142,22 +117,6 @@ class MLP(object):
                         l = make_layer(layer_type,desc)
                         reversedLayers.append(l)
                     self.hiddenLayers = reversedLayers
-
-#                    first = layers.FlatLayer(rng=rng,
-#                                inputs=y_pretraining.flatten(ndim=2),
-#                                n_in=self.params.n_out,
-#                                n_out=chain_n_out,
-#                                activation=self.hiddenLayers[0].activation,
-#                                dropout_rate=self.hiddenLayers[0].dropout_rate,
-#                                layer_name=self.hiddenLayers[0].layer_name + '_rev')
-#                    backup_first = copy.copy(self.hiddenLayers[0])
-#                    self.hiddenLayers[0] = first
-#                    rt_chain_in = first.output
-#                    for l in self.hiddenLayers[1:]:
-#                        l.inputs = rt_chain_in
-#                        l.rejoin()
-#                        rt_chain_in = l.output
-#                    rt_chain_n_in = self.hiddenLayers[-1].n_out
                     self.make_top_layer(self.params.n_in, self.chain_in,
                             self.chain_n_in, rng, 'flat',
                             reversedLayers[0].activation)
