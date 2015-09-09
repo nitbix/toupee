@@ -19,16 +19,16 @@ class CostFunction(yaml.YAMLObject):
 
 class CrossEntropy(CostFunction):
     yaml_tag = u'!CrossEntropy'
-    def __call__(self,model, y):
+    def __call__(self,model,y):
         """
-        Return the mean of the negative log-likelihood of the prediction
+        Return the categorical cross-entropy of the prediction
         of this model under a given target distribution.
         """
-        return T.nnet.binary_crossentropy(y,model.y)
+        return T.nnet.categorical_crossentropy(model.p_y_given_x,y).mean()
 
 class NegLogLikelihood(CostFunction):
     yaml_tag = u'!NegLogLikelihood'
-    def __call__(self,model, y):
+    def __call__(self,model,y):
         """
         Return the mean of the negative log-likelihood of the prediction
         of this model under a given target distribution.
