@@ -28,7 +28,23 @@ class SGD(UpdateRule):
 
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
-        return param - learning_rate * gparam * mask
+        if 'momentum' not in self.__dict__:
+            self.momentum = sharedX(0.)
+        if 'linear_decay' not in self.__dict__:
+            self.linear_decay = {'stop': sharedX(0.),
+                                 'start': sharedX(learning_rate),
+                                 'steps': sharedX(1.)}
+        self.velocity = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
+        self.current_step = sharedX(1,'current_step')
+        epsilon = self.linear_decay['start'] + (
+                   (self.linear_decay['start'] - self.linear_decay['stop']) /
+                    self.linear_decay['steps']
+                  ) * T.clip(self.current_step,1,self.linear_decay['steps'])
+        velocity = (self.velocity * self.momentum -
+                                  epsilon * gparam * mask)
+        updates.append((self.velocity,velocity))
+        updates.append((self.current_step,self.current_step + 1))
+        return param - velocity
 
 class RPropVariant(UpdateRule):
 
