@@ -30,6 +30,7 @@ from data import Resampler, Transformer, sharedX
 import update_rules
 import layers
 import config 
+import cost_functions
 
 class MLP(object):
     """Multi-Layer Perceptron Class

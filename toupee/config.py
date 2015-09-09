@@ -13,6 +13,7 @@ import activations
 import update_rules
 import ensemble_methods
 import parameters
+import cost_functions
 
 def load_parameters(filename):
     with open(filename) as f:

@@ -14,12 +14,12 @@ import yaml
 
 class CostFunction(yaml.YAMLObject):
 
-    def __call__(model,y):
+    def __call__(self,model,y):
         raise NotImplementedError()
 
 class CrossEntropy(CostFunction):
     yaml_tag = u'!CrossEntropy'
-    def __call__(model, y):
+    def __call__(self,model, y):
         """
         Return the mean of the negative log-likelihood of the prediction
         of this model under a given target distribution.
@@ -28,7 +28,7 @@ class CrossEntropy(CostFunction):
 
 class NegLogLikelihood(CostFunction):
     yaml_tag = u'!NegLogLikelihood'
-    def __call__(model, y):
+    def __call__(self,model, y):
         """
         Return the mean of the negative log-likelihood of the prediction
         of this model under a given target distribution.
@@ -37,7 +37,7 @@ class NegLogLikelihood(CostFunction):
 
 class MSE(CostFunction):
     yaml_tag = u'!MSE'
-    def __call__(model,y):
+    def __call__(self,model,y):
         """
         Return the mean squared error
         """
