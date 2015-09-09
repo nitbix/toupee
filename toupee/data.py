@@ -105,7 +105,7 @@ def make_pretraining_set(datasets,mode):
     pretraining_set = None
     if mode == 'unsupervised':
         pretraining_set = datasets[0][0]
-    elif mode == 'supervised':
+    elif mode == 'supervised' or mode == 'reverse':
         pretraining_set = datasets[0]
     elif mode == 'both':
         pretraining_set = (datasets[0][0],datasets[0][1],datasets[0][0])
@@ -275,3 +275,8 @@ class Transformer:
         aggregate_train = t.get_data()
         aggregate_valid = (aggregate_x, aggregate_y)
         return (aggregate_train,aggregate_valid,test)
+
+def one_hot(dataset):
+    b = np.zeros((dataset.size, dataset.max()+1),dtype=theano.config.floatX)
+    b[np.arange(dataset.size), dataset] = 1.
+    return b
