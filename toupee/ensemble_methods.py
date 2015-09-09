@@ -239,7 +239,10 @@ class Stacking(EnsembleMethod):
 
     def create_aggregator(self,members,x,y,train_set,valid_set):
         self.main_params = self.params
-        self.random_seed = self.params.random_seed
+        if 'random_seed' not in self.__dict__:
+            self.random_seed = self.params.random_seed
+        if 'cost_function' not in self.__dict__:
+            self.cost_function = self.params.cost_function
         return StackingRunner(members,x,y,train_set,valid_set,
                 Parameters(**self.__dict__))
 
@@ -268,7 +271,10 @@ class DropStacking(Stacking):
 
     def create_aggregator(self,params,members,x,y,train_set,valid_set):
         self.main_params = params
-        self.random_seed = params.random_seed
+        if 'random_seed' not in self.__dict__:
+            self.random_seed = self.params.random_seed
+        if 'cost_function' not in self.__dict__:
+            self.cost_function = self.params.cost_function
         return DropStackingRunner(members,x,y,train_set,valid_set,
                 Parameters(**self.__dict__))
 
