@@ -4,7 +4,7 @@ Alan Mosca
 Department of Computer Science and Information Systems
 Birkbeck, University of London
 
-All code released under GPLv2.0 licensing.
+All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
