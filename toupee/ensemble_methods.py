@@ -151,7 +151,7 @@ class EnsembleMethod(yaml.YAMLObject):
     def create_member(self,params,x,y,train_set,valid_set):
         raise NotImplementedException()
 
-    def prepare(self, dataset):
+    def prepare(self, params, dataset):
         raise NotImplementedException()
 
 
