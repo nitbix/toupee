@@ -43,7 +43,8 @@ class LinearDecayLearningRate(LearningRate):
         if 'current_epoch' not in self.__dict__:
             self.current_epoch = sharedX(1.)
         epoch = self.current_epoch + 1
-        new_rate = self.start + ((self.stop - self.start) / self.steps) * min(epoch,self.steps)
+        new_rate = (self.start + ((self.stop - self.start) / self.steps) *
+                    T.clip(epoch,1,self.steps))
         updates.append((self.current_rate,new_rate))
         updates.append((self.current_epoch,epoch))
 
