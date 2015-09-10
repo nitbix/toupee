@@ -14,6 +14,39 @@ import theano.tensor as T
 import yaml
 from data import sharedX
 
+class LearningRate(yaml.YAMLObject):
+
+    def get(self):
+        raise NotImplementedError()
+
+    def epoch_hook(self):
+        raise NotImplementedError()
+
+class FixedLearningRate(LearningRate):
+
+    yaml_tag = u'!FixedLearningRate'
+    def get(self):
+        return self.rate
+
+    def epoch_hook(self,updates):
+        pass
+
+class LinearDecayLearningRate(LearningRate):
+
+    yaml_tag = u'!LinearDecayLearningRate'
+    def get(self):
+        if 'current_rate' not in self.__dict__:
+            self.current_rate = sharedX(self.start,borrow=True)
+        return self.current_rate
+
+    def epoch_hook(self,updates):
+        if 'current_epoch' not in self.__dict__:
+            self.current_epoch = sharedX(1.)
+        epoch = self.current_epoch + 1
+        new_rate = self.start + ((self.stop - self.start) / self.steps) * min(epoch,self.steps)
+        updates.append((self.current_rate,new_rate))
+        updates.append((self.current_epoch,epoch))
+
 class UpdateRule(yaml.YAMLObject):
 
     def __call__(self, param, learning_rate, gparam, mask, updates,
@@ -30,20 +63,9 @@ class SGD(UpdateRule):
                  current_cost, previous_cost):
         if 'momentum' not in self.__dict__:
             self.momentum = sharedX(0.)
-        if 'linear_decay' not in self.__dict__:
-            self.linear_decay = {'stop': sharedX(learning_rate),
-                                 'start': sharedX(learning_rate),
-                                 'steps': sharedX(1.)}
         self.velocity = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
-        self.current_step = sharedX(1,'current_step')
-        epsilon = self.linear_decay['start'] + (
-                   (self.linear_decay['stop'] - self.linear_decay['start']) /
-                    self.linear_decay['steps']
-                  ) * T.clip(self.current_step,1,self.linear_decay['steps'])
-        velocity = (self.velocity * self.momentum -
-                                  epsilon * gparam)
+        velocity = (self.velocity * self.momentum - learning_rate.get() * gparam)
         updates.append((self.velocity,velocity))
-        updates.append((self.current_step,self.current_step + 1))
         return param + velocity * mask
 
 class RPropVariant(UpdateRule):
@@ -71,7 +93,7 @@ class OldRProp(RPropVariant):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(learning_rate * numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(learning_rate.get() * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
@@ -127,7 +149,7 @@ class RProp(RPropVariant):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(learning_rate * numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(learning_rate.get() * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
@@ -194,7 +216,7 @@ class iRProp(RPropVariant):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(learning_rate * numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(learning_rate.get() * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
