@@ -151,7 +151,7 @@ class MLP(object):
                         x_pretraining = x
                         y_pretraining = T.matrix('y_pretraining')
                         self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, rng,
-                                'flat', activation_this)
+                                'flat', self.hiddenLayers[0].activation)
                     train_model = self.train_function(index, pretraining_set_x,
                         pretraining_set_y, x_pretraining, y_pretraining)
                     ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
