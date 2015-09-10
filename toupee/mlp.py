@@ -255,6 +255,14 @@ class MLP(object):
                 })
 
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
+    global patience
+    global classifier
+    global best_iter
+    global best_classifier
+    global epoch
+    global best_validation_loss
+    global test_score
+    global previous_minibatch_avg_cost
     train_set_x, train_set_y = dataset[0]
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
@@ -310,48 +318,64 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     epoch = 0
     done_looping = False
     previous_minibatch_avg_cost = 1
+    def run_hooks():
+        updates = []
+        params.learning_rate.epoch_hook(updates)
+        one = sharedX(1.)
+        f = theano.function(inputs=[],
+                outputs=one,
+                on_unused_input='warn',
+                updates=updates,)
+        f()
+
+    def run_epoch():
+        global patience
+        global classifier
+        global best_iter
+        global best_classifier
+        global epoch
+        global best_validation_loss
+        global test_score
+        global previous_minibatch_avg_cost
+        for minibatch_index in xrange(n_train_batches):
+            minibatch_avg_cost = train_model(minibatch_index,previous_minibatch_avg_cost)
+            iter = (epoch - 1) * n_train_batches + minibatch_index
+            if (iter + 1) % validation_frequency == 0:
+                validation_losses = [validate_model(i) for i
+                                     in xrange(n_valid_batches)]
+                this_validation_loss = numpy.mean(validation_losses)
+                print('epoch %i, minibatch %i/%i, validation error %f %%' %
+                     (epoch, minibatch_index + 1, n_train_batches,
+                      this_validation_loss * 100.))
+                if this_validation_loss < best_validation_loss:
+                    if this_validation_loss < best_validation_loss *  \
+                           improvement_threshold:
+                        patience = max(patience, iter * patience_increase)
+                    best_validation_loss = this_validation_loss
+                    best_iter = iter
+                    best_classifier = copy.copy(classifier)
+                    # test it on the test set
+                    if test_model is not None:
+                        test_losses = [test_model(i) for i
+                                       in xrange(n_test_batches)]
+                        test_score = numpy.mean(test_losses)
+
+                        print(('     epoch %i, minibatch %i/%i, test error of '
+                               'best model %f %%') %
+                              (epoch, minibatch_index + 1, n_train_batches,
+                               test_score * 100.))
+            if patience <= iter:
+                    print('finished patience')
+                    done_looping = True
+                    break
+        run_hooks()
+
     if params.training_method == 'normal':
         train_model, validate_model, test_model = make_models(classifier)
         while (epoch < params.n_epochs) and (not done_looping):
             epoch += 1
-            for minibatch_index in xrange(n_train_batches):
+            run_epoch()
 
-                minibatch_avg_cost = train_model(minibatch_index,previous_minibatch_avg_cost)
-                iter = (epoch - 1) * n_train_batches + minibatch_index
-
-                if (iter + 1) % validation_frequency == 0:
-                    validation_losses = [validate_model(i) for i
-                                         in xrange(n_valid_batches)]
-                    this_validation_loss = numpy.mean(validation_losses)
-
-                    print('epoch %i, minibatch %i/%i, validation error %f %%' %
-                         (epoch, minibatch_index + 1, n_train_batches,
-                          this_validation_loss * 100.))
-
-                    if this_validation_loss < best_validation_loss:
-                        if this_validation_loss < best_validation_loss *  \
-                               improvement_threshold:
-                            patience = max(patience, iter * patience_increase)
-
-                        best_validation_loss = this_validation_loss
-                        best_iter = iter
-                        best_classifier = copy.copy(classifier)
-
-                        # test it on the test set
-                        if test_model is not None:
-                            test_losses = [test_model(i) for i
-                                           in xrange(n_test_batches)]
-                            test_score = numpy.mean(test_losses)
-
-                            print(('     epoch %i, minibatch %i/%i, test error of '
-                                   'best model %f %%') %
-                                  (epoch, minibatch_index + 1, n_train_batches,
-                                   test_score * 100.))
-
-                if patience <= iter:
-                        print('finished patience')
-                        done_looping = True
-                        break
     elif params.training_method == 'greedy':
         all_layers = classifier.hiddenLayers
         for l in xrange(len(all_layers)):
@@ -368,44 +392,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             train_model, validate_model, test_model = make_models(classifier)
             while (epoch < params.n_epochs) and (not done_looping):
                 epoch = epoch + 1
-                for minibatch_index in xrange(n_train_batches):
-
-                    minibatch_avg_cost = train_model(minibatch_index,previous_minibatch_avg_cost)
-                    iter = (epoch - 1) * n_train_batches + minibatch_index
-
-                    if (iter + 1) % validation_frequency == 0:
-                        validation_losses = [validate_model(i) for i
-                                             in xrange(n_valid_batches)]
-                        this_validation_loss = numpy.mean(validation_losses)
-
-                        print('epoch %i, minibatch %i/%i, validation error %f %%' %
-                             (epoch, minibatch_index + 1, n_train_batches,
-                              this_validation_loss * 100.))
-
-                        if this_validation_loss < best_validation_loss:
-                            if this_validation_loss < best_validation_loss *  \
-                                   improvement_threshold:
-                                patience = max(patience, iter * patience_increase)
-
-                            best_validation_loss = this_validation_loss
-                            best_iter = iter
-                            best_classifier = classifier
-
-                            # test it on the test set
-                            if test_model is not None:
-                                test_losses = [test_model(i) for i
-                                               in xrange(n_test_batches)]
-                                test_score = numpy.mean(test_losses)
-
-                                print(('     epoch %i, minibatch %i/%i, test error of '
-                                       'best model %f %%') %
-                                      (epoch, minibatch_index + 1, n_train_batches,
-                                       test_score * 100.))
-
-                    if patience <= iter:
-                            print('finished patience')
-                            done_looping = True
-                            break
+                run_epoch()
             classifier = best_classifier
     end_time = time.clock()
     if test_set_x is not None:
