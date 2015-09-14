@@ -24,7 +24,8 @@ class CrossEntropy(CostFunction):
         Return the categorical cross-entropy of the prediction
         of this model under a given target distribution.
         """
-        return T.nnet.categorical_crossentropy(model.p_y_given_x,y).mean()
+        y_hot = theano.tensor.extra_ops.to_one_hot(y,model.p_y_given_x.shape[1])
+        return T.nnet.categorical_crossentropy(model.p_y_given_x,y_hot).mean()
 
 class NegLogLikelihood(CostFunction):
     yaml_tag = u'!NegLogLikelihood'
