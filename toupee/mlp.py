@@ -113,9 +113,12 @@ class MLP(object):
                     self.chain_in = y_pretraining
                     self.chain_n_in = self.params.n_out
                     backup = self.hiddenLayers
-                    for layer_type,desc in reversed(params.n_hidden):
+                    i = len(backup) - 1
+                    for layer_type,desc in reversed(params.n_hidden[:len(backup)]):
                         l = make_layer(layer_type,desc)
+                        l.W = backup[i].W
                         reversedLayers.append(l)
+                        i -= 1
                     self.hiddenLayers = reversedLayers
                     self.make_top_layer(self.params.n_in, self.chain_in,
                             self.chain_n_in, rng, 'flat',
@@ -131,7 +134,7 @@ class MLP(object):
                     self.hiddenLayers = backup
                     self.chain_in= self.chain_in_back 
                     self.chain_n_in= self.chain_n_in_back 
-                    for i,l in enumerate(self.hiddenLayers):
+                    for i,l in enumerate(reversed(self.hiddenLayers)):
                         l.W = reversedLayers[i].W
                     rt_chain_in = input
                     for l in self.hiddenLayers:
@@ -226,7 +229,7 @@ class MLP(object):
         for param in self.opt_params:
             gparam = T.grad(self.cost, param)
             gparams.append(gparam)
-        previous_cost = T.lscalar()
+        previous_cost = T.scalar()
         updates = []
         theano_rng = MRG_RandomStreams(max(self.rng.randint(2 ** 15), 1))
 
@@ -255,14 +258,7 @@ class MLP(object):
                 })
 
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
-    global patience
-    global classifier
-    global best_iter
-    global best_classifier
-    global epoch
-    global best_validation_loss
-    global test_score
-    global previous_minibatch_avg_cost
+    state = {}
     train_set_x, train_set_y = dataset[0]
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
@@ -280,18 +276,18 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
 
     rng = numpy.random.RandomState(params.random_seed)
 
-    classifier = MLP(params=params, rng=rng, input=x, index=index, x=x, y=y,
+    state['classifier'] = MLP(params=params, rng=rng, input=x, index=index, x=x, y=y,
             pretraining_set=pretraining_set)
 
     if len(dataset) > 2:
         test_set_x, test_set_y = dataset[2]
         n_test_batches = test_set_x.get_value(borrow=True).shape[0] / params.batch_size
 
-    def make_models(classifier):
-        validate_model = classifier.eval_function(index,valid_set_x,valid_set_y,x,y)
-        train_model = classifier.train_function(index,train_set_x,train_set_y,x,y)
+    def make_models():
+        validate_model = state['classifier'].eval_function(index,valid_set_x,valid_set_y,x,y)
+        train_model = state['classifier'].train_function(index,train_set_x,train_set_y,x,y)
         if len(dataset) > 2:
-            test_model = classifier.eval_function(index,test_set_x,test_set_y,x,y)
+            test_model = state['classifier'].eval_function(index,test_set_x,test_set_y,x,y)
         else:
             test_model = None
         return (train_model, validate_model, test_model)
@@ -299,25 +295,25 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     print '... {0} training'.format(params.training_method)
 
     # early-stopping parameters
-    patience = 10000  # look as this many examples regardless
-    patience_increase = 20  # wait this much longer when a new best is
+    state['patience'] = 10000  # look as this many examples regardless
+    state['patience_increase'] = 20  # wait this much longer when a new best is
                            # found
     improvement_threshold = 0.99999  # a relative improvement of this much is
                                    # considered significant
-    validation_frequency = min(n_train_batches, patience / 2)
+    validation_frequency = min(n_train_batches, state['patience'] / 2)
                                   # go through this many
                                   # minibatche before checking the network
                                   # on the validation set; in this case we
                                   # check every epoch
 
     start_time = time.clock()
-    best_classifier = None
-    best_validation_loss = numpy.inf
-    best_iter = 0
-    test_score = 0.
-    epoch = 0
+    state['best_classifier'] = None
+    state['best_validation_loss'] = numpy.inf
+    state['best_iter'] = 0
+    state['test_score'] = 0.
+    state['epoch'] = 0
     done_looping = False
-    previous_minibatch_avg_cost = 1
+    state['previous_minibatch_avg_cost'] = 1.
     def run_hooks():
         updates = []
         params.learning_rate.epoch_hook(updates)
@@ -329,84 +325,87 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
         f()
 
     def run_epoch():
-        global patience
-        global classifier
-        global best_iter
-        global best_classifier
-        global epoch
-        global best_validation_loss
-        global test_score
-        global previous_minibatch_avg_cost
         for minibatch_index in xrange(n_train_batches):
-            minibatch_avg_cost = train_model(minibatch_index,previous_minibatch_avg_cost)
-            iter = (epoch - 1) * n_train_batches + minibatch_index
+            minibatch_avg_cost = state['train_model'](minibatch_index,
+                    state['previous_minibatch_avg_cost'])
+            iter = (state['epoch'] - 1) * n_train_batches + minibatch_index
             if (iter + 1) % validation_frequency == 0:
-                validation_losses = [validate_model(i) for i
+                validation_losses = [state['validate_model'](i) for i
                                      in xrange(n_valid_batches)]
                 this_validation_loss = numpy.mean(validation_losses)
                 print('epoch %i, minibatch %i/%i, validation error %f %%' %
-                     (epoch, minibatch_index + 1, n_train_batches,
+                     (state['epoch'], minibatch_index + 1, n_train_batches,
                       this_validation_loss * 100.))
-                if this_validation_loss < best_validation_loss:
-                    if this_validation_loss < best_validation_loss *  \
+                if this_validation_loss < state['best_validation_loss']:
+                    if this_validation_loss < state['best_validation_loss'] *  \
                            improvement_threshold:
-                        patience = max(patience, iter * patience_increase)
-                    best_validation_loss = this_validation_loss
-                    best_iter = iter
-                    best_classifier = copy.copy(classifier)
+                        state['patience'] = max(state['patience'],
+                                iter * state['patience_increase'])
+                    state['best_validation_loss'] = this_validation_loss
+                    state['best_iter'] = iter
+                    state['best_classifier'] = copy.copy(state['classifier'])
                     # test it on the test set
-                    if test_model is not None:
-                        test_losses = [test_model(i) for i
+                    if state['test_model'] is not None:
+                        test_losses = [state['test_model'](i) for i
                                        in xrange(n_test_batches)]
-                        test_score = numpy.mean(test_losses)
+                        state['test_score'] = numpy.mean(test_losses)
 
                         print(('     epoch %i, minibatch %i/%i, test error of '
                                'best model %f %%') %
-                              (epoch, minibatch_index + 1, n_train_batches,
-                               test_score * 100.))
-            if patience <= iter:
+                              (state['epoch'], minibatch_index + 1,
+                                  n_train_batches, state['test_score'] * 100.))
+            state['previous_minibatch_avg_cost'] = minibatch_avg_cost
+            if state['patience'] <= iter:
                     print('finished patience')
                     done_looping = True
                     break
         run_hooks()
 
     if params.training_method == 'normal':
-        train_model, validate_model, test_model = make_models(classifier)
-        while (epoch < params.n_epochs) and (not done_looping):
-            epoch += 1
+        state['best_classifier'] = None
+        state['best_validation_loss'] = numpy.inf
+        state['best_iter'] = 0
+        state['test_score'] = 0.
+        state['epoch'] = 0
+        done_looping = False
+        state['train_model'], state['validate_model'], state['test_model'] = make_models()
+        while (state['epoch'] < params.n_epochs) and (not done_looping):
+            state['epoch'] += 1
             run_epoch()
+        state['classifier'] = state['best_classifier']
 
     elif params.training_method == 'greedy':
-        all_layers = classifier.hiddenLayers
+        all_layers = state['classifier'].hiddenLayers
         for l in xrange(len(all_layers)):
-            best_classifier = None
-            best_validation_loss = numpy.inf
-            best_iter = 0
-            test_score = 0.
-            epoch = 0
+            state['best_classifier'] = None
+            state['best_validation_loss'] = numpy.inf
+            state['best_iter'] = 0
+            state['test_score'] = 0.
+            state['epoch'] = 0
             done_looping = False
             print "training {0} layers\n".format(l + 1)
-            classifier.hiddenLayers = all_layers[:l+1]
-            classifier.make_top_layer(params.n_out,classifier.hiddenLayers[l].output,
-                    classifier.hiddenLayers[l].output_shape,rng)
-            train_model, validate_model, test_model = make_models(classifier)
-            while (epoch < params.n_epochs) and (not done_looping):
-                epoch = epoch + 1
+            state['classifier'].hiddenLayers = all_layers[:l+1]
+            state['classifier'].make_top_layer(params.n_out,state['classifier'].hiddenLayers[l].output,
+                    state['classifier'].hiddenLayers[l].output_shape,rng)
+            state['train_model'], state['validate_model'], state['test_model'] = make_models()
+            while (state['epoch'] < params.n_epochs) and (not done_looping):
+                state['epoch'] += 1
                 run_epoch()
-            classifier = best_classifier
+            state['classifier'] = state['best_classifier']
     end_time = time.clock()
     if test_set_x is not None:
         print(('Optimization complete. Best validation score of %f %% '
                'obtained at iteration %i, with test performance %f %%') %
-              (best_validation_loss * 100., best_iter + 1, test_score * 100.))
+              (state['best_validation_loss'] * 100., state['best_iter'] + 1,
+                  state['test_score'] * 100.))
         print >> sys.stderr, ('The code for file ' +
                               os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
-        return classifier
+        return state['classifier']
     else:
         print('Selection : Best validation score of {0} %'.format(
-              best_validation_loss * 100.))
-        return best_classifier
+              state['best_validation_loss'] * 100.))
+        return state['best_classifier']
 
 if __name__ == '__main__':
     #turn this on only if you want to do parameter search
