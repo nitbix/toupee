@@ -12,6 +12,7 @@ import numpy
 import theano
 import theano.tensor as T
 
-rectifier = lambda x: T.maximum(0, x)
+rectifier = lambda x: T.maximum(0., x)
+leaky_rectifier = lambda x: T.maximum(0.01, x)
 softsign = lambda x: x / (1 + abs(x))
 tanh = T.tanh
