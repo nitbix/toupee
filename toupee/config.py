@@ -14,10 +14,15 @@ import update_rules
 import ensemble_methods
 import parameters
 import cost_functions
+import activations
 
+defaults = { 'random_seed': [2013,1,4],
+             'save_images': False
+           }
 def load_parameters(filename):
     with open(filename) as f:
         r = yaml.load(f)
-    if 'random_seed' not in r:
-        r['random_seed'] = [2013,1,4]
+    for d in defaults:
+        if d not in r:
+            r[d] = defaults[d]
     return parameters.Parameters(**r)

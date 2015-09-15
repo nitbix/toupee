@@ -11,8 +11,30 @@ __docformat__ = 'restructedtext en'
 import numpy
 import theano
 import theano.tensor as T
+import yaml
 
-rectifier = lambda x: T.maximum(0., x)
-leaky_rectifier = lambda x: T.maximum(0.01, x)
-softsign = lambda x: x / (1 + abs(x))
-tanh = T.tanh
+class Activation(yaml.YAMLObject):
+    def __call__(self):
+        raise NotImplementedError()
+
+class TanH(Activation):
+    yaml_tag = u'!TanH'
+    def __call__(self,x):
+        return T.tanh(x)
+
+class SoftSign(Activation):
+    yaml_tag = u'!SoftSign'
+    def __call__(self,x):
+        return x / (1 + T.abs_(x))
+
+class ReLU(Activation):
+    yaml_tag = u'!ReLU'
+    def __call__(self,x):
+        return T.nnet.relu(x)
+
+class LeakyReLU(Activation):
+    yaml_tag = u'!LeakyReLU'
+    def __call__(self,x):
+        if 'rate' not in self.__dict__:
+            self.rate = 0.01
+        return T.nnet.relu(x,alpha=self.rate)
