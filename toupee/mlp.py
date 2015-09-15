@@ -23,7 +23,9 @@ import scipy
 import theano
 import theano.tensor as T
 from theano.ifelse import ifelse
-from theano.sandbox.rng_mrg import MRG_RandomStreams                                                                                                                    
+from theano.sandbox.rng_mrg import MRG_RandomStreams
+from scipy.misc import imsave
+
 from logistic_sgd import LogisticRegression
 import data
 from data import Resampler, Transformer, sharedX
@@ -136,11 +138,6 @@ class MLP(object):
                     self.chain_n_in= self.chain_n_in_back 
                     for i,l in enumerate(reversed(self.hiddenLayers)):
                         l.W = reversedLayers[i].W
-                    rt_chain_in = input
-                    for l in self.hiddenLayers:
-                        l.inputs = rt_chain_in
-                        l.rejoin()
-                        rt_chain_in = l.output
                 else:
                     if(supervised):
                         pretraining_set_x, pretraining_set_y = pretraining_set
@@ -163,6 +160,7 @@ class MLP(object):
                         print "... pretraining layer {0}, pass {1}".format(layer_number,p)
                         for minibatch_index in xrange(n_batches):
                             minibatch_avg_cost = train_model(minibatch_index,1)
+                self.rejoin_layers(input)
 
             if pretraining_set is not None:
                 mode = params.pretraining
@@ -178,6 +176,7 @@ class MLP(object):
                     pretrain(pretraining_set[2],False,reverse)
                     pretrain((pretraining_set[0],pretraining_set[1]),True)
             layer_number += 1
+        self.rejoin_layers(input)
         self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
 
     def make_top_layer(self, n_out, chain_in, chain_n_in, rng, layer_type='log', 
@@ -214,21 +213,30 @@ class MLP(object):
             p += hiddenLayer.params
         self.opt_params = p
 
+    def rejoin_layers(self,input):
+        rt_chain_in = input
+        for l in self.hiddenLayers:
+            l.inputs = rt_chain_in
+            l.rejoin()
+            rt_chain_in = l.output
+
     def eval_function(self,index,eval_set_x,eval_set_y,x,y):
         return theano.function(inputs=[index],
             outputs=self.errors(y),
             givens={
-                x: eval_set_x[index * self.params.batch_size:(index + 1) * self.params.batch_size],
-                y: eval_set_y[index * self.params.batch_size:(index + 1) * self.params.batch_size]})
+                x: eval_set_x[index * self.params.batch_size:(index + 1) *
+                    self.params.batch_size],
+                y: eval_set_y[index * self.params.batch_size:(index + 1) *
+                    self.params.batch_size]})
 
     def train_function(self, index, train_set_x, train_set_y, x, y):
         self.cost = self.cost_function(self.logRegressionLayer,y) \
              + self.params.L1_reg * self.L1 \
              + self.params.L2_reg * self.L2_sqr
-        gparams = []
+        self.gparams = []
         for param in self.opt_params:
             gparam = T.grad(self.cost, param)
-            gparams.append(gparam)
+            self.gparams.append(gparam)
         previous_cost = T.scalar()
         updates = []
         theano_rng = MRG_RandomStreams(max(self.rng.randint(2 ** 15), 1))
@@ -236,14 +244,15 @@ class MLP(object):
         dropout_rates = {}
         for layer in self.hiddenLayers:
             dropout_rates[layer.layer_name + '_W'] = layer.dropout_rate
-        for param, gparam in zip(self.opt_params, gparams):
+        for param, gparam in zip(self.opt_params, self.gparams):
             if str(param) in dropout_rates.keys():
                 include_prob = 1. - dropout_rates[str(param)]
             else:
                 include_prob = 1.
             mask = theano_rng.binomial(p=include_prob,
                                        size=param.shape,dtype=param.dtype)    
-            new_update = self.params.update_rule(param, self.params.learning_rate, gparam, mask, updates,
+            new_update = self.params.update_rule(param,
+                    self.params.learning_rate, gparam, mask, updates,
                     self.cost,previous_cost)
             updates.append((param, new_update))
         return theano.function(inputs=[index,previous_cost],
@@ -263,8 +272,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
 
-    n_train_batches = train_set_x.get_value(borrow=True).shape[0] / params.batch_size
-    n_valid_batches = valid_set_x.get_value(borrow=True).shape[0] / params.batch_size
+    state['n_train_batches'] = train_set_x.get_value(borrow=True).shape[0] / params.batch_size
+    state['n_valid_batches'] = valid_set_x.get_value(borrow=True).shape[0] / params.batch_size
 
     print '... building the model'
 
@@ -281,7 +290,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
 
     if len(dataset) > 2:
         test_set_x, test_set_y = dataset[2]
-        n_test_batches = test_set_x.get_value(borrow=True).shape[0] / params.batch_size
+        state['n_test_batches'] = test_set_x.get_value(borrow=True).shape[0] / params.batch_size
 
     def make_models():
         validate_model = state['classifier'].eval_function(index,valid_set_x,valid_set_y,x,y)
@@ -300,7 +309,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                            # found
     improvement_threshold = 0.99999  # a relative improvement of this much is
                                    # considered significant
-    validation_frequency = min(n_train_batches, state['patience'] / 2)
+    validation_frequency = min(state['n_train_batches'], state['patience'] / 2)
                                   # go through this many
                                   # minibatche before checking the network
                                   # on the validation set; in this case we
@@ -325,16 +334,16 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
         f()
 
     def run_epoch():
-        for minibatch_index in xrange(n_train_batches):
+        for minibatch_index in xrange(state['n_train_batches']):
             minibatch_avg_cost = state['train_model'](minibatch_index,
                     state['previous_minibatch_avg_cost'])
-            iter = (state['epoch'] - 1) * n_train_batches + minibatch_index
+            iter = (state['epoch'] - 1) * state['n_train_batches'] + minibatch_index
             if (iter + 1) % validation_frequency == 0:
                 validation_losses = [state['validate_model'](i) for i
-                                     in xrange(n_valid_batches)]
+                                     in xrange(state['n_valid_batches'])]
                 this_validation_loss = numpy.mean(validation_losses)
                 print('epoch %i, minibatch %i/%i, validation error %f %%' %
-                     (state['epoch'], minibatch_index + 1, n_train_batches,
+                     (state['epoch'], minibatch_index + 1, state['n_train_batches'],
                       this_validation_loss * 100.))
                 if this_validation_loss < state['best_validation_loss']:
                     if this_validation_loss < state['best_validation_loss'] *  \
@@ -343,22 +352,33 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                                 iter * state['patience_increase'])
                     state['best_validation_loss'] = this_validation_loss
                     state['best_iter'] = iter
-                    state['best_classifier'] = copy.copy(state['classifier'])
+                    state['best_classifier'] = copy.deepcopy(state['classifier'])
                     # test it on the test set
                     if state['test_model'] is not None:
                         test_losses = [state['test_model'](i) for i
-                                       in xrange(n_test_batches)]
+                                       in xrange(state['n_test_batches'])]
                         state['test_score'] = numpy.mean(test_losses)
 
                         print(('     epoch %i, minibatch %i/%i, test error of '
                                'best model %f %%') %
                               (state['epoch'], minibatch_index + 1,
-                                  n_train_batches, state['test_score'] * 100.))
+                                  state['n_train_batches'], state['test_score'] * 100.))
             state['previous_minibatch_avg_cost'] = minibatch_avg_cost
             if state['patience'] <= iter:
                     print('finished patience')
                     done_looping = True
                     break
+        if params.save_images == True:
+            for i in xrange(len(state['classifier'].hiddenLayers)):
+                imsave('layer{0}-iter{1}.png'.format(i,state['epoch']),
+                        state['classifier'].hiddenLayers[i].W.get_value()
+                      )
+            imsave('softmaxlayer-iter{0}.png'.format(state['epoch']),
+                    state['classifier'].logRegressionLayer.W.get_value()
+                  )
+#            for gparam in state['classifier'].gparams.eval():
+#                imsave('gradient-{0}-iter{1}'.format(str(gparam),state['epoch']),
+#                        gparam)
         run_hooks()
 
     if params.training_method == 'normal':
@@ -376,6 +396,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
 
     elif params.training_method == 'greedy':
         all_layers = state['classifier'].hiddenLayers
+        state['classifier'].hiddenLayers = []
         for l in xrange(len(all_layers)):
             state['best_classifier'] = None
             state['best_validation_loss'] = numpy.inf
@@ -384,7 +405,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             state['epoch'] = 0
             done_looping = False
             print "training {0} layers\n".format(l + 1)
-            state['classifier'].hiddenLayers = all_layers[:l+1]
+            state['classifier'].hiddenLayers.append(all_layers[l])
+            state['classifier'].rejoin_layers(x)
             state['classifier'].make_top_layer(params.n_out,state['classifier'].hiddenLayers[l].output,
                     state['classifier'].hiddenLayers[l].output_shape,rng)
             state['train_model'], state['validate_model'], state['test_model'] = make_models()
