@@ -24,6 +24,7 @@ class Layer:
         self.layer_name=layer_name
         self.activation = activation
 
+        #TODO: initialisation functions need to be separate
         if W is None:
             W_values = numpy.asarray(rng.uniform(
                     low=-numpy.sqrt(6. / (n_in + n_out)),
