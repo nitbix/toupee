@@ -205,9 +205,9 @@ class RProp(RPropVariant):
         updates.append((previous_inc,inc))
         return param + inc * mask
 
-class iRProp(RPropVariant):
+class iRPropPlus(RPropVariant):
 
-    yaml_tag = u'!iRProp'
+    yaml_tag = u'!iRProp+'
     def __init__(self):
         self.eta_plus = 1.5
         self.eta_minus = 0.25
@@ -225,7 +225,7 @@ class iRProp(RPropVariant):
 
         new_delta = T.clip(
                 T.switch(
-                    T.eq(mask * gparam,0.),
+                    T.eq(gparam,0.),
                     delta,
                     T.switch(
                         T.gt(change,0.),
@@ -261,13 +261,11 @@ class iRProp(RPropVariant):
                     - T.sgn(gparam) * new_delta,
                     T.switch(
                         T.lt(change,0.),
-                        zero,
-#                    - T.sgn(gparam) * new_delta
-                        T.switch( 
-                            T.gt(current_cost, previous_cost),
-                            - T.sgn(gparam) * new_delta,
+                        T.switch(T.gt(current_cost,previous_cost),
+                            - previous_inc,
                             zero
-                        )
+                        ),
+                        - T.sgn(gparam) * new_delta
                     )
                 )
         )
