@@ -165,7 +165,7 @@ class Bagging(EnsembleMethod):
         self.voting = voting
         self.resampler = None
 
-    def create_aggregator(self,members,x,y,train_set,valid_set):
+    def create_aggregator(self,params,members,x,y,train_set,valid_set):
         if 'voting' in self.__dict__ and self.voting:
             return MajorityVotingRunner(members,x,y)
         else:
@@ -195,7 +195,7 @@ class AdaBoost(EnsembleMethod):
 
     yaml_tag = u'!AdaBoost'
 
-    def create_aggregator(self,members,x,y,train_set,valid_set):
+    def create_aggregator(self,params,members,x,y,train_set,valid_set):
         #TODO: create weighted aggregator
         pass
 
@@ -237,12 +237,11 @@ class Stacking(EnsembleMethod):
         self.L1_reg = self.L1_reg
         self.L2_reg = self.L2_reg
 
-    def create_aggregator(self,members,x,y,train_set,valid_set):
+    def create_aggregator(self,params,members,x,y,train_set,valid_set):
         self.main_params = self.params
-        if 'random_seed' not in self.__dict__:
-            self.random_seed = self.params.random_seed
-        if 'cost_function' not in self.__dict__:
-            self.cost_function = self.params.cost_function
+        for p in self.params.__dict__:
+            if p not in self.__dict__:
+                self.__dict__[p] = self.params.__dict__[p]
         return StackingRunner(members,x,y,train_set,valid_set,
                 Parameters(**self.__dict__))
 
@@ -271,10 +270,9 @@ class DropStacking(Stacking):
 
     def create_aggregator(self,params,members,x,y,train_set,valid_set):
         self.main_params = params
-        if 'random_seed' not in self.__dict__:
-            self.random_seed = self.params.random_seed
-        if 'cost_function' not in self.__dict__:
-            self.cost_function = self.params.cost_function
+        for p in self.params.__dict__:
+            if p not in self.__dict__:
+                self.__dict__[p] = self.params.__dict__[p]
         return DropStackingRunner(members,x,y,train_set,valid_set,
                 Parameters(**self.__dict__))
 

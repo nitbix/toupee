@@ -52,6 +52,9 @@ class MLP(object):
         self.params = params
         self.rng = rng
         layer_number = 0
+        self.x = x
+        self.y = y
+        self.index = index
 
         def make_layer(layer_type,desc):
             if(layer_type == 'flat'):
@@ -107,7 +110,7 @@ class MLP(object):
                     pretraining_set_x, pretraining_set_y = pretraining_set
                     pretraining_set_y = sharedX(
                             data.one_hot(pretraining_set_y.eval()))
-                    x_pretraining = x
+                    x_pretraining = self.x
                     y_pretraining = T.matrix('y_pretraining')
                     reversedLayers = []
                     self.chain_in_back = self.chain_in
@@ -141,14 +144,14 @@ class MLP(object):
                 else:
                     if(supervised):
                         pretraining_set_x, pretraining_set_y = pretraining_set
-                        x_pretraining = x
-                        y_pretraining = y
+                        x_pretraining = self.x
+                        y_pretraining = self.y
                         self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
                     else:
                         pretraining_set_x = pretraining_set
                         pretraining_set_y = pretraining_set
                         ptylen = pretraining_set.get_value(borrow=True).shape[1]
-                        x_pretraining = x
+                        x_pretraining = self.x
                         y_pretraining = T.matrix('y_pretraining')
                         self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, rng,
                                 'flat', self.hiddenLayers[0].activation)
@@ -220,7 +223,7 @@ class MLP(object):
             l.rejoin()
             rt_chain_in = l.output
 
-    def eval_function(self,index,eval_set_x,eval_set_y,x,y):
+    def eval_function(self, index, eval_set_x, eval_set_y, x, y):
         return theano.function(inputs=[index],
             outputs=self.errors(y),
             givens={
@@ -266,6 +269,21 @@ class MLP(object):
                         self.params.batch_size]
                 })
 
+    def make_models(self,dataset):
+        train_set_x, train_set_y = dataset[0]
+        valid_set_x, valid_set_y = dataset[1]
+        test_set_x, test_set_y = (None,None)
+        validate_model = self.eval_function(self.index, valid_set_x, valid_set_y,
+                self.x, self.y)
+        train_model = self.train_function(self.index, train_set_x, train_set_y,
+                self.x, self.y)
+        if len(dataset) > 2:
+            test_set_x, test_set_y = dataset[2]
+            test_model = self.eval_function(test_set_x,test_set_y)
+        else:
+            test_model = None
+        return (train_model, validate_model, test_model)
+
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     state = {}
     train_set_x, train_set_y = dataset[0]
@@ -291,15 +309,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     if len(dataset) > 2:
         test_set_x, test_set_y = dataset[2]
         state['n_test_batches'] = test_set_x.get_value(borrow=True).shape[0] / params.batch_size
-
-    def make_models():
-        validate_model = state['classifier'].eval_function(index,valid_set_x,valid_set_y,x,y)
-        train_model = state['classifier'].train_function(index,train_set_x,train_set_y,x,y)
-        if len(dataset) > 2:
-            test_model = state['classifier'].eval_function(index,test_set_x,test_set_y,x,y)
-        else:
-            test_model = None
-        return (train_model, validate_model, test_model)
 
     print '... {0} training'.format(params.training_method)
 
@@ -388,7 +397,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
         state['test_score'] = 0.
         state['epoch'] = 0
         done_looping = False
-        state['train_model'], state['validate_model'], state['test_model'] = make_models()
+        state['train_model'], state['validate_model'], state['test_model'] = state['classifier'].make_models(dataset)
         while (state['epoch'] < params.n_epochs) and (not done_looping):
             state['epoch'] += 1
             run_epoch()
@@ -407,9 +416,10 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             print "training {0} layers\n".format(l + 1)
             state['classifier'].hiddenLayers.append(all_layers[l])
             state['classifier'].rejoin_layers(x)
-            state['classifier'].make_top_layer(params.n_out,state['classifier'].hiddenLayers[l].output,
+            state['classifier'].make_top_layer(
+                    params.n_out,state['classifier'].hiddenLayers[l].output,
                     state['classifier'].hiddenLayers[l].output_shape,rng)
-            state['train_model'], state['validate_model'], state['test_model'] = make_models()
+            state['train_model'], state['validate_model'], state['test_model'] = state['classifier'].make_models(dataset)
             while (state['epoch'] < params.n_epochs) and (not done_looping):
                 state['epoch'] += 1
                 run_epoch()
