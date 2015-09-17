@@ -11,6 +11,7 @@ import numpy
 import theano
 import theano.tensor as T
 import data
+from theano.config import floatX
 
 class LogisticRegression(object):
     """Multi-class Logistic Regression Class
@@ -39,12 +40,10 @@ class LogisticRegression(object):
         """
 
         # initialize with 0 the weights W as a matrix of shape (n_in, n_out)
-        self.W = theano.shared(value=numpy.zeros((n_in, n_out),
-                                                 dtype=theano.config.floatX),
-                                name='W', borrow=True)
+        self.W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=floatX),
+                               name='W', borrow=True)
         # initialize the baises b as a vector of n_out 0s
-        self.b = theano.shared(value=numpy.zeros((n_out,),
-                                                 dtype=theano.config.floatX),
+        self.b = theano.shared(value=numpy.zeros((n_out,), dtype=floatX),
                                name='b', borrow=True)
 
         # compute vector of class-membership probabilities in symbolic form

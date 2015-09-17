@@ -20,6 +20,7 @@ import theano
 import theano.tensor as T
 import gzip
 import cPickle
+from theano.config import floatX
 #import matplotlib.pyplot as plt
 
 def sharedX(value, name=None, borrow=False, dtype=None):
@@ -29,7 +30,7 @@ def sharedX(value, name=None, borrow=False, dtype=None):
     """
 
     if dtype is None:
-        dtype = theano.config.floatX
+        dtype = floatX
     return theano.shared(theano._asarray(value, dtype=dtype),
                          name=name,
                          borrow=borrow)
@@ -45,12 +46,8 @@ def shared_dataset(data_xy, borrow=True):
     variable) would lead to a large decrease in performance.
     """
     data_x, data_y = data_xy
-    shared_x = theano.shared(numpy.asarray(data_x,
-                                           dtype=theano.config.floatX),
-                             borrow=borrow)
-    shared_y = theano.shared(numpy.asarray(data_y,
-                                           dtype=theano.config.floatX),
-                             borrow=borrow)
+    shared_x = theano.shared(numpy.asarray(data_x, dtype=floatX), borrow=borrow)
+    shared_y = theano.shared(numpy.asarray(data_y, dtype=floatX), borrow=borrow)
     # When storing data on the GPU it has to be stored as floats
     # therefore we will store the labels as ``floatX`` as well
     # (``shared_y`` does exactly that). But during our computations
@@ -277,6 +274,6 @@ class Transformer:
         return (aggregate_train,aggregate_valid,test)
 
 def one_hot(dataset):
-    b = np.zeros((dataset.size, dataset.max()+1),dtype=theano.config.floatX)
+    b = np.zeros((dataset.size, dataset.max()+1),dtype=floatX)
     b[np.arange(dataset.size), dataset] = 1.
     return b

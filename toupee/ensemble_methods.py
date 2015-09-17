@@ -14,7 +14,8 @@ import numpy.random
 import theano
 import theano.tensor as T
 import yaml
-from theano.sandbox.rng_mrg import MRG_RandomStreams                                                                                                                    
+from theano.sandbox.rng_mrg import MRG_RandomStreams
+from theano.config import floatX
 
 import mlp
 from logistic_sgd import LogisticRegression
