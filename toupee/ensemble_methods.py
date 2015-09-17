@@ -33,7 +33,7 @@ class AveragingRunner:
         self.p_y_given_x = 0.
         self.p_y_given_x = sum([m.p_y_given_x for m in self.members]) / len(members)
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-        self.errors = T.mean(T.neq(self.y_pred, y))
+        self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
 
 
 class MajorityVotingRunner:
@@ -49,7 +49,7 @@ class MajorityVotingRunner:
         self.p_y_given_x = sum([T.eq(T.max(m.p_y_given_x),m.p_y_given_x)
             for m in self.members])
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-        self.errors = T.mean(T.neq(self.y_pred, y))
+        self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
 
 
 class WeightedAveraging:
@@ -67,7 +67,7 @@ class WeightedAveraging:
         self.p_y_given_x = sum([T.eq(T.max(m.p_y_given_x),m.p_y_given_x)
             for m in self.members])
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-        self.errors = T.mean(T.neq(self.y_pred, y))
+        self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
 
 class StackingRunner:
     """
