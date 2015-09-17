@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-Representation of a Multi-Layer Perceptron
+Run a MLP experiment from a yaml file
 
 Alan Mosca
 Department of Computer Science and Information Systems
@@ -13,6 +13,7 @@ __docformat__ = 'restructedtext en'
 
 import cPickle
 import gzip
+import gc
 import os
 import sys
 import time
@@ -279,7 +280,8 @@ class MLP(object):
                 self.x, self.y)
         if len(dataset) > 2:
             test_set_x, test_set_y = dataset[2]
-            test_model = self.eval_function(test_set_x,test_set_y)
+            test_model = self.eval_function(self.index, test_set_x,test_set_y,
+                self.x, self.y)
         else:
             test_model = None
         return (train_model, validate_model, test_model)
@@ -362,6 +364,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                     state['best_validation_loss'] = this_validation_loss
                     state['best_iter'] = iter
                     state['best_classifier'] = copy.deepcopy(state['classifier'])
+                    gc.collect()
                     # test it on the test set
                     if state['test_model'] is not None:
                         test_losses = [state['test_model'](i) for i
