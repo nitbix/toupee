@@ -11,7 +11,8 @@ import numpy
 import theano
 import theano.tensor as T
 import data
-from theano.config import floatX
+
+floatX = theano.config.floatX
 
 class LogisticRegression(object):
     """Multi-class Logistic Regression Class

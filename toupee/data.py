@@ -20,7 +20,8 @@ import theano
 import theano.tensor as T
 import gzip
 import cPickle
-from theano.config import floatX
+
+floatX = theano.config.floatX
 #import matplotlib.pyplot as plt
 
 def sharedX(value, name=None, borrow=False, dtype=None):
