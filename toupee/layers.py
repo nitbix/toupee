@@ -59,6 +59,11 @@ class Layer:
         self.b = sharedX(other.b.get_value())
         self.rebuild()
 
+    def set_weights(self,W,b):
+        self.W = sharedX(W)
+        self.b = sharedX(b)
+        self.rebuild()
+
 
 class FlatLayer(Layer):
     """
@@ -187,3 +192,6 @@ class ConvolutionalLayer(Layer):
         self.y_out = activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
         self.pooled_out = downsample.max_pool_2d(input=self.y_out,ds=self.pool_size,ignore_border=True,mode=pooling)
         self.output = self.pooled_out
+
+    def rejoin(self):
+        self.rebuild()

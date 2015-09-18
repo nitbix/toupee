@@ -168,6 +168,7 @@ class MLP(object):
             if pretraining_set is not None:
                 mode = params.pretraining
                 reverse = mode == 'reverse'
+                #TODO: refactor into something decent
                 if not isinstance(pretraining_set,tuple):
                     #unsupervised
                     pretrain(pretraining_set,False,reverse)
@@ -278,23 +279,47 @@ class MLP(object):
         train_set_x, train_set_y = dataset[0]
         valid_set_x, valid_set_y = dataset[1]
         test_set_x, test_set_y = (None,None)
+        print "..... eval"
         validate_model = self.eval_function(self.index, valid_set_x, valid_set_y,
                 self.x, self.y)
+        print "..... train"
         train_model = self.train_function(self.index, train_set_x, train_set_y,
                 self.x, self.y)
         if len(dataset) > 2:
             test_set_x, test_set_y = dataset[2]
+            print "..... test"
             test_model = self.eval_function(self.index, test_set_x,test_set_y,
                 self.x, self.y)
         else:
             test_model = None
         return (train_model, validate_model, test_model)
 
-    def copy():
+    def copy(self):
+        """ Very expensive way of copying a network """
         newinstance = copy.copy(self)
         for i,l in enumerate(newinstance.hiddenLayers):
-            old_l = self.hiddenLayers[i]
-            l.copy_weights(old_l)
+            l.copy_weights(self.hiddenLayers[i])
+            l.rebuild()
+        newinstance.outputLayer.copy_weights(self.outputLayer)
+        newinstance.outputLayer.rebuild()
+        return newinstance
+
+    def get_weights(self):
+        W = []
+        b = []
+        for l in self.hiddenLayers:
+            W.append(l.W.get_value())
+            b.append(l.b.get_value())
+        outW = self.outputLayer.W.get_value()
+        outb = self.outputLayer.b.get_value()
+        return {'W': W, 'b': b, 'outW' : outW, 'outb': outb}
+
+    def set_weights(self,weights):
+        W = weights['W']
+        b = weights['b']
+        for i,l in enumerate(self.hiddenLayers):
+            l.set_weights(W[i],b[i])
+        self.outputLayer.set_weights(weights['outW'],weights['outb'])
 
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     state = {}
@@ -337,7 +362,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                                   # check every epoch
 
     start_time = time.clock()
-    state['best_classifier'] = None
+    state['best_weights'] = None
     state['best_validation_loss'] = numpy.inf
     state['best_iter'] = 0
     state['test_score'] = 0.
@@ -384,7 +409,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                                 iter * state['patience_increase'])
                     state['best_validation_loss'] = this_validation_loss
                     state['best_iter'] = iter
-                    state['best_classifier'] = copy.copy(state['classifier'])
+                    state['best_weights'] = state['classifier'].get_weights()
                     gc.collect()
                     # test it on the test set
                     if state['test_model'] is not None:
@@ -415,41 +440,45 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
         run_hooks()
 
     if params.training_method == 'normal':
-        state['best_classifier'] = None
+        state['best_weights'] = None
         state['best_validation_loss'] = numpy.inf
         state['best_iter'] = 0
         state['test_score'] = 0.
         state['epoch'] = 0
         done_looping = False
+        print ".... generating models"
         state['train_model'], state['validate_model'], state['test_model'] = state['classifier'].make_models(dataset)
         reset()
+        print ".... started"
         while (state['epoch'] < params.n_epochs) and (not done_looping):
             state['epoch'] += 1
             run_epoch()
-        state['classifier'] = state['best_classifier']
+        state['classifier'].set_weights(state['best_weights'])
 
     elif params.training_method == 'greedy':
         all_layers = state['classifier'].hiddenLayers
         state['classifier'].hiddenLayers = []
         for l in xrange(len(all_layers)):
             reset()
-            state['best_classifier'] = None
+            state['best_weights'] = None
             state['best_validation_loss'] = numpy.inf
             state['best_iter'] = 0
             state['test_score'] = 0.
             state['epoch'] = 0
             done_looping = False
-            print "training {0} layers\n".format(l + 1)
+            print "\n\ntraining {0} layers".format(l + 1)
             state['classifier'].hiddenLayers.append(all_layers[l])
             state['classifier'].rejoin_layers(x)
             state['classifier'].make_top_layer(
                     params.n_out,state['classifier'].hiddenLayers[l].output,
                     state['classifier'].hiddenLayers[l].output_shape,rng)
+            print ".... generating models"
             state['train_model'], state['validate_model'], state['test_model'] = state['classifier'].make_models(dataset)
+            print ".... started"
             while (state['epoch'] < params.n_epochs) and (not done_looping):
                 state['epoch'] += 1
                 run_epoch()
-            state['classifier'] = state['best_classifier']
+            state['classifier'].set_weights(state['best_weights'])
     end_time = time.clock()
     if test_set_x is not None:
         print(('Optimization complete. Best validation score of %f %% '
@@ -463,36 +492,4 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     else:
         print('Selection : Best validation score of {0} %'.format(
               state['best_validation_loss'] * 100.))
-        return state['best_classifier']
-
-if __name__ == '__main__':
-    #turn this on only if you want to do parameter search
-    search_epochs = 40
-    search = False
-
-    params = config.load_parameters(sys.argv[1])
-    dataset = data.load_data(params.dataset,
-                              shared = True,
-                              pickled = params.pickled)
-    pretraining_set = data.make_pretraining_set(dataset,params.pretraining)
-    if not search:
-        mlp=test_mlp(dataset, params, pretraining_set = pretraining_set)
-    else:
-        params.n_epochs = search_epochs
-        for eta_minus in [0.01,0.1,0.5,0.75,0.9]:
-            params.update_rule.eta_minus = eta_minus
-            for eta_plus in [1.001,1.01,1.1,1.2,1.5]:
-                params.update_rule.eta_plus = eta_plus
-                for min_delta in [1e-3,1e-4,1e-5,1e-6,1e-7]:
-                    params.update_rule.min_delta = min_delta
-                    for max_delta in [50]:
-                        print "PARAMS:"
-                        print "ETA-: {0}".format(eta_minus)
-                        print "ETA+: {0}".format(eta_plus)
-                        print "MIN_DELTA: {0}".format(min_delta)
-                        print "MAX_DELTA: {0}".format(max_delta)
-                        params.update_rule.max_delta = max_delta
-                        try:
-                            mlp=test_mlp(dataset, params, pretraining_set = pretraining_set)
-                        except KeyboardInterrupt:
-                            print "skipping manually to next"
+        return state['classifier']
