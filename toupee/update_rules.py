@@ -19,14 +19,20 @@ class LearningRate(yaml.YAMLObject):
     def get(self):
         raise NotImplementedError()
 
-    def epoch_hook(self):
+    def reset(self,updates):
+        raise NotImplementedError()
+
+    def epoch_hook(self,updates):
         raise NotImplementedError()
 
 class FixedLearningRate(LearningRate):
 
     yaml_tag = u'!FixedLearningRate'
     def get(self):
-        return self.rate
+        return sharedX(self.rate)
+
+    def reset(self,updates):
+        pass
 
     def epoch_hook(self,updates):
         pass
@@ -38,6 +44,14 @@ class LinearDecayLearningRate(LearningRate):
         if 'current_rate' not in self.__dict__:
             self.current_rate = sharedX(self.start,borrow=True)
         return self.current_rate
+
+    def reset(self,updates):
+        if 'current_epoch' not in self.__dict__:
+            self.current_epoch = sharedX(1.)
+        if 'current_rate' not in self.__dict__:
+            self.current_rate = sharedX(self.start,borrow=True)
+        updates.append((self.current_rate,self.start))
+        updates.append((self.current_epoch,1.))
 
     def epoch_hook(self,updates):
         if 'current_epoch' not in self.__dict__:
@@ -94,7 +108,7 @@ class OldRProp(RPropVariant):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(learning_rate.get() * numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(learning_rate.get().get_value() * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
@@ -217,7 +231,7 @@ class iRPropPlus(RPropVariant):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(learning_rate.get() * numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(learning_rate.get().get_value() * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)

@@ -27,7 +27,6 @@ from theano.ifelse import ifelse
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 from scipy.misc import imsave
 
-from logistic_sgd import LogisticRegression
 import data
 from data import Resampler, Transformer, sharedX
 import update_rules
@@ -183,23 +182,28 @@ class MLP(object):
         self.rejoin_layers(input)
         self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
 
-    def make_top_layer(self, n_out, chain_in, chain_n_in, rng, layer_type='log', 
+    def make_top_layer(self, n_out, chain_in, chain_n_in, rng,
+            layer_type='softmax', 
             activation=None, name_this='temp_top'):
         """
         Finalize the construction by making a top layer (either to use in
         pretraining or to use in the final version)
         """
-        if layer_type == 'log':
-            self.logRegressionLayer = LogisticRegression(
-                input=chain_in.flatten(ndim=2),
+        if layer_type == 'softmax':
+            self.outputLayer = layers.SoftMax(
+                rng=rng,
+                inputs=chain_in.flatten(ndim=2),
                 n_in=numpy.prod(chain_n_in),
-                n_out=n_out)
+                n_out=n_out,
+                activation=activation,
+                dropout_rate=0,
+                layer_name='softmax')
             self.cost_function = self.params.cost_function
-            self.p_y_given_x = self.logRegressionLayer.p_y_given_x
-            self.errors = self.logRegressionLayer.errors
-            self.y_pred = self.logRegressionLayer.y_pred
+            self.p_y_given_x = self.outputLayer.p_y_given_x
+            self.errors = self.outputLayer.errors
+            self.y_pred = self.outputLayer.y_pred
         elif layer_type == 'flat':
-            self.logRegressionLayer = layers.FlatLayer(rng=rng,
+            self.outputLayer = layers.FlatLayer(rng=rng,
                 inputs=chain_in.flatten(ndim=2),
                 n_in=numpy.prod(chain_n_in), n_out=n_out,
                 activation=activation,dropout_rate=0,
@@ -208,11 +212,11 @@ class MLP(object):
 
         self.L1 = sum([abs(hiddenLayer.W).sum()
                     for hiddenLayer in self.hiddenLayers]) \
-                + abs(self.logRegressionLayer.W).sum()
+                + abs(self.outputLayer.W).sum()
         self.L2_sqr = sum([(hiddenLayer.W ** 2).sum() for hiddenLayer in
                         self.hiddenLayers]) \
-                    + (self.logRegressionLayer.W ** 2).sum()
-        p = self.logRegressionLayer.params
+                    + (self.outputLayer.W ** 2).sum()
+        p = self.outputLayer.params
         for hiddenLayer in self.hiddenLayers:
             p += hiddenLayer.params
         self.opt_params = p
@@ -234,7 +238,7 @@ class MLP(object):
                     self.params.batch_size]})
 
     def train_function(self, index, train_set_x, train_set_y, x, y):
-        self.cost = self.cost_function(self.logRegressionLayer,y) \
+        self.cost = self.cost_function(self.outputLayer,y) \
              + self.params.L1_reg * self.L1 \
              + self.params.L2_reg * self.L2_sqr
         self.gparams = []
@@ -286,6 +290,12 @@ class MLP(object):
             test_model = None
         return (train_model, validate_model, test_model)
 
+    def copy():
+        newinstance = copy.copy(self)
+        for i,l in enumerate(newinstance.hiddenLayers):
+            old_l = self.hiddenLayers[i]
+            l.copy_weights(old_l)
+
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     state = {}
     train_set_x, train_set_y = dataset[0]
@@ -334,9 +344,20 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     state['epoch'] = 0
     done_looping = False
     state['previous_minibatch_avg_cost'] = 1.
+
     def run_hooks():
         updates = []
         params.learning_rate.epoch_hook(updates)
+        one = sharedX(1.)
+        f = theano.function(inputs=[],
+                outputs=one,
+                on_unused_input='warn',
+                updates=updates,)
+        f()
+
+    def reset():
+        updates = []
+        params.learning_rate.reset(updates)
         one = sharedX(1.)
         f = theano.function(inputs=[],
                 outputs=one,
@@ -363,7 +384,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                                 iter * state['patience_increase'])
                     state['best_validation_loss'] = this_validation_loss
                     state['best_iter'] = iter
-                    state['best_classifier'] = copy.deepcopy(state['classifier'])
+                    state['best_classifier'] = copy.copy(state['classifier'])
                     gc.collect()
                     # test it on the test set
                     if state['test_model'] is not None:
@@ -386,7 +407,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                         state['classifier'].hiddenLayers[i].W.get_value()
                       )
             imsave('softmaxlayer-iter{0}.png'.format(state['epoch']),
-                    state['classifier'].logRegressionLayer.W.get_value()
+                    state['classifier'].outputLayer.W.get_value()
                   )
 #            for gparam in state['classifier'].gparams.eval():
 #                imsave('gradient-{0}-iter{1}'.format(str(gparam),state['epoch']),
@@ -401,6 +422,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
         state['epoch'] = 0
         done_looping = False
         state['train_model'], state['validate_model'], state['test_model'] = state['classifier'].make_models(dataset)
+        reset()
         while (state['epoch'] < params.n_epochs) and (not done_looping):
             state['epoch'] += 1
             run_epoch()
@@ -410,6 +432,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
         all_layers = state['classifier'].hiddenLayers
         state['classifier'].hiddenLayers = []
         for l in xrange(len(all_layers)):
+            reset()
             state['best_classifier'] = None
             state['best_validation_loss'] = numpy.inf
             state['best_iter'] = 0

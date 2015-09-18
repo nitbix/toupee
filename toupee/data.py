@@ -36,6 +36,12 @@ def sharedX(value, name=None, borrow=False, dtype=None):
                          name=name,
                          borrow=borrow)
 
+def sharedXscalar(value, name=None, borrow=False):
+    """
+    Transform value into a shared variable scalar
+    """
+
+    return theano.shared(floatX(value), name=name, borrow=borrow)
 
 def shared_dataset(data_xy, borrow=True):
     """ Function that loads the dataset into shared variables

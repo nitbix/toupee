@@ -15,6 +15,8 @@ from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv
 from data import sharedX
 
+floatX = theano.config.floatX
+
 
 class Layer:
     def __init__(self,rng,inputs,n_in,n_out,activation,
@@ -49,61 +51,80 @@ class Layer:
         self.y = T.dot(self.inputs, self.W) + self.b
         self.params = [self.W, self.b]
 
+    def rebuild(self):
+        raise NotImplementedError()
+
+    def copy_weights(self,other):
+        self.W = sharedX(other.W.get_value())
+        self.b = sharedX(other.b.get_value())
+        self.rebuild()
+
+
 class FlatLayer(Layer):
+    """
+    Typical hidden layer of a MLP: units are fully-connected
+    """
+
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
                  activation=T.tanh,dropout_rate=0,layer_name='hidden'):
-        """
-        Typical hidden layer of a MLP: units are fully-connected and have
-        sigmoidal activation function. Weight matrix W is of shape (n_in,n_out)
-        and the bias vector b is of shape (n_out,).
 
-        NOTE : The default nonlinearity used here is tanh
-
-        Hidden unit activation is given by: a(dot(input,W) + b)
-
-        :type rng: numpy.random.RandomState
-        :param rng: a random number generator used to initialize weights
-
-        :type input: theano.tensor.dmatrix
-        :param input: a symbolic tensor of shape (n_examples, n_in)
-
-        :type n_in: int
-        :param n_in: dimensionality of input
-
-        :type n_out: int
-        :param n_out: number of hidden units
-
-        :type activation: theano.Op or function
-        :param activation: Non linearity to be applied in the hidden
-                           layer
-        """
         Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name,W,b)
-         
-        # `W` is initialized with `W_values` which is uniformely sampled
-        # from sqrt(-6./(n_in+n_hidden)) and sqrt(6./(n_in+n_hidden))
-        # for tanh activation function
-        # the output of uniform if converted using asarray to dtype
-        #        activation function used (among other things).
-        #        For example, results presented in [Xavier10] suggest that you
-        #        should use 4 times larger initial weights for sigmoid
-        #        compared to tanh
-        #        We have no info for other function, so we use the same as
-        #        tanh.
-        lin_output = T.dot(self.inputs, self.W) * (1 - self.dropout_rate) + self.b
-        self.output = (lin_output if activation is None
-                       else activation(lin_output))
-        # parameters of the model
+        self.rebuild()
 
-    def rejoin(self):
-        Layer.rejoin(self)
+    def rebuild(self):
         lin_output = T.dot(self.inputs, self.W) * (1 - self.dropout_rate) + self.b
         self.output = (lin_output if self.activation is None
                        else self.activation(lin_output))
+
+    def rejoin(self):
+        Layer.rejoin(self)
+        self.rebuild()
+
+
+class SoftMax(Layer):
+    """
+    SoftMax Layer
+    """
+
+    def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
+                 activation=T.tanh,dropout_rate=0,layer_name='hidden'):
+        W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=floatX),
+                               name='W', borrow=True)
+        b = theano.shared(value=numpy.zeros((n_out,), dtype=floatX),
+                               name='b', borrow=True)
+        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name,W,b)
+        self.rebuild()
+
+    def rebuild(self):
+        self.p_y_given_x = T.nnet.softmax(T.dot(self.inputs, self.W) + self.b)
+        self.y_pred = T.argmax(self.p_y_given_x, axis=1)
+        self.y = self.p_y_given_x
+
+    def errors(self, y):
+        """
+        Return a float representing the number of errors in the minibatch
+        over the total number of examples of the minibatch ; zero one
+        loss over the size of the minibatch
+        """
+
+        if y.ndim != self.y_pred.ndim:
+            raise TypeError('y should have the same shape as self.y_pred',
+                ('y', target.type, 'y_pred', self.y_pred.type))
+        if y.dtype.startswith('int'):
+            return T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
+        else:
+            raise NotImplementedError()
+
+    def rejoin(self):
+        Layer.rejoin(self)
+        self.rebuild()
+
 
 class ConvolutionalLayer(Layer):
     """
     A Convolutional Layer, as per Convolutional Neural Networks. Includes filter, and pooling.
     """
+    #TODO: rejoin and rebuild
     def __init__(self, rng, inputs, input_shape, filter_shape, pool_size, W=None, b=None,
              activation=T.tanh,dropout_rate=0,layer_name='conv',border_mode='valid',pooling='max'):
         """
@@ -148,6 +169,9 @@ class ConvolutionalLayer(Layer):
 
         Layer.__init__(self,rng,T.reshape(inputs,input_shape,ndim=4),filter_shape[0],
                 filter_shape[1], activation,dropout_rate,layer_name,W,b)
+        self.rebuild()
+
+    def rebuild(self):
         self.delta_W = sharedX(
             value=numpy.zeros(filter_shape),
             name='{0}_delta_W'.format(self.layer_name))
