@@ -367,7 +367,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     state['best_iter'] = 0
     state['test_score'] = 0.
     state['epoch'] = 0
-    done_looping = False
+    state['done_looping'] = False
     state['previous_minibatch_avg_cost'] = 1.
 
     def run_hooks():
@@ -424,7 +424,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             state['previous_minibatch_avg_cost'] = minibatch_avg_cost
             if state['patience'] <= iter:
                     print('finished patience')
-                    done_looping = True
+                    state['done_looping'] = True
                     break
         if params.save_images == True:
             for i in xrange(len(state['classifier'].hiddenLayers)):
@@ -445,12 +445,12 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
         state['best_iter'] = 0
         state['test_score'] = 0.
         state['epoch'] = 0
-        done_looping = False
+        state['done_looping'] = False
         print ".... generating models"
         state['train_model'], state['validate_model'], state['test_model'] = state['classifier'].make_models(dataset)
         reset()
         print ".... started"
-        while (state['epoch'] < params.n_epochs) and (not done_looping):
+        while (state['epoch'] < params.n_epochs) and (not state['done_looping']):
             state['epoch'] += 1
             run_epoch()
         state['classifier'].set_weights(state['best_weights'])
@@ -465,7 +465,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             state['best_iter'] = 0
             state['test_score'] = 0.
             state['epoch'] = 0
-            done_looping = False
+            state['done_looping'] = False
             print "\n\ntraining {0} layers".format(l + 1)
             state['classifier'].hiddenLayers.append(all_layers[l])
             state['classifier'].rejoin_layers(x)
@@ -475,7 +475,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             print ".... generating models"
             state['train_model'], state['validate_model'], state['test_model'] = state['classifier'].make_models(dataset)
             print ".... started"
-            while (state['epoch'] < params.n_epochs) and (not done_looping):
+            while (state['epoch'] < params.n_epochs) and (not state['done_looping']):
                 state['epoch'] += 1
                 run_epoch()
             state['classifier'].set_weights(state['best_weights'])

@@ -164,7 +164,7 @@ class RProp(RPropVariant):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(learning_rate.get() * numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(learning_rate.get().get_value() * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)

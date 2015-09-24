@@ -44,7 +44,7 @@ class Layer:
         self.b = b
         self.n_in = n_in
         self.n_out = n_out
-        self.y = T.dot(self.inputs, self.W) + self.b
+        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate)) + self.b
         self.params = [self.W, self.b]
 
     def rejoin(self):
@@ -77,9 +77,8 @@ class FlatLayer(Layer):
         self.rebuild()
 
     def rebuild(self):
-        lin_output = T.dot(self.inputs, self.W) * (1 - self.dropout_rate) + self.b
-        self.output = (lin_output if self.activation is None
-                       else self.activation(lin_output))
+        self.output = (self.y if self.activation is None
+                       else self.activation(self.y))
 
     def rejoin(self):
         Layer.rejoin(self)
@@ -101,7 +100,7 @@ class SoftMax(Layer):
         self.rebuild()
 
     def rebuild(self):
-        self.p_y_given_x = T.nnet.softmax(T.dot(self.inputs, self.W) + self.b)
+        self.p_y_given_x = T.nnet.softmax(self.y)
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
         self.y = self.p_y_given_x
 
@@ -188,7 +187,7 @@ class ConvolutionalLayer(Layer):
             filters=self.W,
             filter_shape=filter_shape,
             image_shape=input_shape,
-            border_mode=self.border_mode)
+            border_mode=self.border_mode) * (1. / (1. - dropout_rate))
         self.y_out = activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
         self.pooled_out = downsample.max_pool_2d(input=self.y_out,ds=self.pool_size,ignore_border=True,mode=pooling)
         self.output = self.pooled_out
