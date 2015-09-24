@@ -64,6 +64,9 @@ class Layer:
         self.b = sharedX(b)
         self.rebuild()
 
+    def set_input(self,inputs):
+        self.inputs =inputs
+
 
 class FlatLayer(Layer):
     """
@@ -173,9 +176,12 @@ class ConvolutionalLayer(Layer):
                 b_values = numpy.zeros((self.filter_shape[0],), dtype=theano.config.floatX)
                 b = theano.shared(value=b_values, name='b')
 
-        Layer.__init__(self,rng,T.reshape(inputs,input_shape,ndim=4),self.filter_shape[0],
+        Layer.__init__(self,rng,T.reshape(inputs,self.input_shape,ndim=4),self.filter_shape[0],
                 self.filter_shape[1], activation,dropout_rate,layer_name,W,b)
         self.rebuild()
+
+    def set_input(self,inputs):
+        self.inputs = T.reshape(inputs,self.input_shape,ndim=4)
 
     def rebuild(self):
         self.delta_W = sharedX(

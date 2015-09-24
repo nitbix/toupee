@@ -225,7 +225,7 @@ class MLP(object):
     def rejoin_layers(self,input):
         rt_chain_in = input
         for l in self.hiddenLayers:
-            l.inputs = rt_chain_in
+            l.set_input(rt_chain_in)
             l.rejoin()
             rt_chain_in = l.output
 
