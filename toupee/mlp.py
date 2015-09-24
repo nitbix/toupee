@@ -74,7 +74,11 @@ class MLP(object):
                         raise Exception("must specify first input shape")
                     input_shape = self.chain_input_shape
                 else:
+                    if len(input_shape) == 3:
+                        input_shape.insert(0,self.params.batch_size)
                     self.chain_input_shape = input_shape
+                if len(filter_shape) == 3:
+                    filter_shape.insert(1,input_shape[1])
                 if self.prev_dim is None:
                     self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
                 l = layers.ConvolutionalLayer(rng=rng,
@@ -327,6 +331,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
 
+    print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
     state['n_train_batches'] = train_set_x.get_value(borrow=True).shape[0] / params.batch_size
     state['n_valid_batches'] = valid_set_x.get_value(borrow=True).shape[0] / params.batch_size
 
