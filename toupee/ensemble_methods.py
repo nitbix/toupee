@@ -17,7 +17,6 @@ import yaml
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 
 import mlp
-from logistic_sgd import LogisticRegression
 from data import Resampler, Transformer, sharedX, load_data, make_pretraining_set
 from parameters import Parameters
 
