@@ -48,7 +48,7 @@ class MLP(object):
         self.chain_n_in = params.n_in
         self.chain_input_shape = None
         self.chain_in = input
-        prev_dim = None
+        self.prev_dim = None
         self.params = params
         self.rng = rng
         layer_number = 0
@@ -75,8 +75,8 @@ class MLP(object):
                     input_shape = self.chain_input_shape
                 else:
                     self.chain_input_shape = input_shape
-                if prev_dim is None:
-                    prev_dim = (input_shape[1],input_shape[2],input_shape[3])
+                if self.prev_dim is None:
+                    self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
                 l = layers.ConvolutionalLayer(rng=rng,
                                        inputs=self.chain_in, 
                                        input_shape=input_shape, 
@@ -86,13 +86,13 @@ class MLP(object):
                                        dropout_rate=drop_this,
                                        layer_name = name_this,
                                        pooling = pooling)
-                prev_map_number,dim_x,dim_y = prev_dim
+                prev_map_number,dim_x,dim_y = self.prev_dim
                 curr_map_number = filter_shape[0]
                 output_dim_x = (dim_x - filter_shape[2] + 1) / pool_size[0]
                 output_dim_y = (dim_y - filter_shape[3] + 1) / pool_size[1]
                 self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
                 l.output_shape = self.chain_n_in
-                prev_dim = (curr_map_number,output_dim_x,output_dim_y)
+                self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
                 self.chain_in = l.output
                 self.chain_input_shape = [self.chain_input_shape[0],
                         curr_map_number,
