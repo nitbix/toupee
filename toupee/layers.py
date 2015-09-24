@@ -153,10 +153,10 @@ class ConvolutionalLayer(Layer):
         """
         assert input_shape[1] == filter_shape[1]
 
-        self.filter_shape = filter_shape
-        self.input_shape = input_shape
+        self.input_shape = input_shape #[batch_size,levels,x,y]
+        self.filter_shape = filter_shape #[map,levels,x,y]
         self.pooling = pooling
-        self.pool_size = pool_size
+        self.pool_size = pool_size #[x,y]
         self.border_mode = border_mode
         self.fan_in = numpy.prod(self.filter_shape[1:])
         self.fan_out = self.filter_shape[0] * numpy.prod(self.filter_shape[2:]) / numpy.prod(pool_size)
