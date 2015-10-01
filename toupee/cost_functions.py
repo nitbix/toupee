@@ -11,6 +11,7 @@ import numpy
 import theano
 import theano.tensor as T
 import yaml
+import theano.tensor.extra_ops as TE
 
 class CostFunction(yaml.YAMLObject):
 
@@ -46,4 +47,17 @@ class MSE(CostFunction):
             raise TypeError('y should have the same shape as model.y',
                 ('y', y.type, 'y_pred', model.y.type, 'layer', model.layer_name))
         return T.mean((model.y - y) ** 2)
+
+class CategoricalMSE(CostFunction):
+    yaml_tag = u'!CategoricalMSE'
+    def __call__(self,model,y):
+        """
+        Return the mean squared error
+        """
+
+        one_hot = TE.to_one_hot(y,model.n_out)
+        if one_hot.ndim != model.y.ndim:
+            raise TypeError('y one_hot representation should have the same shape as model.y',
+                ('y', y.type, 'y_pred', model.y.type, 'layer', model.layer_name))
+        return T.mean((model.y - one_hot) ** 2)
 
