@@ -242,6 +242,13 @@ class MLP(object):
                 y: eval_set_y[index * self.params.batch_size:(index + 1) *
                     self.params.batch_size]})
 
+    def compute(self, eval_set_x, x=None):
+        x = self.x
+        return theano.function(inputs=[],
+            outputs=self.outputLayer.p_y_given_x,
+            #outputs=self.outputLayer.y_pred,
+            givens={ x: eval_set_x })
+
     def train_function(self, index, train_set_x, train_set_y, x, y):
         self.cost = self.cost_function(self.outputLayer,y) \
              + self.params.L1_reg * self.L1 \
@@ -374,6 +381,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     state['epoch'] = 0
     state['done_looping'] = False
     state['previous_minibatch_avg_cost'] = 1.
+    state['dataset'] = dataset
 
     def run_hooks():
         updates = []
@@ -433,13 +441,14 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                     break
         if params.save_images == True:
             for i in xrange(len(state['classifier'].hiddenLayers)):
-                imsave('layer{0}-iter{1}.png'.format(i,state['epoch']),
+                imsave('weights-layer{0}-iter{1}.png'.format(i,state['epoch']),
                         state['classifier'].hiddenLayers[i].W.get_value()
                       )
-            imsave('softmaxlayer-iter{0}.png'.format(state['epoch']),
+            imsave('weights-outputlayer-iter{0}.png'.format(state['epoch']),
                     state['classifier'].outputLayer.W.get_value()
                   )
-#            for gparam in state['classifier'].gparams.eval():
+#            for gparam in state['classifier'].gparams:
+#              print gparam
 #                imsave('gradient-{0}-iter{1}'.format(str(gparam),state['epoch']),
 #                        gparam)
         run_hooks()
