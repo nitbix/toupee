@@ -445,6 +445,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                     state['done_looping'] = True
                     break
         if params.save_images == True:
+            e_x = dataset[0][0].eval()
+            e_y = dataset[0][1].eval()
             for i in xrange(len(state['classifier'].hiddenLayers)):
                 imsave('weights-layer{0}-iter{1}.png'.format(i,state['epoch']),
                         state['classifier'].hiddenLayers[i].W.get_value()
@@ -453,12 +455,17 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                     state['classifier'].outputLayer.W.get_value()
                   )
             for param, gparam in zip(state['classifier'].opt_params, state['classifier'].gparams):
-                #imsave('gradient-{0}-iter{1}'.format(str(gparam),state['epoch']),
-                gradient = gparam.eval({x: dataset[0][0].eval(), y: dataset[0][1].eval()})#)
-                print "grad max: {0}".format(numpy.asarray(gradient).max())
+                gradient = numpy.asarray(gparam.eval({x: e_x, y: e_y}))
+                p = numpy.asarray(param.eval())
+                if len(gradient.shape) == 2:
+                  imsave('gradient-{0}-iter{1}.png'.format(str(param),state['epoch']),gradient * 255)
+                print "  {0} grad max: {1}".format(str(param),gradient.max())
+                print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
 
             computed = state['classifier'].classify(dataset[0][0])()
-            print "output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
+            print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
+            cost = numpy.asarray(state['classifier'].cost.eval({x: e_x, y: e_y}))
+            print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         run_hooks()
 
     if params.training_method == 'normal':
@@ -477,6 +484,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             run_epoch()
         state['classifier'].set_weights(state['best_weights'])
 
+    
     elif params.training_method == 'greedy':
         all_layers = state['classifier'].hiddenLayers
         state['classifier'].hiddenLayers = []
