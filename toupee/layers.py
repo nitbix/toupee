@@ -44,11 +44,10 @@ class Layer:
         self.b = b
         self.n_in = n_in
         self.n_out = n_out
-        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate)) + self.b
-        self.params = [self.W, self.b]
+        self.rejoin()
 
     def rejoin(self):
-        self.y = T.dot(self.inputs, self.W) + self.b
+        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate)) + self.b
         self.params = [self.W, self.b]
 
     def rebuild(self):
@@ -75,7 +74,6 @@ class FlatLayer(Layer):
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
                  activation=T.tanh,dropout_rate=0,layer_name='hidden'):
-
         Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name,W,b)
         self.rebuild()
 
@@ -95,17 +93,18 @@ class SoftMax(Layer):
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
                  activation=T.tanh,dropout_rate=0,layer_name='hidden'):
-        W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=floatX),
-                               name='W', borrow=True)
-        b = theano.shared(value=numpy.zeros((n_out,), dtype=floatX),
-                               name='b', borrow=True)
-        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name,W,b)
+#        W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=floatX),
+#                               name='Softmax_W', borrow=True)
+#        b = theano.shared(value=numpy.zeros((n_out,), dtype=floatX),
+#                               name='Softmax_b', borrow=True)
+        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name)#,W,b)
         self.rebuild()
 
     def rebuild(self):
+        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.params = [self.W]
         self.p_y_given_x = T.nnet.softmax(self.y)
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-        self.y = self.p_y_given_x
 
     def errors(self, y):
         """
@@ -123,7 +122,8 @@ class SoftMax(Layer):
             raise NotImplementedError()
 
     def rejoin(self):
-        Layer.rejoin(self)
+        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.params = [self.W]
         self.rebuild()
 
 
@@ -202,6 +202,7 @@ class ConvolutionalLayer(Layer):
                                                  ignore_border=True,
                                                  mode=self.pooling)
         self.output = self.pooled_out
+        self.params = [self.W, self.b]
 
     def rejoin(self):
         self.rebuild()
