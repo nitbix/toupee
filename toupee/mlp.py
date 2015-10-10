@@ -246,7 +246,12 @@ class MLP(object):
         x = self.x
         return theano.function(inputs=[],
             outputs=self.outputLayer.p_y_given_x,
-            #outputs=self.outputLayer.y_pred,
+            givens={ x: eval_set_x })
+
+    def classify(self, eval_set_x, x=None):
+        x = self.x
+        return theano.function(inputs=[],
+            outputs=self.outputLayer.y_pred,
             givens={ x: eval_set_x })
 
     def train_function(self, index, train_set_x, train_set_y, x, y):
@@ -447,10 +452,13 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             imsave('weights-outputlayer-iter{0}.png'.format(state['epoch']),
                     state['classifier'].outputLayer.W.get_value()
                   )
-#            for gparam in state['classifier'].gparams:
-#              print gparam
-#                imsave('gradient-{0}-iter{1}'.format(str(gparam),state['epoch']),
-#                        gparam)
+            for param, gparam in zip(state['classifier'].opt_params, state['classifier'].gparams):
+                #imsave('gradient-{0}-iter{1}'.format(str(gparam),state['epoch']),
+                gradient = gparam.eval({x: dataset[0][0].eval(), y: dataset[0][1].eval()})#)
+                print "grad max: {0}".format(numpy.asarray(gradient).max())
+
+            computed = state['classifier'].classify(dataset[0][0])()
+            print "output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
         run_hooks()
 
     if params.training_method == 'normal':
