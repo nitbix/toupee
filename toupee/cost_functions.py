@@ -59,5 +59,5 @@ class CategoricalMSE(CostFunction):
         if one_hot.ndim != model.y.ndim:
             raise TypeError('y one_hot representation should have the same shape as model.y',
                 ('y', y.type, 'y_pred', model.y.type, 'layer', model.layer_name))
-        return T.mean((model.y - one_hot) ** 2)
+        return T.mean((model.p_y_given_x - one_hot) ** 2)
 
