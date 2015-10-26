@@ -34,6 +34,36 @@ import layers
 import config 
 import cost_functions
 
+class TrainingState:
+    """
+    Helps track the state of the current training.
+    """
+    
+    def __init__(self,classifier):
+        self.reset()
+        self.classifier = classifier
+
+    def reset(self):
+        self.done_looping = False
+        self.best_weights = None
+        self.best_validation_loss = numpy.inf
+        self.best_iter = 0
+        self.test_score = 0.
+        self.epoch = 0
+        self.n_batches = {}
+        state.previous_minibatch_avg_cost = 1.
+
+    def pre_iter(self):
+        self.best_weights = None
+        self.best_validation_loss = numpy.inf
+        self.best_iter = 0
+        self.test_score = 0.
+        self.epoch = 0
+
+    def set_models(self,models):
+        self.train_model, self.validate_model, self.test_model = models
+
+
 class MLP(object):
     """
     Multi-Layer Perceptron (or any other kind of ANN if the layers exist)
@@ -104,9 +134,9 @@ class MLP(object):
             l = make_layer(layer_type,desc)
             self.hiddenLayers.append(l)
 
-            def pretrain(pretraining_set,supervised = False, reverse = False):
+            def pretrain(pretraining_set,mode='unsupervised'):
                 self.backup_first = None
-                if reverse:
+                if mode == 'reverse':
                     pretraining_set_x, pretraining_set_y = pretraining_set
                     pretraining_set_y = sharedX(
                             data.one_hot(pretraining_set_y.eval()))
@@ -141,20 +171,24 @@ class MLP(object):
                     self.chain_n_in= self.chain_n_in_back 
                     for i,l in enumerate(reversed(self.hiddenLayers)):
                         l.W = reversedLayers[i].W
+                elif mode == 'supervised':
+                    if len(pretraining_set) != 2:
+                        raise Exception("Need pretraining set with supervision to perform supervised pretraining")
+                    pretraining_set_x, pretraining_set_y = pretraining_set
+                    x_pretraining = self.x
+                    y_pretraining = self.y
+                    self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
+                elif mode == 'unsupervised':
+                    pretraining_set_x = pretraining_set
+                    pretraining_set_y = pretraining_set
+                    ptylen = pretraining_set.get_value(borrow=True).shape[1]
+                    x_pretraining = self.x
+                    y_pretraining = T.matrix('y_pretraining')
+                    self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, rng,
+                            'flat', self.hiddenLayers[0].activation)
                 else:
-                    if(supervised):
-                        pretraining_set_x, pretraining_set_y = pretraining_set
-                        x_pretraining = self.x
-                        y_pretraining = self.y
-                        self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
-                    else:
-                        pretraining_set_x = pretraining_set
-                        pretraining_set_y = pretraining_set
-                        ptylen = pretraining_set.get_value(borrow=True).shape[1]
-                        x_pretraining = self.x
-                        y_pretraining = T.matrix('y_pretraining')
-                        self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, rng,
-                                'flat', self.hiddenLayers[0].activation)
+                    raise Exception("Unknown pretraining mode: %s" % mode)
+                if mode in ['supervised', 'unsupervised']:
                     train_model = self.train_function(index, pretraining_set_x,
                         pretraining_set_y, x_pretraining, y_pretraining)
                     ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
@@ -167,18 +201,12 @@ class MLP(object):
 
             if pretraining_set is not None:
                 mode = params.pretraining
-                reverse = mode == 'reverse'
-                #TODO: refactor into something decent
-                if not isinstance(pretraining_set,tuple):
-                    #unsupervised
-                    pretrain(pretraining_set,False,reverse)
-                elif len(pretraining_set) == 2:
-                    #supervised
-                    pretrain(pretraining_set,True,reverse)
-                elif len(pretraining_set) == 3:
+                if mode == 'both':
                     #both
-                    pretrain(pretraining_set[2],False,reverse)
-                    pretrain((pretraining_set[0],pretraining_set[1]),True)
+                    pretrain(pretraining_set[2], mode='unsupervised')
+                    pretrain((pretraining_set[0],pretraining_set[1]), mode='supervised')
+                else:
+                    pretrain(pretraining_set,mode)
             layer_number += 1
         self.rejoin_layers(input)
         self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
@@ -321,32 +349,6 @@ class MLP(object):
             l.set_weights(W[i],b[i])
         self.outputLayer.set_weights(weights['outW'],weights['outb'])
 
-class TrainingState:
-    
-    def __init__(self,classifier):
-        self.reset()
-        self.classifier = classifier
-
-    def reset(self):
-        self.done_looping = False
-        self.best_weights = None
-        self.best_validation_loss = numpy.inf
-        self.best_iter = 0
-        self.test_score = 0.
-        self.epoch = 0
-        self.n_batches = {}
-        state.previous_minibatch_avg_cost = 1.
-
-    def pre_iter(self):
-        self.best_weights = None
-        self.best_validation_loss = numpy.inf
-        self.best_iter = 0
-        self.test_score = 0.
-        self.epoch = 0
-
-    def set_models(self,models):
-        self.train_model, self.validate_model, self.test_model = models
-
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     state = {}
     train_set_x, train_set_y = dataset[0]
@@ -376,6 +378,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
 
     print '... {0} training'.format(params.training_method)
 
+    #TODO: Make these part of the YAML experiment description, after they get their own class
     # early-stopping parameters
     state.patience = 10000  # look as this many examples regardless
     state.patience_increase = 20  # wait this much longer when a new best is
