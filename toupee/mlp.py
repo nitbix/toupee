@@ -78,7 +78,7 @@ class MLP(object):
         self.chain_n_in = params.n_in
         self.chain_input_shape = None
         self.chain_in = input
-        prev_dim = None
+        self.prev_dim = None
         self.params = params
         self.rng = rng
         layer_number = 0
@@ -104,9 +104,13 @@ class MLP(object):
                         raise Exception("must specify first input shape")
                     input_shape = self.chain_input_shape
                 else:
+                    if len(input_shape) == 3:
+                        input_shape.insert(0,self.params.batch_size)
                     self.chain_input_shape = input_shape
-                if prev_dim is None:
-                    prev_dim = (input_shape[1],input_shape[2],input_shape[3])
+                if len(filter_shape) == 3:
+                    filter_shape.insert(1,input_shape[1])
+                if self.prev_dim is None:
+                    self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
                 l = layers.ConvolutionalLayer(rng=rng,
                                        inputs=self.chain_in, 
                                        input_shape=input_shape, 
@@ -116,13 +120,13 @@ class MLP(object):
                                        dropout_rate=drop_this,
                                        layer_name = name_this,
                                        pooling = pooling)
-                prev_map_number,dim_x,dim_y = prev_dim
+                prev_map_number,dim_x,dim_y = self.prev_dim
                 curr_map_number = filter_shape[0]
                 output_dim_x = (dim_x - filter_shape[2] + 1) / pool_size[0]
                 output_dim_y = (dim_y - filter_shape[3] + 1) / pool_size[1]
                 self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
                 l.output_shape = self.chain_n_in
-                prev_dim = (curr_map_number,output_dim_x,output_dim_y)
+                self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
                 self.chain_in = l.output
                 self.chain_input_shape = [self.chain_input_shape[0],
                         curr_map_number,
@@ -258,7 +262,7 @@ class MLP(object):
     def rejoin_layers(self,input):
         rt_chain_in = input
         for l in self.hiddenLayers:
-            l.inputs = rt_chain_in
+            l.set_input(rt_chain_in)
             l.rejoin()
             rt_chain_in = l.output
 
@@ -270,6 +274,18 @@ class MLP(object):
                     self.params.batch_size],
                 y: eval_set_y[index * self.params.batch_size:(index + 1) *
                     self.params.batch_size]})
+
+    def compute(self, eval_set_x, x=None):
+        x = self.x
+        return theano.function(inputs=[],
+            outputs=self.outputLayer.p_y_given_x,
+            givens={ x: eval_set_x })
+
+    def classify(self, eval_set_x, x=None):
+        x = self.x
+        return theano.function(inputs=[],
+            outputs=self.outputLayer.y_pred,
+            givens={ x: eval_set_x })
 
     def train_function(self, index, train_set_x, train_set_y, x, y):
         self.cost = self.cost_function(self.outputLayer,y) \
@@ -368,6 +384,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
 
+    print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
 
     print '... building the model'
 
@@ -461,19 +478,31 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             state.previous_minibatch_avg_cost = minibatch_avg_cost
             if state.patience <= iter:
                     print('finished patience')
+<<<<<<< HEAD
                     state.done_looping = True
                     break
         if params.save_images == True:
-            for i in xrange(len(state.classifier.hiddenLayers)):
-                imsave('layer{0}-iter{1}.png'.format(i,state.epoch),
-                        state.classifier.hiddenLayers[i].W.get_value()
+            e_x = dataset[0][0].eval()
+            e_y = dataset[0][1].eval()
+            for i in xrange(len(state['classifier'].hiddenLayers)):
+                imsave('weights-layer{0}-iter{1}.png'.format(i,state['epoch']),
+                        state['classifier'].hiddenLayers[i].W.get_value()
                       )
-            imsave('softmaxlayer-iter{0}.png'.format(state.epoch),
-                    state.classifier.outputLayer.W.get_value()
+            imsave('weights-outputlayer-iter{0}.png'.format(state['epoch']),
+                    state['classifier'].outputLayer.W.get_value()
                   )
-#            for gparam in state.classifier.gparams.eval():
-#                imsave('gradient-{0}-iter{1}'.format(str(gparam),state.epoch),
-#                        gparam)
+            for param, gparam in zip(state['classifier'].opt_params, state['classifier'].gparams):
+                gradient = numpy.asarray(gparam.eval({x: e_x, y: e_y}))
+                p = numpy.asarray(param.eval())
+                if len(gradient.shape) == 2:
+                  imsave('gradient-{0}-iter{1}.png'.format(str(param),state['epoch']),gradient * 255)
+                print "  {0} grad max: {1}".format(str(param),gradient.max())
+                print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
+
+            computed = state['classifier'].classify(dataset[0][0])()
+            print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
+            cost = numpy.asarray(state['classifier'].cost.eval({x: e_x, y: e_y}))
+            print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         run_hooks()
 
     if params.training_method == 'normal':
@@ -486,6 +515,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             run_epoch()
         state.classifier.set_weights(state['best_weights'])
 
+    
     elif params.training_method == 'greedy':
         all_layers = state.classifier.hiddenLayers
         state.classifier.hiddenLayers = []

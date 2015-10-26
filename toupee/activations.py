@@ -27,6 +27,11 @@ class SoftSign(Activation):
     def __call__(self,x):
         return x / (1 + T.abs_(x))
 
+class Sigmoid(Activation):
+    yaml_tag = u'!Sigmoid'
+    def __call__(self,x):
+        return T.nnet.sigmoid(x)
+
 class ReLU(Activation):
     yaml_tag = u'!ReLU'
     def __call__(self,x):

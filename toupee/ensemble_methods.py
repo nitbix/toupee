@@ -17,7 +17,6 @@ import yaml
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 
 import mlp
-from logistic_sgd import LogisticRegression
 from data import Resampler, Transformer, sharedX, load_data, make_pretraining_set
 from parameters import Parameters
 
@@ -32,7 +31,6 @@ class AveragingRunner:
         self.members=members
         self.x = x
         self.y = y
-        self.p_y_given_x = 0.
         self.p_y_given_x = sum([m.p_y_given_x for m in self.members]) / len(members)
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
         self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
@@ -47,7 +45,6 @@ class MajorityVotingRunner:
         self.members=members
         self.x = x
         self.y = y
-        self.p_y_given_x = 0.
         self.p_y_given_x = sum([T.eq(T.max(m.p_y_given_x),m.p_y_given_x)
             for m in self.members])
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
@@ -63,9 +60,8 @@ class WeightedAveraging:
         self.members=members
         self.x = x
         self.y = y
-#TODO: make this a Theano variable
+        #TODO: make this a Theano variable
         self.weights = [0 for x in members] + (1. / len(members))
-        self.p_y_given_x = 0.
         self.p_y_given_x = sum([T.eq(T.max(m.p_y_given_x),m.p_y_given_x)
             for m in self.members])
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)

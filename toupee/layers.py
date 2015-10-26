@@ -47,9 +47,10 @@ class Layer:
         self.y = T.dot(self.inputs, self.W) + self.b
         self.params = [self.W, self.b]
         self.write_enable = 1
+        self.rejoin()
 
     def rejoin(self):
-        self.y = T.dot(self.inputs, self.W) + self.b
+        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate)) + self.b
         self.params = [self.W, self.b]
 
     def rebuild(self):
@@ -65,6 +66,9 @@ class Layer:
         self.b = sharedX(b)
         self.rebuild()
 
+    def set_input(self,inputs):
+        self.inputs =inputs
+
 
 class FlatLayer(Layer):
     """
@@ -73,14 +77,12 @@ class FlatLayer(Layer):
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
                  activation=T.tanh,dropout_rate=0,layer_name='hidden'):
-
         Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name,W,b)
         self.rebuild()
 
     def rebuild(self):
-        lin_output = T.dot(self.inputs, self.W) * (1 - self.dropout_rate) + self.b
-        self.output = (lin_output if self.activation is None
-                       else self.activation(lin_output))
+        self.output = (self.y if self.activation is None
+                       else self.activation(self.y))
 
     def rejoin(self):
         Layer.rejoin(self)
@@ -94,17 +96,18 @@ class SoftMax(Layer):
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
                  activation=T.tanh,dropout_rate=0,layer_name='hidden'):
-        W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=floatX),
-                               name='W', borrow=True)
-        b = theano.shared(value=numpy.zeros((n_out,), dtype=floatX),
-                               name='b', borrow=True)
-        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name,W,b)
+#        W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=floatX),
+#                               name='Softmax_W', borrow=True)
+#        b = theano.shared(value=numpy.zeros((n_out,), dtype=floatX),
+#                               name='Softmax_b', borrow=True)
+        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name)#,W,b)
         self.rebuild()
 
     def rebuild(self):
-        self.p_y_given_x = T.nnet.softmax(T.dot(self.inputs, self.W) + self.b)
+        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.params = [self.W]
+        self.p_y_given_x = T.nnet.softmax(self.y)
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-        self.y = self.p_y_given_x
 
     def errors(self, y):
         """
@@ -122,7 +125,8 @@ class SoftMax(Layer):
             raise NotImplementedError()
 
     def rejoin(self):
-        Layer.rejoin(self)
+        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.params = [self.W]
         self.rebuild()
 
 
@@ -152,34 +156,39 @@ class ConvolutionalLayer(Layer):
         """
         assert input_shape[1] == filter_shape[1]
 
-        self.filter_shape = filter_shape
-        self.pool_size = pool_size
+        self.input_shape = input_shape #[batch_size,levels,x,y]
+        self.filter_shape = filter_shape #[map,levels,x,y]
+        self.pooling = pooling
+        self.pool_size = pool_size #[x,y]
         self.border_mode = border_mode
         self.fan_in = numpy.prod(self.filter_shape[1:])
-        self.fan_out = filter_shape[0] * numpy.prod(filter_shape[2:]) / numpy.prod(pool_size)
+        self.fan_out = self.filter_shape[0] * numpy.prod(self.filter_shape[2:]) / numpy.prod(pool_size)
 
         #W and b are slightly different
         if W is None:
                 W_bound = numpy.sqrt(6. / (self.fan_in + self.fan_out))
                 initial_W = numpy.asarray( rng.uniform(
                                        low=-W_bound, high=W_bound,
-                                       size=filter_shape),
+                                       size=self.filter_shape),
                                        dtype=theano.config.floatX)
 
                 if activation == T.nnet.sigmoid:
                     initial_W *= 4
                 W = theano.shared(value = initial_W, name = 'W')
         if b is None:
-                b_values = numpy.zeros((filter_shape[0],), dtype=theano.config.floatX)
+                b_values = numpy.zeros((self.filter_shape[0],), dtype=theano.config.floatX)
                 b = theano.shared(value=b_values, name='b')
 
-        Layer.__init__(self,rng,T.reshape(inputs,input_shape,ndim=4),filter_shape[0],
-                filter_shape[1], activation,dropout_rate,layer_name,W,b)
+        Layer.__init__(self,rng,T.reshape(inputs,self.input_shape,ndim=4),self.filter_shape[0],
+                self.filter_shape[1], activation,dropout_rate,layer_name,W,b)
         self.rebuild()
+
+    def set_input(self,inputs):
+        self.inputs = T.reshape(inputs,self.input_shape,ndim=4)
 
     def rebuild(self):
         self.delta_W = sharedX(
-            value=numpy.zeros(filter_shape),
+            value=numpy.zeros(self.filter_shape),
             name='{0}_delta_W'.format(self.layer_name))
         self.delta_b = sharedX(
             value=numpy.zeros_like(self.b.get_value(borrow=True)),
@@ -187,12 +196,16 @@ class ConvolutionalLayer(Layer):
         self.conv_out = conv.conv2d(
             input=self.inputs,
             filters=self.W,
-            filter_shape=filter_shape,
-            image_shape=input_shape,
-            border_mode=self.border_mode)
-        self.y_out = activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
-        self.pooled_out = downsample.max_pool_2d(input=self.y_out,ds=self.pool_size,ignore_border=True,mode=pooling)
+            filter_shape=self.filter_shape,
+            image_shape=self.input_shape,
+            border_mode=self.border_mode) * (1. / (1. - self.dropout_rate))
+        self.y_out = self.activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
+        self.pooled_out = downsample.max_pool_2d(input=self.y_out, 
+                                                 ds=self.pool_size,
+                                                 ignore_border=True,
+                                                 mode=self.pooling)
         self.output = self.pooled_out
+        self.params = [self.W, self.b]
 
     def rejoin(self):
         self.rebuild()
