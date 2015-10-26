@@ -178,7 +178,7 @@ class MLP(object):
                     x_pretraining = self.x
                     y_pretraining = self.y
                     self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
-                elif mode == 'unsupervised':
+                elif mode in ['unsupervised', 'unsupervised-together']:
                     pretraining_set_x = pretraining_set
                     pretraining_set_y = pretraining_set
                     ptylen = pretraining_set.get_value(borrow=True).shape[1]
@@ -186,9 +186,12 @@ class MLP(object):
                     y_pretraining = T.matrix('y_pretraining')
                     self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, rng,
                             'flat', self.hiddenLayers[0].activation)
+                    if mode == 'unsupervised':
+                        for i in range(0,len(self.hiddenLayers) -1):
+                            self.hiddenLayers[i].write_enable = 0
                 else:
                     raise Exception("Unknown pretraining mode: %s" % mode)
-                if mode in ['supervised', 'unsupervised']:
+                if mode in ['supervised', 'unsupervised', 'unsupervised-together']:
                     train_model = self.train_function(index, pretraining_set_x,
                         pretraining_set_y, x_pretraining, y_pretraining)
                     ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
@@ -197,6 +200,8 @@ class MLP(object):
                         print "... pretraining layer {0}, pass {1}".format(layer_number,p)
                         for minibatch_index in xrange(n_batches):
                             minibatch_avg_cost = train_model(minibatch_index,1)
+                for l in self.hiddenLayers:
+                    l.write_enable = 1
                 self.rejoin_layers(input)
 
             if pretraining_set is not None:
@@ -281,16 +286,24 @@ class MLP(object):
         dropout_rates = {}
         for layer in self.hiddenLayers:
             dropout_rates[layer.layer_name + '_W'] = layer.dropout_rate
+            dropout_rates[layer.layer_name + '_b'] = 1.
+            write_enables[layer.layer_name + '_W'] = layer.write_enable
+            write_enables[layer.layer_name + '_b'] = layer.write_enable
         for param, gparam in zip(self.opt_params, self.gparams):
             if str(param) in dropout_rates.keys():
                 include_prob = 1. - dropout_rates[str(param)]
             else:
-                include_prob = 1.
+                raise Exception("missing dropout probability for layer %s" % str(param))
+            if str(param) in write_enable.keys():
+                we = write_enables[str(param)]
+            else:
+                raise Exception("missing dropout probability for layer %s" % str(param))
+
             mask = theano_rng.binomial(p=include_prob,
-                                       size=param.shape,dtype=param.dtype)    
+                                       size=param.shape,dtype=param.dtype)
             new_update = self.params.update_rule(param,
                     self.params.learning_rate, gparam, mask, updates,
-                    self.cost,previous_cost)
+                    self.cost,previous_cost) * we
             updates.append((param, new_update))
         return theano.function(inputs=[index,previous_cost],
                 outputs=self.cost,

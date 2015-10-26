@@ -46,6 +46,7 @@ class Layer:
         self.n_out = n_out
         self.y = T.dot(self.inputs, self.W) + self.b
         self.params = [self.W, self.b]
+        self.write_enable = 1
 
     def rejoin(self):
         self.y = T.dot(self.inputs, self.W) + self.b
