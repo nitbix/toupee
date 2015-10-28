@@ -42,16 +42,16 @@ class TrainingState:
     def __init__(self,classifier):
         self.reset()
         self.classifier = classifier
+        self.best_validation_loss = numpy.inf
 
     def reset(self):
         self.done_looping = False
         self.best_weights = None
-        self.best_validation_loss = numpy.inf
         self.best_iter = 0
         self.test_score = 0.
         self.epoch = 0
         self.n_batches = {}
-        state.previous_minibatch_avg_cost = 1.
+        self.previous_minibatch_avg_cost = 1.
 
     def pre_iter(self):
         self.best_weights = None
@@ -300,20 +300,32 @@ class MLP(object):
         theano_rng = MRG_RandomStreams(max(self.rng.randint(2 ** 15), 1))
 
         dropout_rates = {}
-        for layer in self.hiddenLayers:
+        write_enables = {}
+        layer_map = {}
+        def unpack(layer):
             dropout_rates[layer.layer_name + '_W'] = layer.dropout_rate
             dropout_rates[layer.layer_name + '_b'] = 1.
             write_enables[layer.layer_name + '_W'] = layer.write_enable
             write_enables[layer.layer_name + '_b'] = layer.write_enable
+            layer_map[layer.layer_name + '_W'] = layer
+            layer_map[layer.layer_name + '_b'] = layer
+
+        for layer in self.hiddenLayers:
+            unpack(layer)
+        unpack(self.outputLayer)
+
         for param, gparam in zip(self.opt_params, self.gparams):
             if str(param) in dropout_rates.keys():
                 include_prob = 1. - dropout_rates[str(param)]
             else:
-                raise Exception("missing dropout probability for layer %s" % str(param))
-            if str(param) in write_enable.keys():
+                include_prob = 1.
+            if str(param) in write_enables.keys():
                 we = write_enables[str(param)]
             else:
-                raise Exception("missing dropout probability for layer %s" % str(param))
+                print write_enables.keys()
+                print self.opt_params
+                print layer_map[str(param)]
+                raise Exception("missing write_enable for layer %s" % str(param))
 
             mask = theano_rng.binomial(p=include_prob,
                                        size=param.shape,dtype=param.dtype)
@@ -379,7 +391,6 @@ class MLP(object):
         self.outputLayer.set_weights(weights['outW'],weights['outb'])
 
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
-    state = {}
     train_set_x, train_set_y = dataset[0]
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
@@ -457,11 +468,11 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                 print('epoch %i, minibatch %i/%i, validation error %f %%' %
                      (state.epoch, minibatch_index + 1, state.n_batches['train'],
                       this_validation_loss * 100.))
-                if this_validation_loss < state.best_loss['valid']:
-                    if this_validation_loss < state.best_loss['valid'] *  \
+                if this_validation_loss < state.best_validation_loss:
+                    if this_validation_loss < state.best_validation_loss *  \
                            improvement_threshold:
                         state.patience = max(state.patience, iter * state.patience_increase)
-                    state.best_loss['valid'] = this_validation_loss
+                    state.best_validation_loss = this_validation_loss
                     state.best_iter = iter
                     state.best_weights = state.classifier.get_weights()
                     gc.collect()
@@ -478,30 +489,29 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             state.previous_minibatch_avg_cost = minibatch_avg_cost
             if state.patience <= iter:
                     print('finished patience')
-<<<<<<< HEAD
                     state.done_looping = True
                     break
         if params.save_images == True:
             e_x = dataset[0][0].eval()
             e_y = dataset[0][1].eval()
-            for i in xrange(len(state['classifier'].hiddenLayers)):
-                imsave('weights-layer{0}-iter{1}.png'.format(i,state['epoch']),
-                        state['classifier'].hiddenLayers[i].W.get_value()
+            for i in xrange(len(state.classifier.hiddenLayers)):
+                imsave('weights-layer{0}-iter{1}.png'.format(i,state.epoch),
+                        state.classifier.hiddenLayers[i].W.get_value()
                       )
-            imsave('weights-outputlayer-iter{0}.png'.format(state['epoch']),
-                    state['classifier'].outputLayer.W.get_value()
+            imsave('weights-outputlayer-iter{0}.png'.format(state.epoch),
+                    state.classifier.outputLayer.W.get_value()
                   )
-            for param, gparam in zip(state['classifier'].opt_params, state['classifier'].gparams):
+            for param, gparam in zip(state.classifier.opt_params, state.classifier.gparams):
                 gradient = numpy.asarray(gparam.eval({x: e_x, y: e_y}))
                 p = numpy.asarray(param.eval())
                 if len(gradient.shape) == 2:
-                  imsave('gradient-{0}-iter{1}.png'.format(str(param),state['epoch']),gradient * 255)
+                  imsave('gradient-{0}-iter{1}.png'.format(str(param),state.epoch),gradient * 255)
                 print "  {0} grad max: {1}".format(str(param),gradient.max())
                 print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
 
-            computed = state['classifier'].classify(dataset[0][0])()
+            computed = state.classifier.classify(dataset[0][0])()
             print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
-            cost = numpy.asarray(state['classifier'].cost.eval({x: e_x, y: e_y}))
+            cost = numpy.asarray(state.classifier.cost.eval({x: e_x, y: e_y}))
             print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         run_hooks()
 
@@ -513,7 +523,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
         while (state.epoch < params.n_epochs) and (not state.done_looping):
             state.epoch += 1
             run_epoch()
-        state.classifier.set_weights(state['best_weights'])
+        state.classifier.set_weights(state.best_weights)
 
     
     elif params.training_method == 'greedy':
@@ -533,18 +543,18 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             while (state.epoch < params.n_epochs) and (not state.done_looping):
                 state.epoch += 1
                 run_epoch()
-            state.classifier.set_weights(state['best_weights'])
+            state.classifier.set_weights(state.best_weights)
     end_time = time.clock()
     if test_set_x is not None:
         print(('Optimization complete. Best validation score of %f %% '
-               'obtained at iteration %i, with test performance %f %%') %
-              (state['best_validation_loss'] * 100., state['best_iter'] + 1,
-                  state['test_score'] * 100.))
+               'obtained at iteration %i, epoch %i, with test performance %f %%') %
+              (state.best_validation_loss * 100., state.best_iter + 1,
+                  state.epoch, state.test_score * 100.))
         print >> sys.stderr, ('The code for file ' +
                               os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
         return state.classifier
     else:
         print('Selection : Best validation score of {0} %'.format(
-              state['best_validation_loss'] * 100.))
+              state.best_validation_loss * 100.))
         return state.classifier

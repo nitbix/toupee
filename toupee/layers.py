@@ -46,7 +46,7 @@ class Layer:
         self.n_out = n_out
         self.y = T.dot(self.inputs, self.W) + self.b
         self.params = [self.W, self.b]
-        self.write_enable = 1
+        self.write_enable = 1.
         self.rejoin()
 
     def rejoin(self):
@@ -164,7 +164,7 @@ class ConvolutionalLayer(Layer):
         self.fan_in = numpy.prod(self.filter_shape[1:])
         self.fan_out = self.filter_shape[0] * numpy.prod(self.filter_shape[2:]) / numpy.prod(pool_size)
 
-        #W and b are slightly different
+        #W and b are slightly different for convnets
         if W is None:
                 W_bound = numpy.sqrt(6. / (self.fan_in + self.fan_out))
                 initial_W = numpy.asarray( rng.uniform(
@@ -174,10 +174,10 @@ class ConvolutionalLayer(Layer):
 
                 if activation == T.nnet.sigmoid:
                     initial_W *= 4
-                W = theano.shared(value = initial_W, name = 'W')
+                W = theano.shared(value=initial_W, name=layer_name + '_W')
         if b is None:
                 b_values = numpy.zeros((self.filter_shape[0],), dtype=theano.config.floatX)
-                b = theano.shared(value=b_values, name='b')
+                b = theano.shared(value=b_values, name=layer_name + '_b')
 
         Layer.__init__(self,rng,T.reshape(inputs,self.input_shape,ndim=4),self.filter_shape[0],
                 self.filter_shape[1], activation,dropout_rate,layer_name,W,b)
