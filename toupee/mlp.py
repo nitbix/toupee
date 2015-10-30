@@ -33,6 +33,7 @@ import update_rules
 import layers
 import config 
 import cost_functions
+import activations
 
 class TrainingState:
     """
@@ -140,8 +141,13 @@ class MLP(object):
 
             def pretrain(pretraining_set,mode='unsupervised'):
                 self.backup_first = None
-                if mode == 'reverse':
-                    pretraining_set_x, pretraining_set_y = pretraining_set
+                #these all lock the previous layers
+                if mode in ['reverse', 'supervised', 'unsupervised']:
+                    for i in range(0,len(self.hiddenLayers) -1):
+                        self.hiddenLayers[i].write_enable = 0
+                    self.rejoin_layers(input)
+                if mode in ['reverse', 'reverse-together']:
+                    pretraining_set_x, pretraining_set_y, _ = pretraining_set
                     pretraining_set_y = sharedX(
                             data.one_hot(pretraining_set_y.eval()))
                     x_pretraining = self.x
@@ -160,8 +166,7 @@ class MLP(object):
                         i -= 1
                     self.hiddenLayers = reversedLayers
                     self.make_top_layer(self.params.n_in, self.chain_in,
-                            self.chain_n_in, rng, 'flat',
-                            reversedLayers[0].activation)
+                            self.chain_n_in, rng, 'flat', activations.TanH())
                     train_model = self.train_function(index, pretraining_set_y,
                         pretraining_set_x, y_pretraining, x_pretraining)
                     ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
@@ -175,24 +180,19 @@ class MLP(object):
                     self.chain_n_in= self.chain_n_in_back 
                     for i,l in enumerate(reversed(self.hiddenLayers)):
                         l.W = reversedLayers[i].W
-                elif mode == 'supervised':
-                    if len(pretraining_set) != 2:
-                        raise Exception("Need pretraining set with supervision to perform supervised pretraining")
-                    pretraining_set_x, pretraining_set_y = pretraining_set
+                elif mode in ['supervised', 'supervised-together']:
+                    pretraining_set_x, pretraining_set_y, _ = pretraining_set
                     x_pretraining = self.x
                     y_pretraining = self.y
                     self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
                 elif mode in ['unsupervised', 'unsupervised-together']:
-                    pretraining_set_x = pretraining_set
-                    pretraining_set_y = pretraining_set
-                    ptylen = pretraining_set.get_value(borrow=True).shape[1]
+                    pretraining_set_x = pretraining_set[0]
+                    pretraining_set_y = pretraining_set[0]
+                    ptylen = pretraining_set[0].get_value(borrow=True).shape[1]
                     x_pretraining = self.x
                     y_pretraining = T.matrix('y_pretraining')
                     self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, rng,
-                            'flat', self.hiddenLayers[0].activation)
-                    if mode == 'unsupervised':
-                        for i in range(0,len(self.hiddenLayers) -1):
-                            self.hiddenLayers[i].write_enable = 0
+                            'flat', activations.TanH())
                 else:
                     raise Exception("Unknown pretraining mode: %s" % mode)
                 if mode in ['supervised', 'unsupervised', 'unsupervised-together']:
@@ -208,10 +208,9 @@ class MLP(object):
                     l.write_enable = 1
                 self.rejoin_layers(input)
 
-            if pretraining_set is not None:
-                mode = params.pretraining
+            mode = params.pretraining
+            if pretraining_set is not None and mode is not None:
                 if mode == 'both':
-                    #both
                     pretrain(pretraining_set[2], mode='unsupervised')
                     pretrain((pretraining_set[0],pretraining_set[1]), mode='supervised')
                 else:
@@ -301,14 +300,11 @@ class MLP(object):
 
         dropout_rates = {}
         write_enables = {}
-        layer_map = {}
         def unpack(layer):
             dropout_rates[layer.layer_name + '_W'] = layer.dropout_rate
             dropout_rates[layer.layer_name + '_b'] = 1.
             write_enables[layer.layer_name + '_W'] = layer.write_enable
             write_enables[layer.layer_name + '_b'] = layer.write_enable
-            layer_map[layer.layer_name + '_W'] = layer
-            layer_map[layer.layer_name + '_b'] = layer
 
         for layer in self.hiddenLayers:
             unpack(layer)
@@ -322,16 +318,13 @@ class MLP(object):
             if str(param) in write_enables.keys():
                 we = write_enables[str(param)]
             else:
-                print write_enables.keys()
-                print self.opt_params
-                print layer_map[str(param)]
                 raise Exception("missing write_enable for layer %s" % str(param))
 
             mask = theano_rng.binomial(p=include_prob,
                                        size=param.shape,dtype=param.dtype)
             new_update = self.params.update_rule(param,
-                    self.params.learning_rate, gparam, mask, updates,
-                    self.cost,previous_cost) * we
+                    self.params.learning_rate, gparam, mask * we, updates,
+                    self.cost,previous_cost)
             updates.append((param, new_update))
         return theano.function(inputs=[index,previous_cost],
                 outputs=self.cost,

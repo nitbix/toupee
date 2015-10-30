@@ -106,14 +106,7 @@ def load_data(dataset, shared=True, pickled=True):
 
 
 def make_pretraining_set(datasets,mode):
-    pretraining_set = None
-    if mode == 'unsupervised':
-        pretraining_set = datasets[0][0]
-    elif mode == 'supervised' or mode == 'reverse':
-        pretraining_set = datasets[0]
-    elif mode == 'both':
-        pretraining_set = (datasets[0][0],datasets[0][1],datasets[0][0])
-    return pretraining_set
+    return (datasets[0][0],datasets[0][1],datasets[0][0])
 
 
 class Resampler:

@@ -83,6 +83,7 @@ class FlatLayer(Layer):
     def rebuild(self):
         self.output = (self.y if self.activation is None
                        else self.activation(self.y))
+        self.p_y_given_x = self.output
 
     def rejoin(self):
         Layer.rejoin(self)
