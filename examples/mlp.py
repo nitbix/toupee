@@ -11,26 +11,10 @@ All code released under GPLv2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 
-import cPickle
-import gzip
-import os
 import sys
-import time
-import copy
-import numpy
-import scipy
 
-import theano
-import theano.tensor as T
-from theano.ifelse import ifelse
-from theano.sandbox.rng_mrg import MRG_RandomStreams                                                                                                                    
-from toupee.logistic_sgd import LogisticRegression
 from toupee import data
-from toupee.data import Resampler, Transformer, sharedX
-from toupee import update_rules
-from toupee import layers
 from toupee import config 
-from toupee import cost_functions
 from toupee.mlp import MLP, test_mlp
 
 
