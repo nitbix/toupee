@@ -208,12 +208,9 @@ class MLP(object):
                     l.write_enable = 1
                 self.rejoin_layers(input)
 
-            mode = params.pretraining
-            if pretraining_set is not None and mode is not None:
-                if mode == 'both':
-                    pretrain(pretraining_set[2], mode='unsupervised')
-                    pretrain((pretraining_set[0],pretraining_set[1]), mode='supervised')
-                else:
+            modes = params.pretraining
+            if pretraining_set is not None and modes is not None:
+                for mode in modes.split(','):
                     pretrain(pretraining_set,mode)
             layer_number += 1
         self.rejoin_layers(input)
