@@ -17,7 +17,8 @@ import cost_functions
 import activations
 
 defaults = { 'random_seed': [2013,1,4],
-             'save_images': False
+             'save_images': False,
+             'pretraining_noise': None
            }
 def load_parameters(filename):
     with open(filename) as f:

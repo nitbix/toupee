@@ -21,7 +21,12 @@ import theano.tensor as T
 import gzip
 import cPickle
 
+from theano.sandbox.rng_mrg import MRG_RandomStreams
+
 floatX = theano.config.floatX
+rng = numpy.random.RandomState(42)
+theano_rng = MRG_RandomStreams(max(rng.randint(2 ** 15), 1))
+
 #import matplotlib.pyplot as plt
 
 def sharedX(value, name=None, borrow=False, dtype=None):
@@ -64,6 +69,11 @@ def shared_dataset(data_xy, borrow=True):
     # lets ous get around this issue
     return shared_x, T.cast(shared_y, 'int32')
 
+def mask(p,shape,dtype=floatX):
+    return theano_rng.binomial(p=p, size=shape, dtype=dtype)
+
+def corrupt(data,p):
+    return mask(1-p,data.shape,dtype=floatX) * data
 
 def load_data(dataset, shared=True, pickled=True):
     ''' Loads the dataset
@@ -106,7 +116,7 @@ def load_data(dataset, shared=True, pickled=True):
 
 
 def make_pretraining_set(datasets,mode):
-    return (datasets[0][0],datasets[0][1],datasets[0][0])
+    return (datasets[0][0],datasets[0][1])
 
 
 class Resampler:

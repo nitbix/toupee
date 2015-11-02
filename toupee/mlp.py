@@ -24,7 +24,6 @@ import scipy
 import theano
 import theano.tensor as T
 from theano.ifelse import ifelse
-from theano.sandbox.rng_mrg import MRG_RandomStreams
 from scipy.misc import imsave
 
 import data
@@ -140,6 +139,9 @@ class MLP(object):
             self.hiddenLayers.append(l)
 
             def pretrain(pretraining_set,mode='unsupervised'):
+                if self.params.pretraining_noise is not None:
+                    pretraining_set[0] = data.corrupt(
+                            self.params.pretraining_noise,pretraining_set[0])
                 self.backup_first = None
                 #these all lock the previous layers
                 if mode in ['reverse', 'supervised', 'unsupervised']:
@@ -147,7 +149,7 @@ class MLP(object):
                         self.hiddenLayers[i].write_enable = 0
                     self.rejoin_layers(input)
                 if mode in ['reverse', 'reverse-together']:
-                    pretraining_set_x, pretraining_set_y, _ = pretraining_set
+                    pretraining_set_x, pretraining_set_y = pretraining_set
                     pretraining_set_y = sharedX(
                             data.one_hot(pretraining_set_y.eval()))
                     x_pretraining = self.x
@@ -181,7 +183,7 @@ class MLP(object):
                     for i,l in enumerate(reversed(self.hiddenLayers)):
                         l.W = reversedLayers[i].W
                 elif mode in ['supervised', 'supervised-together']:
-                    pretraining_set_x, pretraining_set_y, _ = pretraining_set
+                    pretraining_set_x, pretraining_set_y = pretraining_set
                     x_pretraining = self.x
                     y_pretraining = self.y
                     self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
@@ -293,7 +295,6 @@ class MLP(object):
             self.gparams.append(gparam)
         previous_cost = T.scalar()
         updates = []
-        theano_rng = MRG_RandomStreams(max(self.rng.randint(2 ** 15), 1))
 
         dropout_rates = {}
         write_enables = {}
@@ -317,8 +318,7 @@ class MLP(object):
             else:
                 raise Exception("missing write_enable for layer %s" % str(param))
 
-            mask = theano_rng.binomial(p=include_prob,
-                                       size=param.shape,dtype=param.dtype)
+            mask = data.mask(p=include_prob,shape=param.shape,dtype=param.dtype)
             new_update = self.params.update_rule(param,
                     self.params.learning_rate, gparam, mask * we, updates,
                     self.cost,previous_cost)
