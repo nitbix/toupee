@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-Run a MLP experiment from a yaml file
+Run an ensemble experiment from a yaml file
 
 Alan Mosca
 Department of Computer Science and Information Systems
@@ -13,14 +13,11 @@ __docformat__ = 'restructedtext en'
 
 import gc
 import sys
-import numpy as np
-import numpy.random
 import theano
 import theano.tensor as T
 
 import mlp
 import config
-from logistic_sgd import LogisticRegression
 from data import *
 
 if __name__ == '__main__':
