@@ -38,6 +38,7 @@ class FixedLearningRate(LearningRate):
         pass
 
 class LinearDecayLearningRate(LearningRate):
+    #TODO: Using this with Dropout causes NaN all over the place. WTF?
 
     yaml_tag = u'!LinearDecayLearningRate'
     def get(self):
@@ -108,7 +109,7 @@ class OldRProp(RPropVariant):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(learning_rate.get().get_value() * numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(self.min_delta * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
@@ -164,7 +165,7 @@ class RProp(RPropVariant):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(learning_rate.get().get_value() * numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(self.min_delta * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
@@ -231,7 +232,7 @@ class iRPropPlus(RPropVariant):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(learning_rate.get().get_value() * numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(self.min_delta * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
