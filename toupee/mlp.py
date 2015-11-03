@@ -519,8 +519,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
 
     if params.training_method == 'normal':
         print ".... generating models"
-        state.set_models(state.classifier.make_models(dataset))
         reset()
+        state.set_models(state.classifier.make_models(dataset))
         print ".... started"
         while (state.epoch < params.n_epochs) and (not state.done_looping):
             state.epoch += 1
