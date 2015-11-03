@@ -30,7 +30,8 @@ class FixedLearningRate(LearningRate):
     yaml_tag = u'!FixedLearningRate'
 
     def get(self):
-        if self.shared_rate not in self.__dict__:
+        return sharedX(self.rate)
+        if 'shared_rate' not in self.__dict__:
             self.shared_rate = sharedX(self.rate)
         return self.shared_rate
 
