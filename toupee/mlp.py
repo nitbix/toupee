@@ -75,6 +75,7 @@ class MLP(object):
         """
 
         self.hiddenLayers = []
+        self.layer_masks = {}
         self.chain_n_in = params.n_in
         self.chain_input_shape = None
         self.chain_in = input
@@ -300,7 +301,7 @@ class MLP(object):
         write_enables = {}
         def unpack(layer):
             dropout_rates[layer.layer_name + '_W'] = layer.dropout_rate
-            dropout_rates[layer.layer_name + '_b'] = 1.
+            dropout_rates[layer.layer_name + '_b'] = 0.
             write_enables[layer.layer_name + '_W'] = layer.write_enable
             write_enables[layer.layer_name + '_b'] = layer.write_enable
 
@@ -319,6 +320,7 @@ class MLP(object):
                 raise Exception("missing write_enable for layer %s" % str(param))
 
             mask = data.mask(p=include_prob,shape=param.shape,dtype=param.dtype)
+            self.layer_masks[str(param)] = mask
             new_update = self.params.update_rule(param,
                     self.params.learning_rate, gparam, mask * we, updates,
                     self.cost,previous_cost)
@@ -481,28 +483,35 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                     print('finished patience')
                     state.done_looping = True
                     break
-        if params.save_images == True:
+        if params.save_images or params.detailed_stats:
             e_x = dataset[0][0].eval()
             e_y = dataset[0][1].eval()
-            for i in xrange(len(state.classifier.hiddenLayers)):
-                imsave('weights-layer{0}-iter{1}.png'.format(i,state.epoch),
-                        state.classifier.hiddenLayers[i].W.get_value()
+            if params.save_images:
+                for i in xrange(len(state.classifier.hiddenLayers)):
+                    imsave('weights-layer{0}-iter{1}.png'.format(i,state.epoch),
+                            state.classifier.hiddenLayers[i].W.get_value()
+                          )
+                imsave('weights-outputlayer-iter{0}.png'.format(state.epoch),
+                        state.classifier.outputLayer.W.get_value()
                       )
-            imsave('weights-outputlayer-iter{0}.png'.format(state.epoch),
-                    state.classifier.outputLayer.W.get_value()
-                  )
             for param, gparam in zip(state.classifier.opt_params, state.classifier.gparams):
                 gradient = numpy.asarray(gparam.eval({x: e_x, y: e_y}))
                 p = numpy.asarray(param.eval())
-                if len(gradient.shape) == 2:
-                  imsave('gradient-{0}-iter{1}.png'.format(str(param),state.epoch),gradient * 255)
-                print "  {0} grad max: {1}".format(str(param),gradient.max())
-                print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
+                if params.save_images:
+                    if len(gradient.shape) == 2:
+                      imsave('gradient-{0}-iter{1}.png'.format(str(param),state.epoch),gradient * 255)
+                if params.detailed_stats:
+                    print "  {0} grad max: {1}".format(str(param),gradient.max())
+                    print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
+                    #for l,m in state.classifier.layer_masks.iteritems():
+                    #    print l
+                    #    print m.eval()
 
-            computed = state.classifier.classify(dataset[0][0])()
-            print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
-            cost = numpy.asarray(state.classifier.cost.eval({x: e_x, y: e_y}))
-            print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
+            if params.detailed_stats:
+                #computed = state.classifier.classify(dataset[0][0])()
+                #print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
+                cost = numpy.asarray(state.classifier.cost.eval({x: e_x, y: e_y}))
+                print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         run_hooks()
 
     if params.training_method == 'normal':
