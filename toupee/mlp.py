@@ -76,6 +76,7 @@ class MLP(object):
 
         self.hiddenLayers = []
         self.layer_masks = {}
+        self.layer_updates = {}
         self.chain_n_in = params.n_in
         self.chain_input_shape = None
         self.chain_in = input
@@ -324,6 +325,7 @@ class MLP(object):
             new_update = self.params.update_rule(param,
                     self.params.learning_rate, gparam, mask * we, updates,
                     self.cost,previous_cost)
+            self.layer_updates[str(param)] = new_update
             updates.append((param, new_update))
         return theano.function(inputs=[index,previous_cost],
                 outputs=self.cost,
@@ -503,13 +505,14 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                 if params.detailed_stats:
                     print "  {0} grad max: {1}".format(str(param),gradient.max())
                     print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
-                    #for l,m in state.classifier.layer_masks.iteritems():
-                    #    print l
-                    #    print m.eval()
 
             if params.detailed_stats:
+                #for l,m in state.classifier.layer_updates.iteritems():
+                #    print l
+                #    print m.eval({x: e_x, y: e_y})
                 #computed = state.classifier.classify(dataset[0][0])()
                 #print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
+                print "  learning rate: {0}".format(params.learning_rate.get().get_value())
                 cost = numpy.asarray(state.classifier.cost.eval({x: e_x, y: e_y}))
                 print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         run_hooks()
