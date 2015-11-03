@@ -229,7 +229,6 @@ class MLP(object):
         Finalize the construction by making a top layer (either to use in
         pretraining or to use in the final version)
         """
-        print layer_type
         if layer_type == 'softmax':
             self.outputLayer = layers.SoftMax(
                 rng=rng,
