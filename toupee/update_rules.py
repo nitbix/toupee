@@ -28,8 +28,11 @@ class LearningRate(yaml.YAMLObject):
 class FixedLearningRate(LearningRate):
 
     yaml_tag = u'!FixedLearningRate'
+
     def get(self):
-        return sharedX(self.rate)
+        if self.shared_rate not in self.__dict__:
+            self.shared_rate = sharedX(self.rate)
+        return self.shared_rate
 
     def reset(self,updates):
         pass
