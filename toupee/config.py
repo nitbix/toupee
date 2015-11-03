@@ -18,7 +18,8 @@ import activations
 
 defaults = { 'random_seed': [2013,1,4],
              'save_images': False,
-             'pretraining_noise': None
+             'pretraining_noise': None,
+             'detailed_stats': False
            }
 def load_parameters(filename):
     with open(filename) as f:
