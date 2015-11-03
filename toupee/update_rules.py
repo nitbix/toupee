@@ -44,9 +44,10 @@ class LinearDecayLearningRate(LearningRate):
     #TODO: Using this with Dropout causes NaN all over the place. WTF?
 
     yaml_tag = u'!LinearDecayLearningRate'
+
     def get(self):
         if 'current_rate' not in self.__dict__:
-            self.current_rate = sharedX(self.start,borrow=True)
+            raise Exception("Uninitialised LinearDecayLearningRate")
         return self.current_rate
 
     def reset(self,updates):
