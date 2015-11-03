@@ -87,6 +87,7 @@ class MLP(object):
         self.x = x
         self.y = y
         self.index = index
+        self.reset_hooks(TrainingState(self))
 
         def make_layer(layer_type,desc):
             if(layer_type == 'flat'):
@@ -141,6 +142,7 @@ class MLP(object):
             self.hiddenLayers.append(l)
 
             def pretrain(pretraining_set,mode='unsupervised'):
+                self.reset_hooks(TrainingState(self))
                 if self.params.pretraining_noise is not None:
                     pretraining_set[0] = data.corrupt(
                             self.params.pretraining_noise,pretraining_set[0])
@@ -218,7 +220,7 @@ class MLP(object):
                     pretrain(pretraining_set,mode)
             layer_number += 1
         self.rejoin_layers(input)
-        self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
+        self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng,layer_type=params.output_layer)
 
     def make_top_layer(self, n_out, chain_in, chain_n_in, rng,
             layer_type='softmax', 
@@ -227,8 +229,22 @@ class MLP(object):
         Finalize the construction by making a top layer (either to use in
         pretraining or to use in the final version)
         """
+        print layer_type
         if layer_type == 'softmax':
             self.outputLayer = layers.SoftMax(
+                rng=rng,
+                inputs=chain_in.flatten(ndim=2),
+                n_in=numpy.prod(chain_n_in),
+                n_out=n_out,
+                activation=activation,
+                dropout_rate=0,
+                layer_name='softmax')
+            self.cost_function = self.params.cost_function
+            self.p_y_given_x = self.outputLayer.p_y_given_x
+            self.errors = self.outputLayer.errors
+            self.y_pred = self.outputLayer.y_pred
+        if layer_type == 'logsoftmax':
+            self.outputLayer = layers.LogSoftMax(
                 rng=rng,
                 inputs=chain_in.flatten(ndim=2),
                 n_in=numpy.prod(chain_n_in),
@@ -384,6 +400,28 @@ class MLP(object):
             l.set_weights(W[i],b[i])
         self.outputLayer.set_weights(weights['outW'],weights['outb'])
 
+    def run_hooks(self):
+        updates = []
+        self.params.learning_rate.epoch_hook(updates)
+        one = sharedX(1.)
+        f = theano.function(inputs=[],
+                outputs=one,
+                on_unused_input='warn',
+                updates=updates,)
+        f()
+
+    def reset_hooks(self,state):
+        state.done_looping = False
+        state.pre_iter()
+        updates = []
+        self.params.learning_rate.reset(updates)
+        one = sharedX(1.)
+        f = theano.function(inputs=[],
+                outputs=one,
+                on_unused_input='warn',
+                updates=updates,)
+        f()
+
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     train_set_x, train_set_y = dataset[0]
     valid_set_x, valid_set_y = dataset[1]
@@ -427,28 +465,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                                   # check every epoch
 
     start_time = time.clock()
-
-    def run_hooks():
-        updates = []
-        params.learning_rate.epoch_hook(updates)
-        one = sharedX(1.)
-        f = theano.function(inputs=[],
-                outputs=one,
-                on_unused_input='warn',
-                updates=updates,)
-        f()
-
-    def reset():
-        state.done_looping = False
-        state.pre_iter()
-        updates = []
-        params.learning_rate.reset(updates)
-        one = sharedX(1.)
-        f = theano.function(inputs=[],
-                outputs=one,
-                on_unused_input='warn',
-                updates=updates,)
-        f()
 
     def run_epoch():
         for minibatch_index in xrange(state.n_batches['train']):
@@ -515,11 +531,11 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                 print "  learning rate: {0}".format(params.learning_rate.get().get_value())
                 cost = numpy.asarray(state.classifier.cost.eval({x: e_x, y: e_y}))
                 print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
-        run_hooks()
+        state.classifier.run_hooks()
 
     if params.training_method == 'normal':
         print ".... generating models"
-        reset()
+        state.classifier.reset_hooks(state)
         state.set_models(state.classifier.make_models(dataset))
         print ".... started"
         while (state.epoch < params.n_epochs) and (not state.done_looping):
@@ -532,7 +548,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
         all_layers = state.classifier.hiddenLayers
         state.classifier.hiddenLayers = []
         for l in xrange(len(all_layers)):
-            reset()
+            state.classifier.reset_hooks(state)
             print "\n\ntraining {0} layers".format(l + 1)
             state.classifier.hiddenLayers.append(all_layers[l])
             state.classifier.rejoin_layers(x)
