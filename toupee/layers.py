@@ -131,6 +131,48 @@ class SoftMax(Layer):
         self.rebuild()
 
 
+class LogSoftMax(Layer):
+    """
+    SoftMax Layer
+    """
+
+    def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
+                 activation=T.tanh,dropout_rate=0,layer_name='hidden'):
+#        W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=floatX),
+#                               name='Softmax_W', borrow=True)
+#        b = theano.shared(value=numpy.zeros((n_out,), dtype=floatX),
+#                               name='Softmax_b', borrow=True)
+        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name)#,W,b)
+        self.rebuild()
+
+    def rebuild(self):
+        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.params = [self.W]
+        ydev = self.y - self.y.max(1,keepdims=True)
+        self.p_y_given_x = ydev - T.log(T.sum(T.exp(ydev),axis=1,keepdims=True))
+        self.y_pred = T.argmax(self.p_y_given_x, axis=1)
+
+    def errors(self, y):
+        """
+        Return a float representing the number of errors in the minibatch
+        over the total number of examples of the minibatch ; zero one
+        loss over the size of the minibatch
+        """
+
+        if y.ndim != self.y_pred.ndim:
+            raise TypeError('y should have the same shape as self.y_pred',
+                ('y', target.type, 'y_pred', self.y_pred.type))
+        if y.dtype.startswith('int'):
+            return T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
+        else:
+            raise NotImplementedError()
+
+    def rejoin(self):
+        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.params = [self.W]
+        self.rebuild()
+
+
 class ConvolutionalLayer(Layer):
     """
     A Convolutional Layer, as per Convolutional Neural Networks. Includes filter, and pooling.

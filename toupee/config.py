@@ -19,7 +19,8 @@ import activations
 defaults = { 'random_seed': [2013,1,4],
              'save_images': False,
              'pretraining_noise': None,
-             'detailed_stats': False
+             'detailed_stats': False,
+             'output_layer': 'softmax'
            }
 def load_parameters(filename):
     with open(filename) as f:
