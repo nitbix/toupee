@@ -318,7 +318,6 @@ class MLP(object):
         for param in self.opt_params:
             gparam = T.grad(self.cost, param)
             self.gparams.append(gparam)
-        self.previous_cost = T.scalar()
         updates = []
 
         dropout_rates = {}
@@ -333,6 +332,7 @@ class MLP(object):
             unpack(layer)
         unpack(self.outputLayer)
 
+        self.previous_cost = T.scalar()
         for param, gparam in zip(self.opt_params, self.gparams):
             if str(param) in dropout_rates.keys():
                 include_prob = 1. - dropout_rates[str(param)]
