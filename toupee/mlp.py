@@ -33,6 +33,7 @@ import layers
 import config 
 import cost_functions
 import activations
+import common
 
 class TrainingState:
     """
@@ -174,7 +175,9 @@ class MLP(object):
                     self.make_top_layer(self.params.n_in, self.chain_in,
                             self.chain_n_in, rng, 'flat', activations.TanH())
                     train_model = self.train_function(index, pretraining_set_y,
-                        pretraining_set_x, y_pretraining, x_pretraining)
+                        pretraining_set_x, y_pretraining, x_pretraining,
+                        self.params.pretrain_update_rule,
+                        self.params.pretrain_learning_rate)
                     ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
                     n_batches =  ptxlen / self.params.batch_size
                     for p in range(self.params.pretraining_passes):
@@ -302,7 +305,12 @@ class MLP(object):
             outputs=self.outputLayer.y_pred,
             givens={ x: eval_set_x })
 
-    def train_function(self, index, train_set_x, train_set_y, x, y):
+    def train_function(self, index, train_set_x, train_set_y, x, y,
+            update_rule = None, learning_rate = None):
+        if update_rule is None:
+            update_rule = self.params.update_rule
+        if learning_rate is None:
+            learning_rate = self.params.learning_rate
         self.cost = self.cost_function(self.outputLayer,y) \
              + self.params.L1_reg * self.L1 \
              + self.params.L2_reg * self.L2_sqr
@@ -337,8 +345,8 @@ class MLP(object):
 
             mask = data.mask(p=include_prob,shape=param.shape,dtype=param.dtype)
             self.layer_masks[str(param)] = mask
-            new_update = self.params.update_rule(param,
-                    self.params.learning_rate, gparam, mask * we, updates,
+            new_update = update_rule(param,
+                    learning_rate, gparam, mask * we, updates,
                     self.cost,previous_cost)
             self.layer_updates[str(param)] = new_update
             updates.append((param, new_update))
@@ -401,7 +409,8 @@ class MLP(object):
 
     def run_hooks(self):
         updates = []
-        self.params.learning_rate.epoch_hook(updates)
+        for hook in common.toupee_global_instance.epoch_hooks:
+            hook(updates)
         one = sharedX(1.)
         f = theano.function(inputs=[],
                 outputs=one,
@@ -413,7 +422,8 @@ class MLP(object):
         state.done_looping = False
         state.pre_iter()
         updates = []
-        self.params.learning_rate.reset(updates)
+        for hook in common.toupee_global_instance.reset_hooks:
+            hook(updates)
         one = sharedX(1.)
         f = theano.function(inputs=[],
                 outputs=one,
