@@ -13,6 +13,7 @@ import theano
 import theano.tensor as T
 import yaml
 from data import sharedX
+import common
 
 class LearningRate(yaml.YAMLObject):
 
@@ -30,7 +31,6 @@ class FixedLearningRate(LearningRate):
     yaml_tag = u'!FixedLearningRate'
 
     def get(self):
-        return sharedX(self.rate)
         if 'shared_rate' not in self.__dict__:
             self.shared_rate = sharedX(self.rate)
         return self.shared_rate
@@ -42,9 +42,15 @@ class FixedLearningRate(LearningRate):
         pass
 
 class LinearDecayLearningRate(LearningRate):
-    #TODO: Using this with Dropout causes NaN all over the place. WTF?
+    #TODO: Using this with Dropout causes NaN all over the place. ???
 
     yaml_tag = u'!LinearDecayLearningRate'
+
+    def __new__(cls):
+        instance = super(LinearDecayLearningRate,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        return instance
 
     def get(self):
         if 'current_rate' not in self.__dict__:
@@ -238,6 +244,102 @@ class iRPropPlus(RPropVariant):
                  current_cost, previous_cost):
         previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
         delta = sharedX(self.min_delta * numpy.ones(param.shape.eval()),borrow=True)
+        previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
+        zero = T.zeros_like(param)
+        one = T.ones_like(param)
+        change = previous_grad * gparam
+
+        new_delta = T.clip(
+                T.switch(
+                    T.eq(gparam,0.),
+                    delta,
+                    T.switch(
+                        T.gt(change,0.),
+                        delta * self.eta_plus,
+                        T.switch(
+                            T.lt(change,0.),
+                            delta * self.eta_minus,
+                            delta
+                        )
+                    )
+                ),
+                self.min_delta,
+                self.max_delta
+        )
+        new_previous_grad = T.switch(
+                T.eq(mask * gparam,0.),
+                previous_grad,
+                T.switch(
+                    T.gt(change,0.),
+                    gparam,
+                    T.switch(
+                        T.lt(change,0.),
+                        zero,
+                        gparam
+                    )
+                )
+        )
+        inc = T.switch(
+                T.eq(mask * gparam,0.),
+                zero,
+                T.switch(
+                    T.gt(change,0.),
+                    - T.sgn(gparam) * new_delta,
+                    T.switch(
+                        T.lt(change,0.),
+                        T.switch(T.gt(current_cost,previous_cost),
+                            - previous_inc,
+                            zero
+                        ),
+                        - T.sgn(gparam) * new_delta
+                    )
+                )
+        )
+
+        updates.append((previous_grad,new_previous_grad))
+        updates.append((delta,new_delta))
+        updates.append((previous_inc,inc))
+        return param + inc * mask
+
+
+class DRProp(RPropVariant):
+
+    yaml_tag = u'!DRProp'
+
+    def __new__(cls):
+        instance = super(DRProp,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        return instance
+
+    def __init__(self):
+        self.eta_plus = 1.5
+        self.eta_minus = 0.25
+        self.max_delta=500
+        self.start_min_delta=1e-3
+        self.stop_min_delta=1e-8
+        self.steps_min_delta=100
+
+    def reset(self,updates):
+        self.min_delta = sharedX(self.start_min_delta)
+        self.current_epoch = sharedX(1.)
+
+    def epoch_hook(self,updates):
+        if 'current_epoch' not in self.__dict__:
+            self.current_epoch = sharedX(1.)
+        epoch = self.current_epoch + 1
+        new_min = (self.start_min_delta + (
+                     (self.stop_min_delta - self.start_min_delta) /
+                     self.steps_min_delta) *
+                    T.clip(epoch,1,self.steps_min_delta))
+        updates.append((self.min_delta,new_min))
+        updates.append((self.current_epoch,epoch))
+
+
+    def __call__(self, param, learning_rate, gparam, mask, updates,
+                 current_cost, previous_cost):
+        previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
+        delta = sharedX(self.start_min_delta * numpy.ones(param.shape.eval()),borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
