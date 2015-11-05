@@ -37,6 +37,15 @@ class ReLU(Activation):
     def __call__(self,x):
         return T.nnet.relu(x)
 
+class BoundedReLU(Activation):
+    yaml_tag = u'!BoundedReLU'
+    def __call__(self,x):
+        if 'rate' not in self.__dict__:
+            self.rate = 0.01
+        if 'ceiling' not in self.__dict__:
+            self.ceiling = 6
+        return T.min(T.nnet.relu(x,alpha=self.rate),self.ceiling)
+
 class LeakyReLU(Activation):
     yaml_tag = u'!LeakyReLU'
     def __call__(self,x):
