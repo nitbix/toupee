@@ -11,6 +11,7 @@ __docformat__ = 'restructedtext en'
 import numpy
 import theano
 import theano.tensor as T
+import theano.printing
 import yaml
 from data import sharedX
 import common
@@ -301,6 +302,65 @@ class iRPropPlus(RPropVariant):
         updates.append((previous_inc,inc))
         return param + inc * mask
 
+class ARProp(RPropVariant):
+
+    yaml_tag = u'!ARProp'
+    def __init__(self):
+        self.eta_plus = 1.5
+        self.eta_minus = 0.25
+        self.max_delta=500
+        self.min_delta=1e-8
+
+    def __call__(self, param, learning_rate, gparam, mask, updates,
+                 current_cost, previous_cost):
+        ones_array = numpy.ones(param.shape.eval())
+        previous_grad = sharedX(ones_array,borrow=True)
+        delta = sharedX(self.min_delta * ones_array,borrow=True)
+        previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
+        zero = T.zeros_like(param)
+        one = T.ones_like(param)
+        change = previous_grad * gparam
+        q = sharedX(ones_array,borrow=True)
+        cost_increased = T.gt(current_cost,previous_cost)
+        masked_gparam = mask * gparam
+        masked =  T.eq(mask * gparam,0.)
+        change_above_zero = T.gt(change,0.)
+        change_below_zero = T.lt(change,0.)
+
+        def mask_filter(masked,unmasked):
+            return T.switch(masked, masked, unmasked)
+
+        new_delta = T.clip(
+                T.switch(
+                    change_above_zero,
+                    delta * self.eta_plus,
+                    T.switch(
+                        change_below_zero,
+                        delta * self.eta_minus,
+                        delta
+                    )
+                ),
+                self.min_delta,
+                self.max_delta
+        )
+        new_previous_grad = mask_filter(
+            previous_grad,
+            T.switch(change_below_zero, zero, gparam)
+        )
+        step = - T.sgn(gparam) * new_delta
+        unmasked_inc = T.switch(change_below_zero, zero, step)
+        normal_inc = mask_filter(zero,unmasked_inc)
+
+        inc = T.switch(cost_increased, previous_inc, normal_inc)
+        d_w = T.switch(cost_increased, previous_inc / (2 ** q), normal_inc)
+        new_q = T.switch(cost_increased, q + 1, 1)
+
+        updates.append((previous_grad,new_previous_grad))
+        updates.append((delta,new_delta))
+        updates.append((previous_inc,inc))
+        updates.append((q,new_q))
+        return param + d_w * mask
+
 
 class DRProp(RPropVariant):
 
@@ -344,16 +404,19 @@ class DRProp(RPropVariant):
         zero = T.zeros_like(param)
         one = T.ones_like(param)
         change = previous_grad * gparam
+        masked_gparam = mask * gparam
+        change_above_zero = T.gt(change,0.)
+        change_below_zero = T.lt(change,0.)
 
         new_delta = T.clip(
                 T.switch(
                     T.eq(gparam,0.),
                     delta,
                     T.switch(
-                        T.gt(change,0.),
+                        change_above_zero,
                         delta * self.eta_plus,
                         T.switch(
-                            T.lt(change,0.),
+                            change_below_zero,
                             delta * self.eta_minus,
                             delta
                         )
@@ -363,31 +426,32 @@ class DRProp(RPropVariant):
                 self.max_delta
         )
         new_previous_grad = T.switch(
-                T.eq(mask * gparam,0.),
+                T.eq(masked_gparam,0.),
                 previous_grad,
                 T.switch(
-                    T.gt(change,0.),
+                    change_above_zero,
                     gparam,
                     T.switch(
-                        T.lt(change,0.),
+                        change_below_zero,
                         zero,
                         gparam
                     )
                 )
         )
+        step = - T.sgn(gparam) * new_delta
         inc = T.switch(
-                T.eq(mask * gparam,0.),
+                T.eq(masked_gparam,0.),
                 zero,
                 T.switch(
-                    T.gt(change,0.),
-                    - T.sgn(gparam) * new_delta,
+                    change_above_zero,
+                    step,
                     T.switch(
-                        T.lt(change,0.),
+                        change_below_zero,
                         T.switch(T.gt(current_cost,previous_cost),
                             - previous_inc,
                             zero
                         ),
-                        - T.sgn(gparam) * new_delta
+                        step
                     )
                 )
         )
@@ -396,3 +460,86 @@ class DRProp(RPropVariant):
         updates.append((delta,new_delta))
         updates.append((previous_inc,inc))
         return param + inc * mask
+
+class ADRProp(RPropVariant):
+
+    yaml_tag = u'!ADRProp'
+
+    def __new__(cls):
+        instance = super(ADRProp,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        return instance
+
+    def __init__(self):
+        self.eta_plus = 1.5
+        self.eta_minus = 0.25
+        self.max_delta=500
+        self.start_min_delta=1e-3
+        self.stop_min_delta=1e-8
+        self.steps_min_delta=100
+
+    def reset(self,updates):
+        self.min_delta = sharedX(self.start_min_delta)
+        self.current_epoch = sharedX(1.)
+
+    def epoch_hook(self,updates):
+        if 'current_epoch' not in self.__dict__:
+            self.current_epoch = sharedX(1.)
+        epoch = self.current_epoch + 1
+        new_min = (self.start_min_delta + (
+                     (self.stop_min_delta - self.start_min_delta) /
+                     self.steps_min_delta) *
+                    T.clip(epoch,1,self.steps_min_delta))
+        updates.append((self.min_delta,new_min))
+        updates.append((self.current_epoch,epoch))
+
+    def __call__(self, param, learning_rate, gparam, mask, updates,
+                 current_cost, previous_cost):
+        ones_array = numpy.ones(param.shape.eval())
+        previous_grad = sharedX(ones_array,borrow=True)
+        delta = sharedX(self.min_delta * ones_array,borrow=True)
+        previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
+        zero = T.zeros_like(param)
+        one = T.ones_like(param)
+        change = previous_grad * gparam
+        q = sharedX(ones_array,borrow=True)
+        cost_increased = T.gt(current_cost,previous_cost)
+        masked_gparam = mask * gparam
+        masked =  T.eq(mask * gparam,0.)
+        change_above_zero = T.gt(change,0.)
+        change_below_zero = T.lt(change,0.)
+
+        def mask_filter(masked,unmasked):
+            return T.switch(masked, masked, unmasked)
+
+        new_delta = T.clip(
+                T.switch(
+                    change_above_zero,
+                    delta * self.eta_plus,
+                    T.switch(
+                        change_below_zero,
+                        delta * self.eta_minus,
+                        delta
+                    )
+                ),
+                self.min_delta,
+                self.max_delta
+        )
+        new_previous_grad = mask_filter(
+            previous_grad,
+            T.switch(change_below_zero, zero, gparam)
+        )
+        step = - T.sgn(gparam) * new_delta
+        unmasked_inc = T.switch(change_below_zero, zero, step)
+        normal_inc = mask_filter(zero,unmasked_inc)
+
+        inc = T.switch(cost_increased, previous_inc, normal_inc)
+        d_w = T.switch(cost_increased, previous_inc / (2 ** q), normal_inc)
+        new_q = T.switch(cost_increased, q + 1, 1)
+
+        updates.append((previous_grad,new_previous_grad))
+        updates.append((delta,new_delta))
+        updates.append((previous_inc,inc))
+        updates.append((q,new_q))
+        return param + d_w * mask
