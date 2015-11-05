@@ -318,7 +318,7 @@ class MLP(object):
         for param in self.opt_params:
             gparam = T.grad(self.cost, param)
             self.gparams.append(gparam)
-        previous_cost = T.scalar()
+        self.previous_cost = T.scalar()
         updates = []
 
         dropout_rates = {}
@@ -347,10 +347,10 @@ class MLP(object):
             self.layer_masks[str(param)] = mask
             new_update = update_rule(param,
                     learning_rate, gparam, mask * we, updates,
-                    self.cost,previous_cost)
+                    self.cost,self.previous_cost)
             self.layer_updates[str(param)] = new_update
             updates.append((param, new_update))
-        return theano.function(inputs=[index,previous_cost],
+        return theano.function(inputs=[index,self.previous_cost],
                 outputs=self.cost,
                 on_unused_input='warn',
                 updates=updates,
