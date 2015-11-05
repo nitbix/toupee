@@ -105,7 +105,7 @@ class SoftMax(Layer):
         self.rebuild()
 
     def rebuild(self):
-        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
         self.params = [self.W]
         self.p_y_given_x = T.nnet.softmax(self.y)
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
@@ -126,7 +126,7 @@ class SoftMax(Layer):
             raise NotImplementedError()
 
     def rejoin(self):
-        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
         self.params = [self.W]
         self.rebuild()
 
@@ -146,7 +146,7 @@ class LogSoftMax(Layer):
         self.rebuild()
 
     def rebuild(self):
-        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
         self.params = [self.W]
         ydev = self.y - self.y.max(1,keepdims=True)
         self.p_y_given_x = ydev - T.log(T.sum(T.exp(ydev),axis=1,keepdims=True))
@@ -168,7 +168,7 @@ class LogSoftMax(Layer):
             raise NotImplementedError()
 
     def rejoin(self):
-        self.y = T.dot(self.inputs, self.W) * (1. / (1. - self.dropout_rate))
+        self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
         self.params = [self.W]
         self.rebuild()
 
