@@ -432,6 +432,7 @@ class MLP(object):
         f()
 
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
+    results = common.Results(params)
     train_set_x, train_set_y = dataset[0]
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
