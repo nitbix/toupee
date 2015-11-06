@@ -352,7 +352,7 @@ class ARProp(RPropVariant):
         normal_inc = mask_filter(zero,unmasked_inc)
 
         inc = T.switch(cost_increased, previous_inc, normal_inc)
-        d_w = T.switch(cost_increased, previous_inc / (2 ** q), normal_inc)
+        d_w = T.switch(cost_increased, -previous_inc / (2 ** q), normal_inc)
         new_q = T.switch(cost_increased, q + 1, 1)
 
         updates.append((previous_grad,new_previous_grad))
@@ -482,6 +482,11 @@ class ADRProp(RPropVariant):
     def reset(self,updates):
         self.min_delta = sharedX(self.start_min_delta)
         self.current_epoch = sharedX(1.)
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0.
+        if 'momentum_decay' not in self.__dict__:
+            self.momentum_decay = 1.
+        self.momentum_var = sharedX(self.momentum)
 
     def epoch_hook(self,updates):
         if 'current_epoch' not in self.__dict__:
@@ -493,13 +498,20 @@ class ADRProp(RPropVariant):
                     T.clip(epoch,1,self.steps_min_delta))
         updates.append((self.min_delta,new_min))
         updates.append((self.current_epoch,epoch))
+        updates.append((self.momentum_var,self.momentum_var * self.momentum_decay))
 
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0.
+        if 'momentum_decay' not in self.__dict__:
+            self.momentum_decay = 1.
+        self.momentum_var = sharedX(self.momentum)
         ones_array = numpy.ones(param.shape.eval())
         previous_grad = sharedX(ones_array,borrow=True)
-        delta = sharedX(self.min_delta * ones_array,borrow=True)
+        delta = sharedX(self.start_min_delta * ones_array,borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
+        velocity = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
         change = previous_grad * gparam
@@ -534,12 +546,17 @@ class ADRProp(RPropVariant):
         unmasked_inc = T.switch(change_below_zero, zero, step)
         normal_inc = mask_filter(zero,unmasked_inc)
 
+        #the ARProp bits
         inc = T.switch(cost_increased, previous_inc, normal_inc)
-        d_w = T.switch(cost_increased, previous_inc / (2 ** q), normal_inc)
+        d_w = T.switch(cost_increased, -previous_inc / (2 ** q), normal_inc)
         new_q = T.switch(cost_increased, q + 1, 1)
+        
+        #Momentum
+        new_velocity = (velocity * self.momentum_var + d_w)
 
+        updates.append((velocity,new_velocity))
         updates.append((previous_grad,new_previous_grad))
         updates.append((delta,new_delta))
         updates.append((previous_inc,inc))
         updates.append((q,new_q))
-        return param + d_w * mask
+        return param + new_velocity * mask
