@@ -168,69 +168,82 @@ class OldRProp(RPropVariant):
 class RProp(RPropVariant):
 
     yaml_tag = u'!RProp'
+    def __new__(cls):
+        instance = super(RProp,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        return instance
+
     def __init__(self):
         self.eta_plus = 1.01
         self.eta_minus = 0.1
         self.max_delta=5
         self.min_delta=1e-3
 
+    def reset(self,updates):
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0.
+        if 'momentum_decay' not in self.__dict__:
+            self.momentum_decay = 1.
+        self.momentum_var = sharedX(self.momentum)
+
+    def epoch_hook(self,updates):
+        updates.append((self.momentum_var,self.momentum_var * self.momentum_decay))
+
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
-        previous_grad = sharedX(numpy.ones(param.shape.eval()),borrow=True)
-        delta = sharedX(self.min_delta * numpy.ones(param.shape.eval()),borrow=True)
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0.
+        if 'momentum_decay' not in self.__dict__:
+            self.momentum_decay = 1.
+        self.momentum_var = sharedX(self.momentum)
+        ones_array = numpy.ones(param.shape.eval())
+        previous_grad = sharedX(ones_array,borrow=True)
+        delta = sharedX(self.min_delta * ones_array,borrow=True)
         previous_inc = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
+        velocity = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         zero = T.zeros_like(param)
         one = T.ones_like(param)
         change = previous_grad * gparam
+        q = sharedX(ones_array,borrow=True)
+        cost_increased = T.gt(current_cost,previous_cost)
+        masked_gparam = mask * gparam
+        masked =  T.eq(mask * gparam,0.)
+        change_above_zero = T.gt(change,0.)
+        change_below_zero = T.lt(change,0.)
+
+        def mask_filter(m,u):
+            return T.switch(masked, m, u)
 
         new_delta = T.clip(
                 T.switch(
-                    T.eq(gparam,0.),
-                    delta,
+                    change_above_zero,
+                    delta * self.eta_plus,
                     T.switch(
-                        T.gt(change,0.),
-                        delta * self.eta_plus,
-                        T.switch(
-                            T.lt(change,0.),
-                            delta * self.eta_minus,
-                            delta
-                        )
+                        change_below_zero,
+                        delta * self.eta_minus,
+                        delta
                     )
                 ),
                 self.min_delta,
                 self.max_delta
         )
-        new_previous_grad = T.switch(
-                T.eq(mask * gparam,0.),
-                previous_grad,
-                T.switch(
-                    T.gt(change,0.),
-                    gparam,
-                    T.switch(
-                        T.lt(change,0.),
-                        zero,
-                        gparam
-                    )
-                )
+        new_previous_grad = mask_filter(
+            previous_grad,
+            T.switch(change_below_zero, zero, gparam)
         )
-        inc = T.switch(
-                T.eq(mask * gparam,0.),
-                zero,
-                T.switch(
-                    T.gt(change,0.),
-                    - T.sgn(gparam) * new_delta,
-                    T.switch(
-                        T.lt(change,0.),
-                        zero,
-                        - T.sgn(gparam) * new_delta
-                    )
-                )
-        )
+        step = - T.sgn(gparam) * new_delta
+        unmasked_inc = T.switch(change_below_zero, zero, step)
+        d_w = mask_filter(zero,unmasked_inc)
 
+        #Momentum
+        new_velocity = (velocity * self.momentum_var + d_w)
+
+        updates.append((velocity,new_velocity))
         updates.append((previous_grad,new_previous_grad))
         updates.append((delta,new_delta))
-        updates.append((previous_inc,inc))
-        return param + inc * mask
+        updates.append((previous_inc,d_w))
+        return param + new_velocity * mask
 
 class iRPropPlus(RPropVariant):
 
@@ -327,8 +340,8 @@ class ARProp(RPropVariant):
         change_above_zero = T.gt(change,0.)
         change_below_zero = T.lt(change,0.)
 
-        def mask_filter(masked,unmasked):
-            return T.switch(masked, masked, unmasked)
+        def mask_filter(m,u):
+            return T.switch(masked, m, u)
 
         new_delta = T.clip(
                 T.switch(
@@ -522,8 +535,8 @@ class ADRProp(RPropVariant):
         change_above_zero = T.gt(change,0.)
         change_below_zero = T.lt(change,0.)
 
-        def mask_filter(masked,unmasked):
-            return T.switch(masked, masked, unmasked)
+        def mask_filter(m,u):
+            return T.switch(masked, m, u)
 
         new_delta = T.clip(
                 T.switch(
