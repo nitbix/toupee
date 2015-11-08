@@ -20,6 +20,9 @@ import theano
 import theano.tensor as T
 import gzip
 import cPickle
+from skimage import transform as tf
+import multiprocessing
+import theano.tensor.signal.conv as sigconv
 
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 
@@ -172,7 +175,11 @@ class WeightedResampler(Resampler):
     def make_new_train(self,sample_size):
         pass
 
+def transform_aux_map(tr,x):
+    return tr.apply(x)
 
+def f(x):
+    return x
 
 class Transformer:
     """
@@ -180,61 +187,63 @@ class Transformer:
     training set to produce a larger, noisy training set
     """
 
-    def __init__(self,original_set,x,y, progress = False):
+    def __init__(self,original_set,x,y,alpha,beta,gamma,sigma,noise_var,progress = False):
         print("..transforming dataset")
         self.progress = progress
         self.x = x
         self.y = y
-        min_trans_x = -2
-        max_trans_x =  2
-        x_step = 2
-        min_trans_y = -2
-        max_trans_y =  2
-        y_step = 2
-        min_angle = -20
-        max_angle =  20
-        angle_step = 20
-        sigmas = [0.2,0.4]
-        gaussian_resamples = 1
-        scalings = [0.8,1.2]
-        self.original_x, self.original_y = original_set
+        self.min_trans_x = -2
+        self.max_trans_x =  2
+        self.min_trans_y = -2
+        self.max_trans_y =  2
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.sigma = sigma
+        self.noise_var = noise_var
+        self.original_x = numpy.asarray(original_set)
         self.final_x = []
-        self.final_y = []
         self.instance_no = 0
         instances = len(self.original_x)
-        elastic_sigma = 6.
-        elastic_alpha = 5.
-        elastic_transforms = 2
         rng = numpy.random.RandomState(42)
-        for i in xrange(0,instances):
-            self.step_no = 0
-            curr_x = self.original_x[i].reshape(self.x,self.y)
-            curr_y = self.original_y[i]
-            for dx in xrange(min_trans_x,max_trans_x,x_step):
-                for dy in xrange(min_trans_y,max_trans_y,y_step):
-                    if dx != 0 or dy != 0:
-                        self.add_instance(
-                                self.translate_instance(curr_x,dx,dy),
-                                curr_y)
-            for angle in xrange(min_angle,max_angle,angle_step):
-                if angle != 0:
-                    self.add_instance(self.rotate_instance(curr_x,angle),curr_y)
-            for j in xrange(1,gaussian_resamples):
-                for sigma in sigmas:
-                    self.add_instance(self.gaussian_noise(curr_x,sigma),curr_y)
-#            for scale_x in scalings:
-#                for scale_y in scalings:
-#                    if scale_x != 1 or scale_y != 1:
-#                        self.add_instance(self.scale(curr_x,[scale_x,scale_y]),curr_y)
-            for j in range(0,elastic_transforms):
-                self.add_instance(self.elastic_transform(curr_x,elastic_sigma,elastic_alpha),curr_y)
+        self.original_x = numpy.asarray(self.original_x).reshape(instances,self.x,self.y)
+        p = multiprocessing.Pool(32)
+        deferred = [p.apply_async(transform_aux_map,args=(self,x)) for x in
+                self.original_x]
+        self.final_x = [x.get() for x in deferred]
 
-            self.instance_no += 1
-            gc.collect()
+    def apply(self,curr_x):
+#        if self.progress and self.instance_no % 100 == 0:
+#            print("instance {0}".format(self.instance_no), end="\r")
+        dx = numpy.random.uniform(low=self.min_trans_x,high=self.max_trans_x)
+        dy = numpy.random.uniform(low=self.min_trans_y,high=self.max_trans_y)
+        curr_x = self.translate_instance(curr_x,int(dx),int(dy))
+        angle = numpy.random.uniform(low=-self.beta,high=self.beta)
+        shear = numpy.random.uniform(low=-self.beta,high=self.beta)
+        curr_x = self.rotate_instance(curr_x,angle)
+        #curr_x = self.gaussian_noise(curr_x,noise_var)
+        scale_x = 1. + numpy.random.uniform(low=-self.gamma,high=self.gamma) / 100.
+        scale_y = 1. + numpy.random.uniform(low=-self.gamma,high=self.gamma) / 100.
+        curr_x = self.scale(curr_x,[scale_x,scale_y])
+#            curr_x = self.elastic_transform(curr_x,sigma,alpha)
+#        trans = tf.AffineTransform(
+#                    scale=(scale_x,scale_y),
+#                    shear=shear,
+#                    rotation=angle,
+#                    translation=(dx,dy)
+#                )
+#        warped_x = tf.warp(curr_x,trans)
+#        if plot:
+#            plt.gray()
+#            plt.imshow(warped_x)
+#            plt.show()
+#        self.instance_no += 1
+        warped_x = curr_x
+        return warped_x.flatten()
 
     def elastic_transform(self,xval,sigma,alpha):
-            field_x = numpy.random.rand(28,28) * 2. - 1.
-            field_y = numpy.random.rand(28,28) * 2. - 1.
+            field_x = numpy.random.rand(xval.shape[0],xval.shape[1]) * 2. - 1.
+            field_y = numpy.random.rand(xval.shape[0],xval.shape[1]) * 2. - 1.
             convolved_field_x = ni.filters.gaussian_filter(field_x,sigma)
             convolved_field_y = ni.filters.gaussian_filter(field_y,sigma)
             convolved_field_x = convolved_field_x * alpha / max(abs(convolved_field_x.flatten()))
@@ -248,7 +257,7 @@ class Transformer:
         return np.roll(np.roll(xval,dx,axis=0),dy,axis=1)
 
     def rotate_instance(self,xval,angle):
-        return ni.rotate(xval,angle,reshape=False)
+        return tf.rotate(xval,angle, mode='reflect')
 
     def gaussian_noise(self,xval,sigma):
         return xval + numpy.random.normal(0.,sigma,xval.shape)
@@ -256,32 +265,99 @@ class Transformer:
     def scale(self,xval,scaling):
         return ni.zoom(xval,scaling)
 
-    def add_instance(self,xval,yval,plot=False):
-#        if plot:
-#            plt.gray()
-#            plt.imshow(xval)
-#            plt.show()
-        self.final_x.append(xval.flatten())
-        self.final_y.append(yval)
-        self.step_no += 1
-        if self.progress:
-            print("instance {0}, step {1}".format(
-                    self.instance_no, self.step_no), end="\r")
+    def get_data(self):
+        return np.array(self.final_x)
+
+class GPUTransformer:
+    """
+    Apply translation, scaling, rotation and other transformations to a 
+    training set to produce a larger, noisy training set, using Theano on the
+    GPU
+    Credit for this function to theanet https://github.com/rakeshvar/theanet/
+    """
+
+    def __init__(self,original_set,x,y,alpha,beta,gamma,sigma,pflip,translation,
+                    layers=1,invert=False,progress=False):
+        print("..transforming dataset")
+        self.min_trans_x = -2
+        self.max_trans_x =  2
+        self.min_trans_y = -2
+        self.max_trans_y =  2
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.sigma = sigma
+        self.pflip = pflip
+        self.x = x
+        self.y = y
+        self.layers = layers
+        self.original_x = original_set
+        self.instances = self.original_x.shape[0].eval()
+        inpt = self.original_x.reshape([self.instances,self.layers,self.x,self.y])
+
+        srs = T.shared_randomstreams.RandomStreams(rng.randint(1e6))
+        target = T.as_tensor_variable(np.indices((self.y, self.x)).astype('float32'))
+
+        # Translate
+        transln = translation * srs.uniform((2, 1, 1), -1,dtype=floatX)
+        target += transln
+
+        # Build a gaussian filter
+        var = sigma ** 2
+        filt = np.array([[np.exp(-.5 * (i * i + j * j) / var)
+                         for i in range(-sigma, sigma + 1)]
+                         for j in range(-sigma, sigma + 1)], dtype=floatX)
+        filt /= 2 * np.pi * var
+
+        # Elastic
+        elast = alpha * srs.normal((2, self.y, self.x),dtype=floatX)
+        elast = sigconv.conv2d(elast, filt, (2, self.y, self.x), filt.shape, 'full')
+        elast = elast[:, sigma:self.y + sigma, sigma:self.x + sigma]
+        target += elast
+
+        # Center at 'about' half way
+        origin = srs.uniform((2, 1, 1), .25, .75,dtype=floatX) * \
+                 np.array((self.y, self.x)).reshape((2, 1, 1)).astype('float32')
+        target -= origin
+
+        # Zoom
+        zoomer = T.exp(np.log(gamma).astype('float32') * srs.uniform((2, 1, 1), -1,dtype=floatX))
+        target *= zoomer
+
+        # Rotate
+        theta = beta * np.pi / 180 * srs.uniform(low=-1,dtype=floatX)
+        c, s = T.cos(theta), T.sin(theta)
+        rotate = T.stack(c, -s, s, c).reshape((2,2))
+        target = T.tensordot(rotate, target, axes=((0, 0)))
+
+        # Uncenter
+        target += origin
+
+        # Clip the mapping to valid range and linearly interpolate
+        transy = T.clip(target[0], 0, self.y - 1 - .001)
+        transx = T.clip(target[1], 0, self.x - 1 - .001)
+
+        topp = T.cast(transy, 'int32')
+        left = T.cast(transx, 'int32')
+        fraction_y = T.cast(transy - T.cast(topp, floatX), floatX)
+        fraction_x = T.cast(transx - T.cast(left, floatX), floatX)
+
+        output = inpt[:, :, topp, left] * (1 - fraction_y) * (1 - fraction_x) + \
+                 inpt[:, :, topp, left + 1] * (1 - fraction_y) * fraction_x + \
+                 inpt[:, :, topp + 1, left] * fraction_y * (1 - fraction_x) + \
+                 inpt[:, :, topp + 1, left + 1] * fraction_y * fraction_x
+
+        # Now add some noise
+        mask = srs.binomial(n=1, p=pflip, size=inpt.shape, dtype=floatX)
+        acc_x = (1 - output) * mask + output * (1 - mask)
+
+        if invert:
+            acc_x = 1. - acc_x
+
+        self.final_x = acc_x
 
     def get_data(self):
-        return (np.array(self.final_x),np.array(self.final_y))
-
-    def transform_dataset(dataset):
-        train,valid,test = dataset
-        train_x, train_y = train
-        valid_x, valid_y = valid
-        test_x, test_y = test
-        aggregate_x = np.concatenate((train_x, valid_x), axis=0)
-        aggregate_y = np.concatenate((train_y, valid_y), axis=0)
-        t = Transformer((aggregate_x,aggregate_y),28,28)
-        aggregate_train = t.get_data()
-        aggregate_valid = (aggregate_x, aggregate_y)
-        return (aggregate_train,aggregate_valid,test)
+        return sharedX(self.final_x.reshape([self.instances,self.layers * self.x * self.y]).eval())
 
 def one_hot(dataset):
     b = np.zeros((dataset.size, dataset.max()+1),dtype=floatX)
