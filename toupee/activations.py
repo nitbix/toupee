@@ -22,6 +22,15 @@ class TanH(Activation):
     def __call__(self,x):
         return T.tanh(x)
 
+class ScaledTanH(Activation):
+    yaml_tag = u'!ScaledTanH'
+    def __call__(self,x):
+        if 'A' not in self.__dict__:
+            self.A = 1.
+        if 'B' not in self.__dict__:
+            self.B = 1.
+        return self.A * T.tanh(self.B * x)
+
 class SoftSign(Activation):
     yaml_tag = u'!SoftSign'
     def __call__(self,x):
