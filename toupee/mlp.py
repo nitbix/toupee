@@ -20,6 +20,7 @@ import time
 import copy
 import numpy
 import scipy
+import math
 
 import theano
 import theano.tensor as T
@@ -369,7 +370,10 @@ class MLP(object):
         validate_model = self.eval_function(self.index, valid_set_x, valid_set_y,
                 self.x, self.y)
         print "..... train"
-        train_model = self.train_function(self.index, train_set_x, train_set_y,
+        if self.params.online_transform:
+            train_model = None
+        else:
+            train_model = self.train_function(self.index, train_set_x, train_set_y,
                 self.x, self.y)
         if len(dataset) > 2:
             test_set_x, test_set_y = dataset[2]
@@ -437,6 +441,18 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
 
+    if params.online_transform:
+        valid_set_x,valid_set_y  = data.shared_dataset(
+                                    (numpy.concatenate([train_set_x.eval({}),valid_set_x.eval({})]),
+                                     numpy.concatenate([train_set_y.eval({}),valid_set_y.eval({})])
+                                    )
+                                )
+        train_set_x, train_set_y = (valid_set_x,valid_set_y)
+        dataset = [ (train_set_x,train_set_y),
+                    (valid_set_x,valid_set_y),
+                    dataset[2]
+                  ]
+
     print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
 
     print '... building the model'
@@ -477,6 +493,26 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     start_time = time.clock()
 
     def run_epoch():
+        if params.online_transform:
+            t = data.GPUTransformer(valid_set_x,
+                            x=int(math.sqrt(params.n_in)),
+                            y=int(math.sqrt(params.n_in)),
+                            #TODO: these should be in params
+                            progress=False,
+                            alpha=36.0,
+                            beta=7.5,
+                            gamma=15.0,
+                            sigma=5,
+                            translation=2,
+                            pflip=0.0)
+            train_set_x = t.get_data()
+            train_set_y = valid_set_y
+            state.train_model = state.classifier.train_function(
+                    state.classifier.index,
+                    train_set_x,
+                    train_set_y,
+                    state.classifier.x,
+                    state.classifier.y)
         for minibatch_index in xrange(state.n_batches['train']):
             minibatch_avg_cost = state.train_model(minibatch_index,
                     state.previous_minibatch_avg_cost)
