@@ -43,7 +43,6 @@ class FixedLearningRate(LearningRate):
         pass
 
 class LinearDecayLearningRate(LearningRate):
-    #TODO: Using this with Dropout causes NaN all over the place. ???
 
     yaml_tag = u'!LinearDecayLearningRate'
 
@@ -74,6 +73,34 @@ class LinearDecayLearningRate(LearningRate):
                     T.clip(epoch,1,self.steps))
         updates.append((self.current_rate,new_rate))
         updates.append((self.current_epoch,epoch))
+
+class MultiplicativeDecayLearningRate(LearningRate):
+
+    yaml_tag = u'!MultiplicativeDecayLearningRate'
+
+    def __new__(cls):
+        instance = super(MultiplicativeDecayLearningRate,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        return instance
+
+    def get(self):
+        if 'current_rate' not in self.__dict__:
+            raise Exception("Uninitialised MultiplicativeDecayLearningRate")
+        return self.current_rate
+
+    def reset(self,updates):
+        if 'current_rate' not in self.__dict__:
+            self.current_rate = sharedX(self.start,borrow=True)
+        updates.append((self.current_rate,self.start))
+
+    def epoch_hook(self,updates):
+        if 'multiplier' not in self.__dict__:
+            self.multiplier = 0.9
+        new_rate = T.clip(self.current_rate * self.multiplier,
+                            self.stop,
+                            self.start)
+        updates.append((self.current_rate,new_rate))
 
 class UpdateRule(yaml.YAMLObject):
 
