@@ -14,31 +14,24 @@ import theano.tensor as T
 from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv
 from data import sharedX
+import weight_inits
 
 floatX = theano.config.floatX
 
-
 class Layer:
     def __init__(self,rng,inputs,n_in,n_out,activation,
-                 dropout_rate,layer_name,W=None,b=None):
+                 dropout_rate,layer_name,W=None,b=None,weight_init=None):
         self.inputs = inputs
         self.dropout_rate=dropout_rate
         self.layer_name=layer_name
         self.activation = activation
 
-        #TODO: initialisation functions need to be separate
+        if weight_init is None:
+            weight_init = weight_inits.GlorotWeightInit()
         if W is None:
-            W_values = numpy.asarray(rng.uniform(
-                    low=-numpy.sqrt(6. / (n_in + n_out)),
-                    high=numpy.sqrt(6. / (n_in + n_out)),
-                    size=(n_in, n_out)), dtype=theano.config.floatX)
-            if self.activation == theano.tensor.nnet.sigmoid:
-                W_values *= 4
-            W = theano.shared(value=W_values, name=layer_name + '_W', borrow=True)
-
+            W = weight_init(rng,n_in,n_out,self.layer_name + '_W',self.activation)
         if b is None:
-            b_values = numpy.zeros((n_out,), dtype=theano.config.floatX)
-            b = theano.shared(value=b_values, name=layer_name + '_b', borrow=True)
+            b = weight_inits.ZeroWeightInit()(rng,n_out,None,layer_name + '_b',None)
 
         self.W = W
         self.b = b
@@ -76,8 +69,10 @@ class FlatLayer(Layer):
     """
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
-                 activation=T.tanh,dropout_rate=0,layer_name='hidden'):
-        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name,W,b)
+                 activation=T.tanh,dropout_rate=0,layer_name='hidden',
+                 weight_init=None):
+        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,
+                dropout_rate,layer_name,W,b,weight_init=weight_init)
         self.rebuild()
 
     def rebuild(self):
@@ -96,12 +91,10 @@ class SoftMax(Layer):
     """
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
-                 activation=T.tanh,dropout_rate=0,layer_name='hidden'):
-#        W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=floatX),
-#                               name='Softmax_W', borrow=True)
-#        b = theano.shared(value=numpy.zeros((n_out,), dtype=floatX),
-#                               name='Softmax_b', borrow=True)
-        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name)#,W,b)
+                 activation=T.tanh,dropout_rate=0,layer_name='hidden',
+                 weight_init=None):
+        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,
+                dropout_rate,layer_name,W,b,weight_init=weight_init)
         self.rebuild()
 
     def rebuild(self):
@@ -137,12 +130,10 @@ class LogSoftMax(Layer):
     """
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
-                 activation=T.tanh,dropout_rate=0,layer_name='hidden'):
-#        W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=floatX),
-#                               name='Softmax_W', borrow=True)
-#        b = theano.shared(value=numpy.zeros((n_out,), dtype=floatX),
-#                               name='Softmax_b', borrow=True)
-        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,dropout_rate,layer_name)#,W,b)
+                 activation=T.tanh,dropout_rate=0,layer_name='hidden',
+                 weight_init=None):
+        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,
+                dropout_rate,layer_name,W,b,weight_init=weight_init)
         self.rebuild()
 
     def rebuild(self):
@@ -179,7 +170,8 @@ class ConvolutionalLayer(Layer):
     """
     #TODO: rejoin and rebuild
     def __init__(self, rng, inputs, input_shape, filter_shape, pool_size, W=None, b=None,
-             activation=T.tanh,dropout_rate=0,layer_name='conv',border_mode='valid',pooling='max'):
+             activation=T.tanh,dropout_rate=0,layer_name='conv',
+             border_mode='valid',pooling='max',weight_init=None):
         """
         :type rng: numpy.random.RandomState
         :param rng: a random number generator used to initialize weights
@@ -207,21 +199,15 @@ class ConvolutionalLayer(Layer):
         self.fan_in = numpy.prod(self.filter_shape[1:])
         self.fan_out = self.filter_shape[0] * numpy.prod(self.filter_shape[2:]) / numpy.prod(pool_size)
 
-        #W and b are slightly different for convnets
+        #W and b are slightly different for convnets - we need filter_shape
+        if weight_init is None:
+            weight_init = weight_inits.GlorotWeightInit()
         if W is None:
-                W_bound = numpy.sqrt(6. / (self.fan_in + self.fan_out))
-                initial_W = numpy.asarray( rng.uniform(
-                                       low=-W_bound, high=W_bound,
-                                       size=self.filter_shape),
-                                       dtype=theano.config.floatX)
-
-                if activation == T.nnet.sigmoid:
-                    initial_W *= 4
-                W = theano.shared(value=initial_W, name=layer_name + '_W')
+            W = weight_init(rng,n_in,n_out,self.layer_name + '_W',
+                    self.activation, self.filter_shape)
         if b is None:
-                b_values = numpy.zeros((self.filter_shape[0],), dtype=theano.config.floatX)
-                b = theano.shared(value=b_values, name=layer_name + '_b')
-
+            b = weight_inits.ZeroWeightInit()(rng,self.filter_shape[0],None,
+                    layer_name + '_b', None)
         Layer.__init__(self,rng,T.reshape(inputs,self.input_shape,ndim=4),self.filter_shape[0],
                 self.filter_shape[1], activation,dropout_rate,layer_name,W,b)
         self.rebuild()

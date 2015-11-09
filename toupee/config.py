@@ -15,6 +15,7 @@ import ensemble_methods
 import parameters
 import cost_functions
 import activations
+import weight_inits
 
 defaults = { 'random_seed': [2013,1,4],
              'save_images': False,
