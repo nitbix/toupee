@@ -43,7 +43,7 @@ class UniformWeightInit(WeightInit):
             else:
                 shape = (n_in, n_out)
         W_values = numpy.asarray(rng.uniform(
-                low=-self.min_w,
+                low=self.min_w,
                 high=self.max_w,
                 size=shape), dtype=theano.config.floatX)
         return theano.shared(value=W_values, name=weight_name, borrow=True)
