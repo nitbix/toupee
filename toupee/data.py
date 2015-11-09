@@ -23,6 +23,7 @@ import cPickle
 from skimage import transform as tf
 import multiprocessing
 import theano.tensor.signal.conv as sigconv
+from scipy.misc import imsave
 
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 
@@ -277,7 +278,7 @@ class GPUTransformer:
     """
 
     def __init__(self,original_set,x,y,alpha,beta,gamma,sigma,pflip,translation,
-                    layers=1,invert=False,progress=False):
+                    layers=1,invert=False,progress=False,save=False):
         print("..transforming dataset")
         self.min_trans_x = -2
         self.max_trans_x =  2
@@ -321,7 +322,7 @@ class GPUTransformer:
         target -= origin
 
         # Zoom
-        zoomer = T.exp(np.log(gamma).astype('float32') * srs.uniform((2, 1, 1), -1,dtype=floatX))
+        zoomer = T.exp(np.log(1. + (gamma/100.)).astype('float32') * srs.uniform((2, 1, 1), -1,dtype=floatX))
         target *= zoomer
 
         # Rotate
@@ -356,6 +357,18 @@ class GPUTransformer:
 
         self.final_x = acc_x
 
+        if save:
+            self.save_images()
+
+    def save_images(self):
+        to_save = self.final_x.reshape([self.instances,self.x,self.y]).eval({})
+        for i,x in enumerate(to_save[:100]):
+            print(i)
+            imsave('trans{0}.png'.format(i),x)
+        to_save = self.original_x.reshape([self.instances,self.x,self.y]).eval({})
+        for i,x in enumerate(to_save[:100]):
+            print(i)
+            imsave('orig{0}.png'.format(i),x)
     def get_data(self):
         return sharedX(self.final_x.reshape([self.instances,self.layers * self.x * self.y]).eval())
 
