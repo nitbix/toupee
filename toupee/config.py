@@ -23,7 +23,8 @@ defaults = { 'random_seed': [2013,1,4],
              'output_layer': 'softmax',
              'pretrain_update_rule': None,
              'pretrain_learning_rate': None,
-             'online_transform': False,
+             'online_transform': None,
+             'resize_data_to': None,
            }
 def load_parameters(filename):
     with open(filename) as f:

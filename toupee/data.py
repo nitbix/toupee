@@ -20,6 +20,7 @@ import theano
 import theano.tensor as T
 import gzip
 import cPickle
+import math
 from skimage import transform as tf
 import multiprocessing
 import theano.tensor.signal.conv as sigconv
@@ -79,7 +80,7 @@ def mask(p,shape,dtype=floatX):
 def corrupt(data,p):
     return mask(1-p,data.shape,dtype=floatX) * data
 
-def load_data(dataset, shared=True, pickled=True):
+def load_data(dataset, resize_to=None, shared=True, pickled=True):
     ''' Loads the dataset
 
     :type dataset: string
@@ -103,7 +104,29 @@ def load_data(dataset, shared=True, pickled=True):
         train_set = (tr['x'],tr['y'])
         valid_set = (v['x'],v['y'])
         test_set = (te['x'],te['y'])
-
+    if resize_to is not None:
+        orig_size = math.sqrt(train_set[0].shape[1])
+        train_set = (
+                        pad_dataset(
+                            train_set[0].reshape((train_set[0].shape[0],
+                                                    orig_size,orig_size)
+                            ),
+                            resize_to),
+                        train_set[1])
+        valid_set = (
+                        pad_dataset(
+                            valid_set[0].reshape((valid_set[0].shape[0],
+                                                    orig_size,orig_size)
+                            ),
+                            resize_to),
+                        valid_set[1])
+        test_set  = (
+                        pad_dataset(
+                            test_set[0].reshape((test_set[0].shape[0],
+                                                    orig_size,orig_size)
+                            ),
+                            resize_to),
+                        test_set[1])
     if shared:
         test_set_x, test_set_y = shared_dataset(test_set)
         valid_set_x, valid_set_y = shared_dataset(valid_set)
@@ -181,6 +204,25 @@ def transform_aux_map(tr,x):
 
 def f(x):
     return x
+
+def pad_dataset(xval,end_size):
+    """ 
+    Thanks to https://github.com/ilyakava/ciresan
+    """
+    new_x = []
+    for x in xval:
+        cs = x.shape[0]
+        padding = end_size - cs
+        bp = round(padding / 2) # before padding (left)
+        ap = padding - bp # after padding (right)
+        pads = (bp,ap)
+        if bp + ap > 0:
+            new_x.append(numpy.pad(x,(pads,pads),mode='constant').reshape(end_size**2))
+        else: # image is too big now, unpad/slice
+            si = -bp # start index
+            ei = cs + ap # end index
+            new_x.append(x[si:ei, si:ei].reshape(end_size**2))
+    return numpy.asarray(new_x)
 
 class Transformer:
     """
@@ -277,18 +319,21 @@ class GPUTransformer:
     Credit for this function to theanet https://github.com/rakeshvar/theanet/
     """
 
-    def __init__(self,original_set,x,y,alpha,beta,gamma,sigma,pflip,translation,
-                    layers=1,invert=False,progress=False,save=False):
+    def __init__(self,original_set,x,y,opts,
+                    layers=1,progress=False,save=False):
         print("..transforming dataset")
         self.min_trans_x = -2
         self.max_trans_x =  2
         self.min_trans_y = -2
         self.max_trans_y =  2
-        self.alpha = alpha
-        self.beta = beta
-        self.gamma = gamma
-        self.sigma = sigma
-        self.pflip = pflip
+        self.alpha = opts['alpha']
+        self.beta  = opts['beta']
+        self.gamma = opts['gamma']
+        self.sigma = opts['sigma']
+        self.pflip = opts['pflip']
+        self.translation = opts['translation']
+        self.bilinear = opts['bilinear']
+        self.invert = opts['invert'] if 'invert' in opts else False
         self.x = x
         self.y = y
         self.layers = layers
@@ -300,20 +345,20 @@ class GPUTransformer:
         target = T.as_tensor_variable(np.indices((self.y, self.x)).astype('float32'))
 
         # Translate
-        transln = translation * srs.uniform((2, 1, 1), -1,dtype=floatX)
+        transln = self.translation * srs.uniform((2, 1, 1), -1,dtype=floatX)
         target += transln
 
         # Build a gaussian filter
-        var = sigma ** 2
+        var = self.sigma ** 2
         filt = np.array([[np.exp(-.5 * (i * i + j * j) / var)
-                         for i in range(-sigma, sigma + 1)]
-                         for j in range(-sigma, sigma + 1)], dtype=floatX)
+                         for i in range(-self.sigma, self.sigma + 1)]
+                         for j in range(-self.sigma, self.sigma + 1)], dtype=floatX)
         filt /= 2 * np.pi * var
 
         # Elastic
-        elast = alpha * srs.normal((2, self.y, self.x),dtype=floatX)
+        elast = self.alpha * srs.normal((2, self.y, self.x),dtype=floatX)
         elast = sigconv.conv2d(elast, filt, (2, self.y, self.x), filt.shape, 'full')
-        elast = elast[:, sigma:self.y + sigma, sigma:self.x + sigma]
+        elast = elast[:, self.sigma:self.y + self.sigma, self.sigma:self.x + self.sigma]
         target += elast
 
         # Center at 'about' half way
@@ -322,11 +367,11 @@ class GPUTransformer:
         target -= origin
 
         # Zoom
-        zoomer = T.exp(np.log(1. + (gamma/100.)).astype('float32') * srs.uniform((2, 1, 1), -1,dtype=floatX))
+        zoomer = T.exp(np.log(1. + (self.gamma/100.)).astype('float32') * srs.uniform((2, 1, 1), -1,dtype=floatX))
         target *= zoomer
 
         # Rotate
-        theta = beta * np.pi / 180 * srs.uniform(low=-1,dtype=floatX)
+        theta = (self.beta * np.pi / 180) * srs.uniform(low=-1,dtype=floatX)
         c, s = T.cos(theta), T.sin(theta)
         rotate = T.stack(c, -s, s, c).reshape((2,2))
         target = T.tensordot(rotate, target, axes=((0, 0)))
@@ -338,21 +383,26 @@ class GPUTransformer:
         transy = T.clip(target[0], 0, self.y - 1 - .001)
         transx = T.clip(target[1], 0, self.x - 1 - .001)
 
-        topp = T.cast(transy, 'int32')
-        left = T.cast(transx, 'int32')
-        fraction_y = T.cast(transy - T.cast(topp, floatX), floatX)
-        fraction_x = T.cast(transx - T.cast(left, floatX), floatX)
+        if self.bilinear:
+            topp = T.cast(transy, 'int32')
+            left = T.cast(transx, 'int32')
+            fraction_y = T.cast(transy - T.cast(topp, floatX), floatX)
+            fraction_x = T.cast(transx - T.cast(left, floatX), floatX)
 
-        output = inpt[:, :, topp, left] * (1 - fraction_y) * (1 - fraction_x) + \
-                 inpt[:, :, topp, left + 1] * (1 - fraction_y) * fraction_x + \
-                 inpt[:, :, topp + 1, left] * fraction_y * (1 - fraction_x) + \
-                 inpt[:, :, topp + 1, left + 1] * fraction_y * fraction_x
+            output = inpt[:, :, topp, left] * (1 - fraction_y) * (1 - fraction_x) + \
+                     inpt[:, :, topp, left + 1] * (1 - fraction_y) * fraction_x + \
+                     inpt[:, :, topp + 1, left] * fraction_y * (1 - fraction_x) + \
+                     inpt[:, :, topp + 1, left + 1] * fraction_y * fraction_x
+        else:
+            vert = T.iround(transy)
+            horz = T.iround(transx)
+            output = inpt[:, :, vert, horz]
 
         # Now add some noise
-        mask = srs.binomial(n=1, p=pflip, size=inpt.shape, dtype=floatX)
+        mask = srs.binomial(n=1, p=self.pflip, size=inpt.shape, dtype=floatX)
         acc_x = (1 - output) * mask + output * (1 - mask)
 
-        if invert:
+        if self.invert:
             acc_x = 1. - acc_x
 
         self.final_x = acc_x
