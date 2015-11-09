@@ -362,7 +362,7 @@ class MLP(object):
                         self.params.batch_size]
                 })
 
-    def make_models(self,dataset):
+    def make_models(self, dataset):
         train_set_x, train_set_y = dataset[0]
         valid_set_x, valid_set_y = dataset[1]
         test_set_x, test_set_y = (None,None)
@@ -370,7 +370,7 @@ class MLP(object):
         validate_model = self.eval_function(self.index, valid_set_x, valid_set_y,
                 self.x, self.y)
         print "..... train"
-        if self.params.online_transform:
+        if self.params.online_transform is not None:
             train_model = None
         else:
             train_model = self.train_function(self.index, train_set_x, train_set_y,
@@ -441,17 +441,15 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
 
-    if params.online_transform:
-        valid_set_x,valid_set_y  = data.shared_dataset(
-                                    (numpy.concatenate([train_set_x.eval({}),valid_set_x.eval({})]),
-                                     numpy.concatenate([train_set_y.eval({}),valid_set_y.eval({})])
+    if params.online_transform is not None:
+        valid_set_x, valid_set_y  = data.shared_dataset(
+                                        (numpy.concatenate([train_set_x.eval({}),valid_set_x.eval({})]),
+                                         numpy.concatenate([train_set_y.eval({}),valid_set_y.eval({})])
+                                        )
                                     )
-                                )
         train_set_x, train_set_y = (valid_set_x,valid_set_y)
-        dataset = [ (train_set_x,train_set_y),
-                    (valid_set_x,valid_set_y),
-                    dataset[2]
-                  ]
+        dataset[0] = (train_set_x,train_set_y)
+        dataset[1] = (valid_set_x,valid_set_y)
 
     print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
 
@@ -493,21 +491,14 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
     start_time = time.clock()
 
     def run_epoch():
-        if params.online_transform:
+        if params.online_transform is not None:
             t = data.GPUTransformer(valid_set_x,
                             x=int(math.sqrt(params.n_in)),
                             y=int(math.sqrt(params.n_in)),
-                            #TODO: these should be in params
                             progress=False,
                             save=False,
-                            alpha=36.0,
-                            beta=15.0,
-                            gamma=30.0,
-                            sigma=8,
-                            translation=5,
-                            pflip=0.0)
+                            opts=params.online_transform)
             train_set_x = t.get_data()
-            train_set_y = valid_set_y
             state.train_model = state.classifier.train_function(
                     state.classifier.index,
                     train_set_x,
