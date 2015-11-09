@@ -62,6 +62,6 @@ class GlorotWeightInit(WeightInit):
                 low=-numpy.sqrt(6. / (n_in + n_out)),
                 high=numpy.sqrt(6. / (n_in + n_out)),
                 size=shape), dtype=theano.config.floatX)
-        if activation == theano.tensor.nnet.sigmoid:
+        if type(activation) is 'toupee.activations.Sigmoid':
             W_values *= 4
         return theano.shared(value=W_values, name=weight_name, borrow=True)
