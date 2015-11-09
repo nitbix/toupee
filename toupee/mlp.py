@@ -499,11 +499,12 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                             y=int(math.sqrt(params.n_in)),
                             #TODO: these should be in params
                             progress=False,
+                            save=False,
                             alpha=36.0,
-                            beta=7.5,
-                            gamma=15.0,
-                            sigma=5,
-                            translation=2,
+                            beta=15.0,
+                            gamma=30.0,
+                            sigma=8,
+                            translation=5,
                             pflip=0.0)
             train_set_x = t.get_data()
             train_set_y = valid_set_y
