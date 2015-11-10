@@ -213,8 +213,8 @@ def pad_dataset(xval,end_size):
     for x in xval:
         cs = x.shape[0]
         padding = end_size - cs
-        bp = round(padding / 2) # before padding (left)
-        ap = padding - bp # after padding (right)
+        bp = int(round(padding / 2)) # before padding (left)
+        ap = int(round(padding - bp)) # after padding (right)
         pads = (bp,ap)
         if bp + ap > 0:
             new_x.append(np.pad(x,(pads,pads),mode='constant').reshape(end_size**2))
