@@ -203,7 +203,7 @@ class ConvolutionalLayer(Layer):
         if weight_init is None:
             weight_init = weight_inits.GlorotWeightInit()
         if W is None:
-            W = weight_init(rng,n_in,n_out,self.layer_name + '_W',
+            W = weight_init(rng,self.fan_in,self.fan_out,self.layer_name + '_W',
                     self.activation, self.filter_shape)
         if b is None:
             b = weight_inits.ZeroWeightInit()(rng,self.filter_shape[0],None,
