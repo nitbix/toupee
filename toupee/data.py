@@ -334,6 +334,7 @@ class GPUTransformer:
         self.translation = opts['translation']
         self.bilinear = opts['bilinear']
         self.invert = opts['invert'] if 'invert' in opts else False
+        self.center_uncertainty = opts['center_uncertainty'] if 'center_uncertainty' in opts else 0.
         self.x = x
         self.y = y
         self.layers = layers
@@ -362,7 +363,8 @@ class GPUTransformer:
         target += elast
 
         # Center at 'about' half way
-        origin = srs.uniform((2, 1, 1), .25, .75,dtype=floatX) * \
+        origin = srs.uniform((2, 1, 1), 0.5 - self.center_uncertainty,
+                 0.5 + self.center_uncertainty,dtype=floatX) * \
                  np.array((self.y, self.x)).reshape((2, 1, 1)).astype('float32')
         target -= origin
 
@@ -419,6 +421,7 @@ class GPUTransformer:
         for i,x in enumerate(to_save[:100]):
             print(i)
             imsave('orig{0}.png'.format(i),x)
+
     def get_data(self):
         return sharedX(self.final_x.reshape([self.instances,self.layers * self.x * self.y]).eval())
 
