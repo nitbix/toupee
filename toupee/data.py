@@ -217,7 +217,7 @@ def pad_dataset(xval,end_size):
         ap = padding - bp # after padding (right)
         pads = (bp,ap)
         if bp + ap > 0:
-            new_x.append(numpy.pad(x,(pads,pads),mode='constant').reshape(end_size**2))
+            new_x.append(np.pad(x,(pads,pads),mode='constant').reshape(end_size**2))
         else: # image is too big now, unpad/slice
             si = -bp # start index
             ei = cs + ap # end index
