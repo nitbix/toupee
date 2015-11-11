@@ -504,7 +504,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                             save=False,
                             opts=params.online_transform)
             train_set_x = t.get_data()
-            del t
+            t.clear()
             gc.collect()
             state.train_model = state.classifier.train_function(
                     state.classifier.index,
@@ -579,6 +579,10 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                 cost = numpy.asarray(state.classifier.cost.eval({x: e_x, y: e_y}))
                 print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         state.classifier.run_hooks()
+        if params.online_transform is not None:
+            del train_set_x
+            del state.train_model
+            gc.collect()
 
     if params.training_method == 'normal':
         print ".... generating models"

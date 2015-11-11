@@ -402,13 +402,13 @@ class GPUTransformer:
 
         # Now add some noise
         mask = srs.binomial(n=1, p=self.pflip, size=inpt.shape, dtype=floatX)
-        acc_x = (1 - output) * mask + output * (1 - mask)
+        output = (1 - output) * mask + output * (1 - mask)
 
         if self.invert:
-            acc_x = 1. - acc_x
+            output = 1. - output
 
-        self.final_x = acc_x
-
+        self.final_x = output
+        del target
         if save:
             self.save_images()
 
@@ -421,6 +421,10 @@ class GPUTransformer:
         for i,x in enumerate(to_save[:100]):
             print(i)
             imsave('orig{0}.png'.format(i),x)
+
+    def clear(self):
+        del self.final_x
+        gc.collect()
 
     def get_data(self):
         return sharedX(self.final_x.reshape([self.instances,self.layers * self.x * self.y]).eval())
