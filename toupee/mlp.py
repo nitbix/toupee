@@ -516,7 +516,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
             minibatch_avg_cost = state.train_model(minibatch_index,
                     state.previous_minibatch_avg_cost)
             iter = (state.epoch - 1) * state.n_batches['train'] + minibatch_index
-            if (iter + 1) % validation_frequency == 0:
+            if (iter + 1) % validation_frequency == 0 \
+                    or (minibatch_index + 1) == state.n_batches['train'] == 0:
                 validation_losses = [state.validate_model(i) for i
                                      in xrange(state.n_batches['valid'])]
                 this_validation_loss = numpy.mean(validation_losses)
