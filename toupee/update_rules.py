@@ -111,15 +111,30 @@ class UpdateRule(yaml.YAMLObject):
 class SGD(UpdateRule):
 
     yaml_tag = u'!SGD'
+
+    def __new__(cls):
+        instance = super(SGD,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        return instance
+
+    def reset(self,updates):
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0.
+        if 'momentum_decay' not in self.__dict__:
+            self.momentum_decay = 1.
+        self.curr_momentum = sharedX(self.momentum)
+
+    def epoch_hook(self,updates):
+        updates.append((self.curr_momentum,self.curr_momentum * self.momentum_decay))
+
     def __init__(self):
         pass
 
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
-        if 'momentum' not in self.__dict__:
-            self.momentum = sharedX(0.)
         self.velocity = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
-        velocity = (self.velocity * self.momentum - learning_rate.get() * gparam)
+        velocity = (self.velocity * self.curr_momentum - learning_rate.get() * gparam)
         updates.append((self.velocity,velocity))
         return param + velocity * mask
 
@@ -434,7 +449,6 @@ class DRProp(RPropVariant):
                     T.clip(epoch,1,self.steps_min_delta))
         updates.append((self.min_delta,new_min))
         updates.append((self.current_epoch,epoch))
-
 
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
