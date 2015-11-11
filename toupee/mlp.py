@@ -504,6 +504,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                             save=False,
                             opts=params.online_transform)
             train_set_x = t.get_data()
+            del t
+            gc.collect()
             state.train_model = state.classifier.train_function(
                     state.classifier.index,
                     train_set_x,
