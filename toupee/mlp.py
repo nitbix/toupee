@@ -564,6 +564,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
                 if params.detailed_stats:
                     print "  {0} grad max: {1}".format(str(param),gradient.max())
                     print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
+                del gradient
+                gc.collect()
 
             if params.detailed_stats:
                 #for l,m in state.classifier.layer_updates.iteritems():
