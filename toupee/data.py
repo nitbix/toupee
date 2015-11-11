@@ -63,8 +63,8 @@ def shared_dataset(data_xy, borrow=True):
     variable) would lead to a large decrease in performance.
     """
     data_x, data_y = data_xy
-    shared_x = theano.shared(numpy.asarray(data_x, dtype=floatX), borrow=borrow)
-    shared_y = theano.shared(numpy.asarray(data_y, dtype=floatX), borrow=borrow)
+    shared_x = theano.shared(np.asarray(data_x, dtype=floatX), borrow=borrow)
+    shared_y = theano.shared(np.asarray(data_y, dtype=floatX), borrow=borrow)
     # When storing data on the GPU it has to be stored as floats
     # therefore we will store the labels as ``floatX`` as well
     # (``shared_y`` does exactly that). But during our computations
@@ -164,7 +164,7 @@ class Resampler:
         
     def make_new_train(self,sample_size,distribution=None):
         if distribution is None:
-            sample = numpy.random.randint(low=0,high=self.train_size,size=sample_size)
+            sample = np.random.randint(low=0,high=self.train_size,size=sample_size)
         else:
             raise Exception("not implemented");
         sampled_x = []
@@ -213,16 +213,16 @@ def pad_dataset(xval,end_size):
     for x in xval:
         cs = x.shape[0]
         padding = end_size - cs
-        bp = round(padding / 2) # before padding (left)
-        ap = padding - bp # after padding (right)
+        bp = int(round(padding / 2)) # before padding (left)
+        ap = int(round(padding - bp)) # after padding (right)
         pads = (bp,ap)
         if bp + ap > 0:
-            new_x.append(numpy.pad(x,(pads,pads),mode='constant').reshape(end_size**2))
+            new_x.append(np.pad(x,(pads,pads),mode='constant').reshape(end_size**2))
         else: # image is too big now, unpad/slice
             si = -bp # start index
             ei = cs + ap # end index
             new_x.append(x[si:ei, si:ei].reshape(end_size**2))
-    return numpy.asarray(new_x)
+    return np.asarray(new_x)
 
 class Transformer:
     """
@@ -244,12 +244,12 @@ class Transformer:
         self.gamma = gamma
         self.sigma = sigma
         self.noise_var = noise_var
-        self.original_x = numpy.asarray(original_set)
+        self.original_x = np.asarray(original_set)
         self.final_x = []
         self.instance_no = 0
         instances = len(self.original_x)
-        rng = numpy.random.RandomState(42)
-        self.original_x = numpy.asarray(self.original_x).reshape(instances,self.x,self.y)
+        rng = np.random.RandomState(42)
+        self.original_x = np.asarray(self.original_x).reshape(instances,self.x,self.y)
         p = multiprocessing.Pool(32)
         deferred = [p.apply_async(transform_aux_map,args=(self,x)) for x in
                 self.original_x]
@@ -258,15 +258,15 @@ class Transformer:
     def apply(self,curr_x):
 #        if self.progress and self.instance_no % 100 == 0:
 #            print("instance {0}".format(self.instance_no), end="\r")
-        dx = numpy.random.uniform(low=self.min_trans_x,high=self.max_trans_x)
-        dy = numpy.random.uniform(low=self.min_trans_y,high=self.max_trans_y)
+        dx = np.random.uniform(low=self.min_trans_x,high=self.max_trans_x)
+        dy = np.random.uniform(low=self.min_trans_y,high=self.max_trans_y)
         curr_x = self.translate_instance(curr_x,int(dx),int(dy))
-        angle = numpy.random.uniform(low=-self.beta,high=self.beta)
-        shear = numpy.random.uniform(low=-self.beta,high=self.beta)
+        angle = np.random.uniform(low=-self.beta,high=self.beta)
+        shear = np.random.uniform(low=-self.beta,high=self.beta)
         curr_x = self.rotate_instance(curr_x,angle)
         #curr_x = self.gaussian_noise(curr_x,noise_var)
-        scale_x = 1. + numpy.random.uniform(low=-self.gamma,high=self.gamma) / 100.
-        scale_y = 1. + numpy.random.uniform(low=-self.gamma,high=self.gamma) / 100.
+        scale_x = 1. + np.random.uniform(low=-self.gamma,high=self.gamma) / 100.
+        scale_y = 1. + np.random.uniform(low=-self.gamma,high=self.gamma) / 100.
         curr_x = self.scale(curr_x,[scale_x,scale_y])
 #            curr_x = self.elastic_transform(curr_x,sigma,alpha)
 #        trans = tf.AffineTransform(
@@ -285,8 +285,8 @@ class Transformer:
         return warped_x.flatten()
 
     def elastic_transform(self,xval,sigma,alpha):
-            field_x = numpy.random.rand(xval.shape[0],xval.shape[1]) * 2. - 1.
-            field_y = numpy.random.rand(xval.shape[0],xval.shape[1]) * 2. - 1.
+            field_x = np.random.rand(xval.shape[0],xval.shape[1]) * 2. - 1.
+            field_y = np.random.rand(xval.shape[0],xval.shape[1]) * 2. - 1.
             convolved_field_x = ni.filters.gaussian_filter(field_x,sigma)
             convolved_field_y = ni.filters.gaussian_filter(field_y,sigma)
             convolved_field_x = convolved_field_x * alpha / max(abs(convolved_field_x.flatten()))
@@ -303,7 +303,7 @@ class Transformer:
         return tf.rotate(xval,angle, mode='reflect')
 
     def gaussian_noise(self,xval,sigma):
-        return xval + numpy.random.normal(0.,sigma,xval.shape)
+        return xval + np.random.normal(0.,sigma,xval.shape)
 
     def scale(self,xval,scaling):
         return ni.zoom(xval,scaling)
