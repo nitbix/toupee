@@ -497,7 +497,6 @@ class DRProp(RPropVariant):
         updates.append((previous_grad,new_previous_grad))
         updates.append((delta,new_delta))
         updates.append((previous_inc,d_w))
-        updates.append((q,new_q))
         return param + new_velocity * mask
 
 
