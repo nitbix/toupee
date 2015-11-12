@@ -17,7 +17,7 @@ import cost_functions
 import activations
 import weight_inits
 
-defaults = { 'random_seed': [2013,1,4],
+defaults = { 'random_seed': None,
              'save_images': False,
              'pretraining_noise': None,
              'detailed_stats': False,
