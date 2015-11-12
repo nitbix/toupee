@@ -16,9 +16,6 @@ import yaml
 from data import sharedX
 import common
 
-def mask_filter(m,u):
-    return T.switch(masked, m, u)
-
 class LearningRate(yaml.YAMLObject):
 
     def get(self):
@@ -257,6 +254,9 @@ class RProp(RPropVariant):
         change_above_zero = T.gt(change,0.)
         change_below_zero = T.lt(change,0.)
 
+        def mask_filter(m,u):
+            return T.switch(masked, m, u)
+
         new_delta = T.clip(
                 T.switch(
                     change_above_zero,
@@ -382,6 +382,9 @@ class ARProp(RPropVariant):
         change_above_zero = T.gt(change,0.)
         change_below_zero = T.lt(change,0.)
 
+        def mask_filter(m,u):
+            return T.switch(masked, m, u)
+
         new_delta = T.clip(
                 T.switch(
                     change_above_zero,
@@ -462,6 +465,9 @@ class DRProp(RPropVariant):
         masked =  T.eq(mask * gparam,0.)
         change_above_zero = T.gt(change,0.)
         change_below_zero = T.lt(change,0.)
+
+        def mask_filter(m,u):
+            return T.switch(masked, m, u)
 
         new_delta = T.clip(
                 T.switch(
@@ -555,6 +561,9 @@ class ADRProp(RPropVariant):
         masked =  T.eq(mask * gparam,0.)
         change_above_zero = T.gt(change,0.)
         change_below_zero = T.lt(change,0.)
+
+        def mask_filter(m,u):
+            return T.switch(masked, m, u)
 
         new_delta = T.clip(
                 T.switch(
