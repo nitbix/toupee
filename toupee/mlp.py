@@ -454,7 +454,7 @@ class MLP(object):
                 updates=updates,)
         f()
 
-def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
+def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None):
     results = common.Results(params)
     train_set_x, train_set_y = dataset[0]
     valid_set_x, valid_set_y = dataset[1]
@@ -474,7 +474,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None):
 
     print '... building the model'
 
-    index = T.lscalar()
+    if index is None:
+        index = T.lscalar()
     if x is None:
         x = T.matrix('x')
     if y is None:
