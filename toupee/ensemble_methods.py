@@ -170,8 +170,8 @@ class Bagging(EnsembleMethod):
             return AveragingRunner(members,x,y)
 
     def create_member(self,x,y):
-        mlp_training_dataset = (self.resampler.make_new_train(self.params.resample_size),
-                self.resampler.get_valid())
+        mlp_training_dataset = [self.resampler.make_new_train(self.params.resample_size),
+                self.resampler.get_valid()]
         pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
         m = mlp.test_mlp(mlp_training_dataset, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
@@ -198,8 +198,8 @@ class AdaBoost(EnsembleMethod):
         pass
 
     def create_member(self,x,y):
-        mlp_training_dataset = (self.resampler.make_new_train(self.params.resample_size),
-                self.resampler.get_valid())
+        mlp_training_dataset = [self.resampler.make_new_train(self.params.resample_size),
+                self.resampler.get_valid()]
         pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
         m = mlp.test_mlp(mlp_training_dataset, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
@@ -244,8 +244,8 @@ class Stacking(EnsembleMethod):
                 Parameters(**self.__dict__))
 
     def create_member(self,x,y):
-        mlp_training_dataset = (self.resampler.make_new_train(self.params.resample_size),
-                self.resampler.get_valid())
+        mlp_training_dataset = [self.resampler.make_new_train(self.params.resample_size),
+                self.resampler.get_valid()]
         pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
         m = mlp.test_mlp(mlp_training_dataset, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
@@ -275,8 +275,8 @@ class DropStacking(Stacking):
                 Parameters(**self.__dict__))
 
     def create_member(self,x,y):
-        mlp_training_dataset = (self.resampler.make_new_train(self.params.resample_size),
-                self.resampler.get_valid())
+        mlp_training_dataset = [self.resampler.make_new_train(self.params.resample_size),
+                self.resampler.get_valid()]
         pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
         m = mlp.test_mlp(mlp_training_dataset, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
