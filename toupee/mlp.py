@@ -106,6 +106,20 @@ class MLP(object):
                 l.output_shape = self.chain_n_in
                 self.chain_in=l.output
                 return l
+            elif(layer_type == 'dropout'):
+                n_this,drop_this,name_this,activation_this,weight_init = desc
+                l = layers.Dropout(rng=rng,
+                                     inputs=self.chain_in.flatten(ndim=2),
+                                     n_in=numpy.prod(self.chain_n_in),
+                                     n_out=numpy.prod(self.chain_n_in),
+                                     activation=activation_this,
+                                     dropout_rate=drop_this,
+                                     layer_name=name_this,
+                                     )
+                self.chain_n_in = n_this
+                l.output_shape = self.chain_n_in
+                self.chain_in=l.output
+                return l
             elif(layer_type == 'conv'):
                 input_shape,filter_shape,pool_size,drop_this,name_this,activation_this,pooling,weight_init = desc
                 if input_shape is None:
