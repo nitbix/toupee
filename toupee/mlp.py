@@ -50,6 +50,7 @@ class TrainingState:
         self.done_looping = False
         self.best_weights = None
         self.best_iter = 0
+        self.best_epoch = 0
         self.test_score = 0.
         self.epoch = 0
         self.n_batches = {}
@@ -59,6 +60,7 @@ class TrainingState:
         self.best_weights = None
         self.best_validation_loss = numpy.inf
         self.best_iter = 0
+        self.best_epoch = 0
         self.test_score = 0.
         self.epoch = 0
 
@@ -331,9 +333,11 @@ class MLP(object):
             update_rule = self.params.update_rule
         if learning_rate is None:
             learning_rate = self.params.learning_rate
-        self.cost = self.cost_function(self.outputLayer,y) \
-             + self.params.L1_reg * self.L1 \
-             + self.params.L2_reg * self.L2_sqr
+        self.cost = self.cost_function(self.outputLayer,y)
+        if self.params.L1_reg:
+            self.cost += self.params.L1_reg * self.L1
+        if self.params.L2_reg:
+            self.cost += self.params.L2_reg * self.L2_sqr
         self.gparams = []
         for param in self.opt_params:
             gparam = T.grad(self.cost, param)
@@ -545,6 +549,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None):
                         state.patience = max(state.patience, iter * state.patience_increase)
                     state.best_validation_loss = this_validation_loss
                     state.best_iter = iter
+                    state.best_epoch = state.epoch
                     state.best_weights = state.classifier.get_weights()
                     gc.collect()
                     # test it on the test set
@@ -606,8 +611,11 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None):
         state.set_models(state.classifier.make_models(dataset))
         print ".... started"
         while (state.epoch < params.n_epochs) and (not state.done_looping):
+            epoch_start = time.clock()
             state.epoch += 1
             run_epoch()
+            epoch_end = time.clock()
+            print "t: {0}".format(epoch_end - epoch_start)
         state.classifier.set_weights(state.best_weights)
 
     
@@ -627,14 +635,17 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None):
             print ".... started"
             while (state.epoch < params.n_epochs) and (not state.done_looping):
                 state.epoch += 1
+                epoch_start = time.clock()
                 run_epoch()
+                epoch_end = time.clock()
+                print "t: {0}".format(epoch_end - epoch_start)
             state.classifier.set_weights(state.best_weights)
     end_time = time.clock()
     if test_set_x is not None:
         print(('Optimization complete. Best validation score of %f %% '
                'obtained at iteration %i, epoch %i, with test performance %f %%') %
               (state.best_validation_loss * 100., state.best_iter + 1,
-                  state.epoch, state.test_score * 100.))
+                  state.best_epoch, state.test_score * 100.))
         print >> sys.stderr, ('The code for file ' +
                               os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
