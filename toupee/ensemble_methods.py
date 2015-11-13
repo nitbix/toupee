@@ -123,8 +123,8 @@ class DropStackingRunner:
         print 'training stack head'
         self.head_x = T.concatenate([m.p_y_given_x
             for m in self.members],axis=1)
-        dataset = ((sharedX(self.train_input_x(),borrow=True),train_set_y),
-                   (sharedX(self.valid_input_x(),borrow=True),valid_set_y))
+        dataset = [(sharedX(self.train_input_x(),borrow=True),train_set_y),
+                   (sharedX(self.valid_input_x(),borrow=True),valid_set_y)]
         pretraining_set = make_pretraining_set(dataset,params.pretraining)
         params.n_in = len(members) * params.main_params.n_out
         params.n_out = params.main_params.n_out
@@ -171,7 +171,7 @@ class Bagging(EnsembleMethod):
 
     def create_member(self,x,y):
         mlp_training_dataset = [self.resampler.make_new_train(self.params.resample_size),
-                self.resampler.get_valid()]
+                self.resampler.get_valid(),self.resampler.get_test()]
         pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
         m = mlp.test_mlp(mlp_training_dataset, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
