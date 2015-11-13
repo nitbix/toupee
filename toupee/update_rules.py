@@ -123,6 +123,8 @@ class SGD(UpdateRule):
             self.momentum = 0.
         if 'momentum_decay' not in self.__dict__:
             self.momentum_decay = 1.
+        if 'renorm' not in self.__dict__:
+            self.renorm = False
         self.curr_momentum = sharedX(self.momentum)
 
     def epoch_hook(self,updates):
@@ -134,9 +136,15 @@ class SGD(UpdateRule):
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
         self.velocity = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
-        velocity = (self.velocity * self.curr_momentum - learning_rate.get() * gparam)
+        if self.momentum:
+            velocity = (self.velocity * self.curr_momentum - learning_rate.get() * gparam)
+        else:
+            velocity = - learning_rate.get() * gparam
+        new_w = param + self.velocity * mask
+        if self.renorm:
+            new_w = new_w / T.min(T.abs_(new_w))
         updates.append((self.velocity,velocity))
-        return param + velocity * mask
+        return new_w
 
 class RPropVariant(UpdateRule):
 
@@ -487,8 +495,8 @@ class DRProp(RPropVariant):
             T.switch(change_below_zero, zero, gparam)
         )
         step = - T.sgn(gparam) * new_delta
-        unmasked_inc = T.switch(change_below_zero, zero, step)
-        d_w = mask_filter(zero,unmasked_inc)
+        d_w = T.switch(change_below_zero, zero, step)
+        d_w = mask_filter(zero,d_w)
 
         #Momentum
         new_velocity = (velocity * self.momentum_var + d_w)
@@ -497,7 +505,9 @@ class DRProp(RPropVariant):
         updates.append((previous_grad,new_previous_grad))
         updates.append((delta,new_delta))
         updates.append((previous_inc,d_w))
-        return param + new_velocity * mask
+        new_w = param + new_velocity * mask
+        new_w = new_w / T.max(T.abs_(new_w))
+        return new_w
 
 
 class ADRProp(RPropVariant):
