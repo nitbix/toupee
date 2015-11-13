@@ -346,40 +346,45 @@ class GPUTransformer:
         target = T.as_tensor_variable(np.indices((self.y, self.x)).astype('float32'))
 
         # Translate
-        transln = self.translation * srs.uniform((2, 1, 1), -1,dtype=floatX)
-        target += transln
+        if self.translation:
+            transln = self.translation * srs.uniform((2, 1, 1), -1,dtype=floatX)
+            target += transln
 
         # Build a gaussian filter
-        var = self.sigma ** 2
-        filt = np.array([[np.exp(-.5 * (i * i + j * j) / var)
-                         for i in range(-self.sigma, self.sigma + 1)]
-                         for j in range(-self.sigma, self.sigma + 1)], dtype=floatX)
-        filt /= 2 * np.pi * var
+        if self.sigma - 1:
+            var = self.sigma ** 2
+            filt = np.array([[np.exp(-.5 * (i * i + j * j) / var)
+                             for i in range(-self.sigma, self.sigma + 1)]
+                             for j in range(-self.sigma, self.sigma + 1)], dtype=floatX)
+            filt /= 2 * np.pi * var
 
-        # Elastic
-        elast = self.alpha * srs.normal((2, self.y, self.x),dtype=floatX)
-        elast = sigconv.conv2d(elast, filt, (2, self.y, self.x), filt.shape, 'full')
-        elast = elast[:, self.sigma:self.y + self.sigma, self.sigma:self.x + self.sigma]
-        target += elast
+            # Elastic
+            elast = self.alpha * srs.normal((2, self.y, self.x),dtype=floatX)
+            elast = sigconv.conv2d(elast, filt, (2, self.y, self.x), filt.shape, 'full')
+            elast = elast[:, self.sigma:self.y + self.sigma, self.sigma:self.x + self.sigma]
+            target += elast
 
-        # Center at 'about' half way
-        origin = srs.uniform((2, 1, 1), 0.5 - self.center_uncertainty,
-                 0.5 + self.center_uncertainty,dtype=floatX) * \
-                 np.array((self.y, self.x)).reshape((2, 1, 1)).astype('float32')
-        target -= origin
+        if self.gamma or self.beta:
+            # Center at 'about' half way
+            origin = srs.uniform((2, 1, 1), 0.5 - self.center_uncertainty,
+                     0.5 + self.center_uncertainty,dtype=floatX) * \
+                     np.array((self.y, self.x)).reshape((2, 1, 1)).astype('float32')
+            target -= origin
 
-        # Zoom
-        zoomer = T.exp(np.log(1. + (self.gamma/100.)).astype('float32') * srs.uniform((2, 1, 1), -1,dtype=floatX))
-        target *= zoomer
+            # Zoom
+            if self.gamma:
+                zoomer = T.exp(np.log(1. + (self.gamma/100.)).astype('float32') * srs.uniform((2, 1, 1), -1,dtype=floatX))
+                target *= zoomer
 
-        # Rotate
-        theta = (self.beta * np.pi / 180) * srs.uniform(low=-1,dtype=floatX)
-        c, s = T.cos(theta), T.sin(theta)
-        rotate = T.stack(c, -s, s, c).reshape((2,2))
-        target = T.tensordot(rotate, target, axes=((0, 0)))
+            # Rotate
+            if self.beta:
+                theta = (self.beta * np.pi / 180) * srs.uniform(low=-1,dtype=floatX)
+                c, s = T.cos(theta), T.sin(theta)
+                rotate = T.stack(c, -s, s, c).reshape((2,2))
+                target = T.tensordot(rotate, target, axes=((0, 0)))
 
-        # Uncenter
-        target += origin
+            # Uncenter
+            target += origin
 
         # Clip the mapping to valid range and linearly interpolate
         transy = T.clip(target[0], 0, self.y - 1 - .001)
@@ -401,8 +406,9 @@ class GPUTransformer:
             output = inpt[:, :, vert, horz]
 
         # Now add some noise
-        mask = srs.binomial(n=1, p=self.pflip, size=inpt.shape, dtype=floatX)
-        output = (1 - output) * mask + output * (1 - mask)
+        if self.pflip:
+            mask = srs.binomial(n=1, p=self.pflip, size=inpt.shape, dtype=floatX)
+            output = (1 - output) * mask + output * (1 - mask)
 
         if self.invert:
             output = 1. - output
