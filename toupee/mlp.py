@@ -73,7 +73,8 @@ class MLP(object):
     Multi-Layer Perceptron (or any other kind of ANN if the layers exist)
     """
 
-    def __init__(self, params, rng, input, index, x, y, pretraining_set = None):
+    def __init__(self, params, rng, input, index, x, y, pretraining_set = None,
+            continuation = None):
         """
         Initialize the parameters for the multilayer perceptron
         """
@@ -84,6 +85,7 @@ class MLP(object):
         self.chain_n_in = params.n_in
         self.chain_input_shape = None
         self.chain_in = input
+        self.input = input
         self.prev_dim = None
         self.params = params
         self.rng = rng
@@ -93,7 +95,7 @@ class MLP(object):
         self.index = index
         self.reset_hooks(TrainingState(self))
 
-        def make_layer(layer_type,desc):
+        def make_layer(layer_type,desc,W=None,b=None):
             if(layer_type == 'flat'):
                 n_this,drop_this,name_this,activation_this,weight_init = desc
                 l = layers.FlatLayer(rng=rng,
@@ -103,7 +105,8 @@ class MLP(object):
                                      activation=activation_this,
                                      dropout_rate=drop_this,
                                      layer_name=name_this,
-                                     weight_init=weight_init)
+                                     weight_init=weight_init,
+                                     W=W,b=b)
                 self.chain_n_in = n_this
                 l.output_shape = self.chain_n_in
                 self.chain_in=l.output
@@ -145,7 +148,8 @@ class MLP(object):
                                        dropout_rate=drop_this,
                                        layer_name = name_this,
                                        pooling = pooling,
-                                       weight_init = weight_init)
+                                       weight_init = weight_init,
+                                       W=W,b=b)
                 prev_map_number,dim_x,dim_y = self.prev_dim
                 curr_map_number = filter_shape[0]
                 output_dim_x = (dim_x - filter_shape[2] + 1) / pool_size[0]
@@ -160,8 +164,15 @@ class MLP(object):
                         output_dim_y]
                 return l
 
-        for layer_type,desc in params.n_hidden:
-            l = make_layer(layer_type,desc)
+        for i,(layer_type,desc) in enumerate(params.n_hidden):
+            if continuation is not None:
+                W = continuation['W'][i]
+                b = continuation['b'][i]
+            else:
+                W = None
+                b = None
+
+            l = make_layer(layer_type,desc,W,b)
             self.hiddenLayers.append(l)
 
             def pretrain(pretraining_set,mode='unsupervised'):
@@ -245,11 +256,15 @@ class MLP(object):
                     pretrain(pretraining_set,mode)
             layer_number += 1
         self.rejoin_layers(input)
-        self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng,layer_type=params.output_layer)
+        if continuation is not None:
+            W = continuation['outW']
+            b = continuation['outb']
+        self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng,
+                layer_type=params.output_layer,W=W,b=b)
 
     def make_top_layer(self, n_out, chain_in, chain_n_in, rng,
-            layer_type='softmax', 
-            activation=None, name_this='temp_top'):
+            layer_type='softmax', activation=None, name_this='temp_top',
+            W = None, b = None):
         """
         Finalize the construction by making a top layer (either to use in
         pretraining or to use in the final version)
@@ -262,7 +277,8 @@ class MLP(object):
                 n_out=n_out,
                 activation=activation,
                 dropout_rate=0,
-                layer_name='softmax')
+                layer_name='softmax',
+                W=W, b=b)
             self.cost_function = self.params.cost_function
             self.p_y_given_x = self.outputLayer.p_y_given_x
             self.errors = self.outputLayer.errors
@@ -275,7 +291,8 @@ class MLP(object):
                 n_out=n_out,
                 activation=activation,
                 dropout_rate=0,
-                layer_name='softmax')
+                layer_name='softmax',
+                W=W,b=b)
             self.cost_function = self.params.cost_function
             self.p_y_given_x = self.outputLayer.p_y_given_x
             self.errors = self.outputLayer.errors
@@ -285,7 +302,8 @@ class MLP(object):
                 inputs=chain_in.flatten(ndim=2),
                 n_in=numpy.prod(chain_n_in), n_out=n_out,
                 activation=activation,dropout_rate=0,
-                layer_name=name_this)
+                layer_name=name_this,
+                W=W,b=b)
             self.cost_function = cost_functions.MSE()
 
         self.L1 = sum([abs(hiddenLayer.W).sum()
@@ -433,6 +451,8 @@ class MLP(object):
         for i,l in enumerate(self.hiddenLayers):
             l.set_weights(W[i],b[i])
         self.outputLayer.set_weights(weights['outW'],weights['outb'])
+        self.rejoin_layers(self.input)
+        self.outputLayer.rejoin()
 
     def run_hooks(self):
         updates = []
@@ -458,7 +478,8 @@ class MLP(object):
                 updates=updates,)
         f()
 
-def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None):
+def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
+        continuation=None):
     results = common.Results(params)
     train_set_x, train_set_y = dataset[0]
     valid_set_x, valid_set_y = dataset[1]
@@ -487,8 +508,12 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None):
 
     rng = numpy.random.RandomState(params.random_seed)
 
-    classifier = MLP(params=params, rng=rng, input=x, index=index, x=x, y=y,
+    if continuation is None:
+        classifier = MLP(params=params, rng=rng, input=x, index=index, x=x, y=y,
             pretraining_set=pretraining_set)
+    else:
+        classifier = MLP(params=params, rng=rng, input=x, index=index, x=x, y=y,
+            pretraining_set=pretraining_set, continuation=continuation)
 
     state = TrainingState(classifier)
     state.n_batches['train'] = train_set_x.get_value(borrow=True).shape[0] / params.batch_size
@@ -616,7 +641,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None):
             run_epoch()
             epoch_end = time.clock()
             print "t: {0}".format(epoch_end - epoch_start)
-        state.classifier.set_weights(state.best_weights)
+        if state.best_weights is not None:
+            state.classifier.set_weights(state.best_weights)
 
     
     elif params.training_method == 'greedy':
@@ -629,7 +655,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None):
             state.classifier.rejoin_layers(x)
             state.classifier.make_top_layer(
                     params.n_out,state.classifier.hiddenLayers[l].output,
-                    state.classifier.hiddenLayers[l].output_shape,rng)
+                    state.classifier.hiddenLayers[l].output_shape,rng
+                    )
             print ".... generating models"
             state.set_models(state.classifier.make_models(dataset))
             print ".... started"
