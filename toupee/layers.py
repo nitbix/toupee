@@ -30,8 +30,12 @@ class Layer:
             weight_init = weight_inits.GlorotWeightInit()
         if W is None:
             W = weight_init(rng,n_in,n_out,self.layer_name + '_W',self.activation)
+        else:
+            W = sharedX(W,name=self.layer_name + '_W')
         if b is None:
             b = weight_inits.ZeroWeightInit()(rng,n_out,None,layer_name + '_b',None)
+        else:
+            b = sharedX(b,name=self.layer_name + '_b')
 
         self.W = W
         self.b = b
