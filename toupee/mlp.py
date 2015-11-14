@@ -259,6 +259,9 @@ class MLP(object):
         if continuation is not None:
             W = continuation['outW']
             b = continuation['outb']
+        else:
+            W = None
+            b = None
         self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng,
                 layer_type=params.output_layer,W=W,b=b)
 
