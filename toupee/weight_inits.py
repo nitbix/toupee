@@ -30,7 +30,7 @@ class ZeroWeightInit(WeightInit):
             else:
                 shape = (n_in, n_out)
         W_values = numpy.zeros(shape, dtype=theano.config.floatX)
-        return theano.shared(value=W_values, name=weight_name, borrow=True)
+        return W_values
 
 class UniformWeightInit(WeightInit):
 
@@ -46,7 +46,7 @@ class UniformWeightInit(WeightInit):
                 low=self.min_w,
                 high=self.max_w,
                 size=shape), dtype=theano.config.floatX)
-        return theano.shared(value=W_values, name=weight_name, borrow=True)
+        return W_values
 
 class GlorotWeightInit(WeightInit):
 
@@ -64,4 +64,4 @@ class GlorotWeightInit(WeightInit):
                 size=shape), dtype=theano.config.floatX)
         if type(activation) is 'toupee.activations.Sigmoid':
             W_values *= 4
-        return theano.shared(value=W_values, name=weight_name, borrow=True)
+        return W_values
