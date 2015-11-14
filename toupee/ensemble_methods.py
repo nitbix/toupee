@@ -152,6 +152,16 @@ class EnsembleMethod(yaml.YAMLObject):
     def prepare(self, params, dataset):
         raise NotImplementedException()
 
+    def load_weights(self,weights,x,y,index):
+        self.members = []
+        for w in weights:
+            rng = numpy.random.RandomState(self.params.random_seed)
+            m = mlp.MLP(params=self.params, rng=rng, input=x, index=index, x=x, y=y)
+            m.set_weights(w)
+            self.members.append(m)
+        return self.members
+
+
 
 class Bagging(EnsembleMethod):
     """
@@ -162,7 +172,7 @@ class Bagging(EnsembleMethod):
     def __init__(self,voting=False):
         self.voting = voting
         self.resampler = None
-
+    
     def create_aggregator(self,params,members,x,y,train_set,valid_set):
         if 'voting' in self.__dict__ and self.voting:
             return MajorityVotingRunner(members,x,y)
@@ -175,9 +185,9 @@ class Bagging(EnsembleMethod):
         pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
         m = mlp.test_mlp(mlp_training_dataset, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
-        self.members.append(m)
-        return m
-
+        w = m.get_weights()
+        self.members.append(w)
+        return w
 
     def prepare(self, params, dataset):
         self.params = params
@@ -249,8 +259,9 @@ class Stacking(EnsembleMethod):
         pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
         m = mlp.test_mlp(mlp_training_dataset, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
-        self.members.append(m)
-        return m
+        w = m.get_weights()
+        self.members.append(w)
+        return w
 
     def prepare(self, params, dataset):
         self.params = params
@@ -280,8 +291,9 @@ class DropStacking(Stacking):
         pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
         m = mlp.test_mlp(mlp_training_dataset, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
-        self.members.append(m)
-        return m
+        w = m.get_weights()
+        self.members.append(w)
+        return w
 
     def prepare(self, params, dataset):
         self.params = params
