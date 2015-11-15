@@ -320,6 +320,11 @@ class MLP(object):
             p += hiddenLayer.params
         self.opt_params = p
 
+    def clear(self):
+        del self.cost
+        del self.hiddenLayers
+        del self.outputLayer
+
     def rejoin_layers(self,input):
         rt_chain_in = input
         for l in self.hiddenLayers:
@@ -484,14 +489,16 @@ class MLP(object):
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         continuation=None):
     results = common.Results(params)
+    orig_train_set_x, orig_train_set_y = dataset[0]
+    orig_valid_set_x, orig_valid_set_y = dataset[1]
     train_set_x, train_set_y = dataset[0]
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
 
     if params.online_transform is not None:
         valid_set_x, valid_set_y  = data.shared_dataset(
-                                        (numpy.concatenate([train_set_x.eval({}),valid_set_x.eval({})]),
-                                         numpy.concatenate([train_set_y.eval({}),valid_set_y.eval({})])
+                                        (numpy.concatenate([orig_train_set_x.eval({}),orig_valid_set_x.eval({})]),
+                                         numpy.concatenate([orig_train_set_y.eval({}),orig_valid_set_y.eval({})])
                                         )
                                     )
         train_set_x, train_set_y = (valid_set_x,valid_set_y)
@@ -542,7 +549,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 
     start_time = time.clock()
 
-    def run_epoch():
+    def run_epoch(state):
         if params.online_transform is not None:
             t = data.GPUTransformer(valid_set_x,
                             x=int(math.sqrt(params.n_in)),
@@ -641,7 +648,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         while (state.epoch < params.n_epochs) and (not state.done_looping):
             epoch_start = time.clock()
             state.epoch += 1
-            run_epoch()
+            run_epoch(state)
             epoch_end = time.clock()
             print "t: {0}".format(epoch_end - epoch_start)
         if state.best_weights is not None:
@@ -666,7 +673,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
             while (state.epoch < params.n_epochs) and (not state.done_looping):
                 state.epoch += 1
                 epoch_start = time.clock()
-                run_epoch()
+                run_epoch(state)
                 epoch_end = time.clock()
                 print "t: {0}".format(epoch_end - epoch_start)
             state.classifier.set_weights(state.best_weights)
@@ -679,8 +686,15 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         print >> sys.stderr, ('The code for file ' +
                               os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
-        return state.classifier
     else:
         print('Selection : Best validation score of {0} %'.format(
               state.best_validation_loss * 100.))
-        return state.classifier
+    if params.online_transform is not None:
+        #restore original datasets that got messed about
+        dataset[0] = orig_train_set_x, orig_train_set_y
+        dataset[1] = orig_valid_set_x, orig_valid_set_y
+        del test_set_x
+    cl = state.classifier
+    del state
+    gc.collect()
+    return cl
