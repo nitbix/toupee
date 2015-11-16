@@ -200,6 +200,9 @@ class MLP(object):
                     backup = self.hiddenLayers
                     i = len(backup) - 1
                     for layer_type,desc in reversed(params.n_hidden[:len(backup)]):
+                        if layer_type == 'conv':
+                            #TODO: make conv nets reversable
+                            u = 1
                         l = make_layer(layer_type,desc)
                         l.W = backup[i].W
                         reversedLayers.append(l)
