@@ -35,7 +35,7 @@ class Results:
     def __init__(self,params):
         self.validation_history = []
         self.test_history = []
-        self.params = params
+        self.params = params.__dict__
 
     def set_observation(self,validation,test):
         self.validation_history.append(validation)
