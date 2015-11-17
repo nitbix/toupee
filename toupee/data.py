@@ -29,7 +29,7 @@ from scipy.misc import imsave
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 
 floatX = theano.config.floatX
-rng = numpy.random.RandomState(42)
+rng = numpy.random.RandomState(None)
 theano_rng = MRG_RandomStreams(max(rng.randint(2 ** 15), 1))
 
 #import matplotlib.pyplot as plt
@@ -248,7 +248,7 @@ class Transformer:
         self.final_x = []
         self.instance_no = 0
         instances = len(self.original_x)
-        rng = np.random.RandomState(42)
+        rng = np.random.RandomState(None)
         self.original_x = np.asarray(self.original_x).reshape(instances,self.x,self.y)
         p = multiprocessing.Pool(32)
         deferred = [p.apply_async(transform_aux_map,args=(self,x)) for x in
