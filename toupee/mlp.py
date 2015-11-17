@@ -21,9 +21,12 @@ import copy
 import numpy
 import scipy
 import math
+from pymongo import Connection
+import json
 
 import theano
 import theano.tensor as T
+from theano.sandbox.cuda import CudaNdarray
 from theano.ifelse import ifelse
 from scipy.misc import imsave
 
@@ -51,7 +54,7 @@ class TrainingState:
         self.best_weights = None
         self.best_iter = 0
         self.best_epoch = 0
-        self.test_score = 0.
+        self.test_score = None
         self.epoch = 0
         self.n_batches = {}
         self.previous_minibatch_avg_cost = 1.
@@ -201,13 +204,14 @@ class MLP(object):
                     i = len(backup) - 1
                     for layer_type,desc in reversed(params.n_hidden[:len(backup)]):
                         if layer_type == 'conv':
-                            #TODO: make conv nets reversable
-                            u = 1
-                        l = make_layer(layer_type,desc)
-                        l.W = backup[i].W
-                        reversedLayers.append(l)
-                        i -= 1
-                    self.hiddenLayers = reversedLayers
+                            print "Warning: reverse pretraining a convolutional layer has no effect"
+                            reversedLayers.append(None)
+                        else:
+                            l = make_layer(layer_type,desc)
+                            l.W = backup[i].W
+                            reversedLayers.append(l)
+                            i -= 1
+                    self.hiddenLayers = [x for x in reversedLayers if x is not None]
                     self.make_top_layer(self.params.n_in, self.chain_in,
                             self.chain_n_in, rng, 'flat', activations.TanH())
                     train_model = self.train_function(index, pretraining_set_y,
@@ -224,7 +228,8 @@ class MLP(object):
                     self.chain_in= self.chain_in_back 
                     self.chain_n_in= self.chain_n_in_back 
                     for i,l in enumerate(reversed(self.hiddenLayers)):
-                        l.W = reversedLayers[i].W
+                        if reversedLayers[i] is not None:
+                            l.W = reversedLayers[i].W
                 elif mode in ['supervised', 'supervised-together']:
                     pretraining_set_x, pretraining_set_y = pretraining_set
                     x_pretraining = self.x
@@ -552,7 +557,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 
     start_time = time.clock()
 
-    def run_epoch(state):
+    def run_epoch(state,results):
         if params.online_transform is not None:
             t = data.GPUTransformer(valid_set_x,
                             x=int(math.sqrt(params.n_in)),
@@ -581,6 +586,15 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 print('epoch %i, minibatch %i/%i, validation error %f %%' %
                      (state.epoch, minibatch_index + 1, state.n_batches['train'],
                       this_validation_loss * 100.))
+                test_loss = None
+                if state.test_model is not None:
+                    test_losses = [state.test_model(i) for i
+                                   in xrange(state.n_batches['test'])]
+                    test_loss = numpy.mean(test_losses)
+                    print(('     epoch %i, minibatch %i/%i, test error of '
+                           'best model %f %%') %
+                          (state.epoch, minibatch_index + 1,
+                              state.n_batches['train'], test_loss * 100.))
                 if this_validation_loss < state.best_validation_loss:
                     if this_validation_loss < state.best_validation_loss *  \
                            improvement_threshold:
@@ -589,17 +603,9 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     state.best_iter = iter
                     state.best_epoch = state.epoch
                     state.best_weights = state.classifier.get_weights()
+                    state.test_score = test_loss
                     gc.collect()
-                    # test it on the test set
-                    if state.test_model is not None:
-                        test_losses = [state.test_model(i) for i
-                                       in xrange(state.n_batches['test'])]
-                        state.test_score = numpy.mean(test_losses)
-
-                        print(('     epoch %i, minibatch %i/%i, test error of '
-                               'best model %f %%') %
-                              (state.epoch, minibatch_index + 1,
-                                  state.n_batches['train'], state.test_score * 100.))
+                results.set_observation(this_validation_loss,test_loss)
             state.previous_minibatch_avg_cost = minibatch_avg_cost
             if state.patience <= iter:
                     print('finished patience')
@@ -651,7 +657,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         while (state.epoch < params.n_epochs) and (not state.done_looping):
             epoch_start = time.clock()
             state.epoch += 1
-            run_epoch(state)
+            run_epoch(state,results)
             epoch_end = time.clock()
             print "t: {0}".format(epoch_end - epoch_start)
         if state.best_weights is not None:
@@ -676,7 +682,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
             while (state.epoch < params.n_epochs) and (not state.done_looping):
                 state.epoch += 1
                 epoch_start = time.clock()
-                run_epoch(state)
+                run_epoch(state,results)
                 epoch_end = time.clock()
                 print "t: {0}".format(epoch_end - epoch_start)
             state.classifier.set_weights(state.best_weights)
@@ -692,6 +698,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     else:
         print('Selection : Best validation score of {0} %'.format(
               state.best_validation_loss * 100.))
+    results.set_final_observation(state.best_validation_loss * 100., state.test_score * 100., state.best_epoch)
     if params.online_transform is not None:
         #restore original datasets that got messed about
         dataset[0] = orig_train_set_x, orig_train_set_y
@@ -700,4 +707,26 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     cl = state.classifier
     del state
     gc.collect()
+    if params.results_db is not None:
+        print "saving results to {0}".format(params.results_db)
+        conn = Connection()
+        db = conn[params.results_db]
+        if 'results_table' in params.__dict__: 
+            table_name = params.results_table
+        else:
+            table_name = 'results'
+        table = db[table_name]
+        def serialize(o):
+            if isinstance(o, numpy.float32):
+                return float(o)
+            elif isinstance(o, CudaNdarray):
+                return numpy.asarray(o).tolist()
+            elif isinstance(o, object):
+                if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
+                    return o.tolist()
+                return json.loads(json.dumps(o.__dict__,default=serialize))
+            else:
+                raise Exception()
+        table.insert(json.loads(json.dumps(results.__dict__,default=serialize)))
+
     return cl
