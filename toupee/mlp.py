@@ -21,7 +21,7 @@ import copy
 import numpy
 import scipy
 import math
-from pymongo import Connection
+from pymongo import MongoClient
 import json
 
 import theano
@@ -709,7 +709,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     gc.collect()
     if params.results_db is not None:
         print "saving results to {0}".format(params.results_db)
-        conn = Connection()
+        conn = MongoClient()
         db = conn[params.results_db]
         if 'results_table' in params.__dict__: 
             table_name = params.results_table
