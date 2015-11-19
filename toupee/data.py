@@ -415,12 +415,22 @@ class GPUTransformer:
         if self.pflip:
             mask = srs.binomial(n=1, p=self.pflip, size=inpt.shape, dtype=floatX)
             output = (1 - output) * mask + output * (1 - mask)
+            del mask
 
         if self.invert:
             output = 1. - output
 
         self.final_x = output
         del target
+        del filt
+        del elast
+        del transx
+        del transy
+        del origin
+        del rotate
+        del transln
+        del srs
+
         if save:
             self.save_images()
 
@@ -435,6 +445,7 @@ class GPUTransformer:
             imsave('orig{0}.png'.format(i),x)
 
     def clear(self):
+        del self.original_x
         del self.final_x
         gc.collect()
 
