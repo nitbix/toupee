@@ -26,6 +26,7 @@ defaults = { 'random_seed': None,
              'pretrain_learning_rate': None,
              'online_transform': None,
              'resize_data_to': None,
+             'subtract_mean': False,
            }
 def load_parameters(filename):
     with open(filename) as f:
