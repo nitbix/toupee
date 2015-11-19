@@ -559,9 +559,14 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 
     def run_epoch(state,results):
         if params.online_transform is not None:
+            if params.RGB:
+                channels = 3
+            else:
+                channels = 1
             t = data.GPUTransformer(valid_set_x,
-                            x=int(math.sqrt(params.n_in)),
-                            y=int(math.sqrt(params.n_in)),
+                            x=int(math.sqrt(params.n_in / channels)),
+                            y=int(math.sqrt(params.n_in / channels)),
+                            channels=channels,
                             progress=False,
                             save=False,
                             opts=params.online_transform)
@@ -709,7 +714,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     gc.collect()
     if params.results_db is not None:
         print "saving results to {0}".format(params.results_db)
-        conn = MongoClient()
+        #TODO: Make this a parameter
+        conn = MongoClient(host='193.61.36.31')
         db = conn[params.results_db]
         if 'results_table' in params.__dict__: 
             table_name = params.results_table

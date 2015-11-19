@@ -330,12 +330,8 @@ class GPUTransformer:
     """
 
     def __init__(self,original_set,x,y,opts,
-                    layers=1,progress=False,save=False):
+                    channels=1,progress=False,save=False):
         print("..transforming dataset")
-        self.min_trans_x = -2
-        self.max_trans_x =  2
-        self.min_trans_y = -2
-        self.max_trans_y =  2
         self.alpha = opts['alpha']
         self.beta  = opts['beta']
         self.gamma = opts['gamma']
@@ -347,10 +343,10 @@ class GPUTransformer:
         self.center_uncertainty = opts['center_uncertainty'] if 'center_uncertainty' in opts else 0.
         self.x = x
         self.y = y
-        self.layers = layers
+        self.channels = channels
         self.original_x = original_set
         self.instances = self.original_x.shape[0].eval()
-        inpt = self.original_x.reshape([self.instances,self.layers,self.x,self.y])
+        inpt = self.original_x.reshape([self.instances,self.channels,self.x,self.y])
 
         srs = T.shared_randomstreams.RandomStreams(rng.randint(1e6))
         target = T.as_tensor_variable(np.indices((self.y, self.x)).astype('float32'))
@@ -443,7 +439,7 @@ class GPUTransformer:
         gc.collect()
 
     def get_data(self):
-        return sharedX(self.final_x.reshape([self.instances,self.layers * self.x * self.y]).eval())
+        return sharedX(self.final_x.reshape([self.instances,self.channels * self.x * self.y]).eval())
 
 def one_hot(dataset):
     b = np.zeros((dataset.size, dataset.max()+1),dtype=floatX)
