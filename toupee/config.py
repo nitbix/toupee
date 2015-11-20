@@ -27,6 +27,7 @@ defaults = { 'random_seed': None,
              'online_transform': None,
              'resize_data_to': None,
              'subtract_mean': False,
+             'join_train_and_valid': False,
              'RGB': False,
            }
 def load_parameters(filename):
