@@ -13,7 +13,8 @@ import theano
 import theano.tensor as T
 from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv
-from data import sharedX
+from theano.ifelse import ifelse
+from data import sharedX,GPUTransformer
 import weight_inits
 
 floatX = theano.config.floatX
@@ -42,6 +43,9 @@ class Layer:
         self.write_enable = 1.
         self.rejoin()
 
+    def updates(self):
+        return None
+
     def rejoin(self):
         self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate) + self.b
         self.params = [self.W, self.b]
@@ -61,6 +65,35 @@ class Layer:
 
     def set_input(self,inputs):
         self.inputs =inputs
+
+class Elastic(Layer):
+    def __init__(self,inputs,x,y,opts,channels,trainflag):
+        self.inputs = inputs
+        self.trainflag = trainflag
+        self.W = sharedX(numpy.asarray([0.]))
+        self.b = sharedX(numpy.asarray([0.]))
+        self.n_in = channels * x * y
+        self.n_out = channels * x * y
+        self.write_enable = 0.
+        self.dropout_rate = 0.
+        self.layer_name = 'elastic_transform'
+        self.t = GPUTransformer(inputs,x,y,opts,channels,False,False)
+        self.rejoin()
+
+    def rejoin(self):
+        self.y = T.switch(T.gt(self.trainflag,0.5),self.t.final_x,self.inputs)
+        self.params = []
+        self.rebuild()
+
+    def rebuild(self):
+        self.output = self.y
+        self.p_y_given_x = self.output
+
+    def copy_weights(self,other):
+        pass
+
+    def set_weights(self,W,b):
+        pass
 
 class Dropout(Layer):
     def __init__(self,rng,inputs,n_in,n_out,activation,
