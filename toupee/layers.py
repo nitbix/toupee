@@ -62,6 +62,34 @@ class Layer:
     def set_input(self,inputs):
         self.inputs =inputs
 
+class RNORM1(Layer):
+    def __init__(self,rng,inputs,n_in,size,activation,
+                 dropout_rate,layer_name,W=None,b=None,weight_init=None):
+        self.inputs = inputs
+        self.dropout_rate=dropout_rate
+        self.layer_name=layer_name
+        self.W = sharedX(numpy.asarray([0.]))
+        self.b = sharedX(numpy.asarray([0.]))
+        self.n_in = n_in
+        self.n_out = n_in
+        self.write_enable = 0.
+        self.rejoin()
+
+    def rejoin(self):
+        self.y = self.inputs
+        self.params = []
+        self.rebuild()
+
+    def rebuild(self):
+        self.output = self.y
+        self.p_y_given_x = self.output
+
+    def copy_weights(self,other):
+        pass
+
+    def set_weights(self,W,b):
+        pass
+
 class Dropout(Layer):
     def __init__(self,rng,inputs,n_in,n_out,activation,
                  dropout_rate,layer_name,W=None,b=None,weight_init=None):
