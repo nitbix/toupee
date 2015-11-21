@@ -27,10 +27,11 @@ import theano.tensor.signal.conv as sigconv
 from scipy.misc import imsave
 
 from theano.sandbox.rng_mrg import MRG_RandomStreams
+from theano.sandbox.cuda.basic_ops import gpu_from_host
 
 floatX = theano.config.floatX
 rng = numpy.random.RandomState(None)
-theano_rng = MRG_RandomStreams(max(rng.randint(2 ** 15), 1))
+theano_rng = MRG_RandomStreams(rng.randint(1.0e6))
 
 #import matplotlib.pyplot as plt
 
@@ -341,19 +342,19 @@ class GPUTransformer:
         self.bilinear = opts['bilinear']
         self.invert = opts['invert'] if 'invert' in opts else False
         self.center_uncertainty = opts['center_uncertainty'] if 'center_uncertainty' in opts else 0.
-        self.x = x
-        self.y = y
+        self.x = int(x)
+        self.y = int(y)
         self.channels = channels
         self.original_x = original_set
-        self.instances = self.original_x.shape[0].eval()
+        self.instances = self.original_x.shape[0]
         inpt = self.original_x.reshape([self.instances,self.channels,self.x,self.y])
 
-        srs = T.shared_randomstreams.RandomStreams(rng.randint(1e6))
+        self.srs = T.shared_randomstreams.RandomStreams(rng.randint(1e6))
         target = T.as_tensor_variable(np.indices((self.y, self.x)).astype('float32'))
 
         # Translate
         if self.translation:
-            transln = self.translation * srs.uniform((2, 1, 1), -1,dtype=floatX)
+            transln = self.translation * self.srs.uniform((2, 1, 1), -1,dtype=floatX)
             target += transln
 
         # Build a gaussian filter
@@ -365,26 +366,26 @@ class GPUTransformer:
             filt /= 2 * np.pi * var
 
             # Elastic
-            elast = self.alpha * srs.normal((2, self.y, self.x),dtype=floatX)
+            elast = self.alpha * self.srs.normal((2, self.y, self.x),dtype=floatX)
             elast = sigconv.conv2d(elast, filt, (2, self.y, self.x), filt.shape, 'full')
             elast = elast[:, self.sigma:self.y + self.sigma, self.sigma:self.x + self.sigma]
             target += elast
 
         if self.gamma or self.beta:
             # Center at 'about' half way
-            origin = srs.uniform((2, 1, 1), 0.5 - self.center_uncertainty,
+            origin = self.srs.uniform((2, 1, 1), 0.5 - self.center_uncertainty,
                      0.5 + self.center_uncertainty,dtype=floatX) * \
                      np.array((self.y, self.x)).reshape((2, 1, 1)).astype('float32')
             target -= origin
 
             # Zoom
             if self.gamma:
-                zoomer = T.exp(np.log(1. + (self.gamma/100.)).astype('float32') * srs.uniform((2, 1, 1), -1,dtype=floatX))
+                zoomer = T.exp(np.log(1. + (self.gamma/100.)).astype('float32') * self.srs.uniform((2, 1, 1), -1,dtype=floatX))
                 target *= zoomer
 
             # Rotate
             if self.beta:
-                theta = (self.beta * np.pi / 180) * srs.uniform(low=-1,dtype=floatX)
+                theta = (self.beta * np.pi / 180) * self.srs.uniform(low=-1,dtype=floatX)
                 c, s = T.cos(theta), T.sin(theta)
                 rotate = T.stack(c, -s, s, c).reshape((2,2))
                 target = T.tensordot(rotate, target, axes=((0, 0)))
@@ -415,21 +416,11 @@ class GPUTransformer:
         if self.pflip:
             mask = srs.binomial(n=1, p=self.pflip, size=inpt.shape, dtype=floatX)
             output = (1 - output) * mask + output * (1 - mask)
-            del mask
 
         if self.invert:
             output = 1. - output
 
-        self.final_x = output
-        del target
-        del filt
-        del elast
-        del transx
-        del transy
-        del origin
-        del rotate
-        del transln
-        del srs
+        self.final_x = output.reshape([self.instances,self.channels * self.x * self.y])
 
         if save:
             self.save_images()
@@ -450,7 +441,7 @@ class GPUTransformer:
         gc.collect()
 
     def get_data(self):
-        return sharedX(self.final_x.reshape([self.instances,self.channels * self.x * self.y]).eval())
+        return sharedX(self.final_x.eval())
 
 def one_hot(dataset):
     b = np.zeros((dataset.size, dataset.max()+1),dtype=floatX)

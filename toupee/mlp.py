@@ -27,6 +27,7 @@ import json
 import theano
 import theano.tensor as T
 from theano.sandbox.cuda import CudaNdarray
+from theano.sandbox.cuda.basic_ops import gpu_from_host
 from theano.ifelse import ifelse
 from scipy.misc import imsave
 
@@ -38,6 +39,8 @@ import config
 import cost_functions
 import activations
 import common
+
+floatX = theano.config.floatX
 
 class TrainingState:
     """
@@ -97,6 +100,7 @@ class MLP(object):
         self.y = y
         self.index = index
         self.reset_hooks(TrainingState(self))
+        self.trainflag = T.scalar('trainflag')
 
         def make_layer(layer_type,desc,W=None,b=None):
             if(layer_type == 'flat'):
@@ -111,6 +115,25 @@ class MLP(object):
                                      weight_init=weight_init,
                                      W=W,b=b)
                 self.chain_n_in = n_this
+                l.output_shape = self.chain_n_in
+                self.chain_in=l.output
+                return l
+            elif(layer_type == 'elastic_transform'):
+                if 'channels' in self.params.__dict__:
+                    channels = self.params.channels
+                elif self.params.RGB:
+                    channels = 3
+                else:
+                    channels = 1
+                n_pixels = math.sqrt(numpy.prod(self.chain_n_in) / channels)
+                l = layers.Elastic(
+                            self.chain_in.flatten(ndim=2),
+                            n_pixels,
+                            n_pixels,
+                            desc,
+                            channels,
+                            self.trainflag
+                        )
                 l.output_shape = self.chain_n_in
                 self.chain_in=l.output
                 return l
@@ -341,13 +364,18 @@ class MLP(object):
             rt_chain_in = l.output
 
     def eval_function(self, index, eval_set_x, eval_set_y, x, y):
-        return theano.function(inputs=[index],
-            outputs=self.errors(y),
-            givens={
-                x: eval_set_x[index * self.params.batch_size:(index + 1) *
-                    self.params.batch_size],
-                y: eval_set_y[index * self.params.batch_size:(index + 1) *
-                    self.params.batch_size]})
+        return theano.function(
+                inputs=[index],
+                outputs=self.errors(y),
+                on_unused_input='warn',
+                givens={
+                    x: eval_set_x[index * self.params.batch_size:(index + 1) *
+                        self.params.batch_size],
+                    y: eval_set_y[index * self.params.batch_size:(index + 1) *
+                        self.params.batch_size],
+                    self.trainflag: numpy.float32(0.)
+                }
+               )
 
     def compute(self, eval_set_x, x=None):
         x = self.x
@@ -407,17 +435,24 @@ class MLP(object):
                     learning_rate, gparam, mask * we, updates,
                     self.cost,self.previous_cost)
             self.layer_updates[str(param)] = new_update
+            for l in self.hiddenLayers:
+                u = l.updates()
+                if u is not None:
+                    updates += u
             updates.append((param, new_update))
-        return theano.function(inputs=[index,self.previous_cost],
-                outputs=self.cost,
+        rf = theano.function(
+                inputs=[index,self.previous_cost],
+                outputs=gpu_from_host(self.cost),
                 on_unused_input='warn',
                 updates=updates,
                 givens={
                     x: train_set_x[index * self.params.batch_size:(index + 1) *
                         self.params.batch_size],
                     y: train_set_y[index * self.params.batch_size:(index + 1) *
-                        self.params.batch_size]
+                        self.params.batch_size],
+                    self.trainflag: sharedX(1.)
                 })
+        return rf
 
     def make_models(self, dataset):
         train_set_x, train_set_y = dataset[0]
@@ -503,7 +538,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     valid_set_x, valid_set_y = dataset[1]
     test_set_x, test_set_y = (None,None)
 
-    if params.online_transform is not None:
+    if params.online_transform is not None or params.join_train_and_valid:
         valid_set_x, valid_set_y  = data.shared_dataset(
                                         (numpy.concatenate([orig_train_set_x.eval({}),orig_valid_set_x.eval({})]),
                                          numpy.concatenate([orig_train_set_y.eval({}),orig_valid_set_y.eval({})])
@@ -571,9 +606,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                             save=False,
                             opts=params.online_transform)
             train_set_x = t.get_data()
-            t.clear()
-            del t
-            gc.collect()
             state.train_model = state.classifier.train_function(
                     state.classifier.index,
                     train_set_x,
@@ -705,7 +737,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         print('Selection : Best validation score of {0} %'.format(
               state.best_validation_loss * 100.))
     results.set_final_observation(state.best_validation_loss * 100., state.test_score * 100., state.best_epoch)
-    if params.online_transform is not None:
+    if params.online_transform is not None or params.join_train_and_valid:
         #restore original datasets that got messed about
         dataset[0] = orig_train_set_x, orig_train_set_y
         dataset[1] = orig_valid_set_x, orig_valid_set_y
