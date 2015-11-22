@@ -14,6 +14,7 @@ import theano.tensor as T
 from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv
 from theano.ifelse import ifelse
+from utils import gaussian_filter
 from data import sharedX,GPUTransformer
 import weight_inits
 
@@ -66,23 +67,57 @@ class Layer:
     def set_input(self,inputs):
         self.inputs =inputs
 
+
 class RNORM1(Layer):
-    def __init__(self,rng,inputs,n_in,size,activation,
-                 dropout_rate,layer_name,W=None,b=None,weight_init=None):
-        self.inputs = inputs
-        self.dropout_rate=dropout_rate
-        self.layer_name=layer_name
+    def __init__(self,inputs,kernel_size,x,y,channels,batch_size,use_divisor=False):
+        self.instances = inputs.shape[0]
+        self.out_shape = inputs.shape
+        self.x = int(x)
+        self.y = int(y)
+        self.channels = channels
+        self.batch_size = batch_size
+        self.use_divisor = use_divisor
+        self.kernel_size = kernel_size
+        self.inputs = inputs.reshape([self.instances,self.channels,self.x,self.y])
+        self.n_in = self.channels * self.x * self.y
+        self.n_out = self.channels * self.x * self.y
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
-        self.n_in = n_in
-        self.n_out = n_in
         self.write_enable = 0.
+        self.dropout_rate = 0.
+        self.layer_name = 'rnorm1'
         self.rejoin()
 
     def rejoin(self):
-        self.y = self.inputs
+        filter_shape = [self.batch_size, self.channels, self.kernel_size, self.kernel_size]
+        filters,update = theano.scan(
+                fn=lambda: gaussian_filter(self.kernel_size),
+                n_steps = self.batch_size * self.channels
+                )
+        filters.reshape(filter_shape)
+        print filter_shape
+
+        convout = conv.conv2d(self.inputs, filters=filters, filter_shape=filter_shape, border_mode='full')
+        mid = int(numpy.floor(self.kernel_size/2.))
+        new_X = self.inputs - convout[:,:,mid:-mid,mid:-mid]
+        if self.use_divisor:
+            # Scale down norm of kernel_sizexkernel_size patch
+            sum_sqr_XX = conv.conv2d(T.sqr(T.abs_(new_X)), filters=filters, 
+                                filter_shape=filter_shape, border_mode='full')
+
+            denom = T.sqrt(sum_sqr_XX[:,:,mid:-mid,mid:-mid])
+            per_img_mean = denom.mean(axis=[2,3])
+            divisor = T.largest(per_img_mean.dimshuffle(0,1,'x','x'), denom)
+            divisor = T.maximum(divisor, threshold)
+
+            new_X /= divisor
+        self.y = new_X.reshape(self.out_shape)
         self.params = []
         self.rebuild()
+
+    def rebuild(self):
+        self.output = self.y
+        self.p_y_given_x = self.output
 
     def copy_weights(self,other):
         pass
@@ -94,10 +129,13 @@ class Elastic(Layer):
     def __init__(self,inputs,x,y,opts,channels,trainflag):
         self.inputs = inputs
         self.trainflag = trainflag
+        self.x = int(x)
+        self.y = int(y)
+        self.channels = channels
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
-        self.n_in = channels * x * y
-        self.n_out = channels * x * y
+        self.n_in = self.channels * self.x * self.y
+        self.n_out = self.channels * self.x * self.y
         self.write_enable = 0.
         self.dropout_rate = 0.
         self.layer_name = 'elastic_transform'
@@ -275,8 +313,8 @@ class ConvolutionalLayer(Layer):
         """
         assert input_shape[1] == filter_shape[1]
 
-        self.input_shape = input_shape #[batch_size,levels,x,y]
-        self.filter_shape = filter_shape #[map,levels,x,y]
+        self.input_shape = input_shape #[batch_size,channels,x,y]
+        self.filter_shape = filter_shape #[map,channels,x,y]
         self.pooling = pooling
         self.pool_size = pool_size #[x,y]
         self.border_mode = border_mode

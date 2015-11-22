@@ -102,7 +102,32 @@ class MLP(object):
         self.reset_hooks(TrainingState(self))
         self.trainflag = T.scalar('trainflag')
 
-        def make_layer(layer_type,desc,W=None,b=None):
+        def make_layer(layer_type,desc,W=None,b=None,i=0):
+            
+            def get_channels():
+                if i == 0:
+                    if 'channels' in self.params.__dict__:
+                        return self.params.channels
+                    elif self.params.RGB:
+                        return 3
+                else:
+                    if len(self.chain_n_in) > 1:
+                        return self.chain_n_in[0]
+                return 1
+
+            def get_n_pixels():
+                if i == 0:
+                    n_pixels_x = math.sqrt(numpy.prod(self.chain_n_in) / get_channels())
+                    n_pixels_y = n_pixels_x
+                else:
+                    if len(self.chain_n_in) == 3:
+                        n_pixels_y = self.chain_n_in[1]
+                        n_pixels_x = self.chain_n_in[2]
+                    else:
+                        n_pixels_x = self.chain_n_in
+                        n_pixels_y = n_pixels_x
+                return (n_pixels_y,n_pixels_x)
+
             if(layer_type == 'flat'):
                 n_this,drop_this,name_this,activation_this,weight_init = desc
                 l = layers.FlatLayer(rng=rng,
@@ -118,20 +143,29 @@ class MLP(object):
                 l.output_shape = self.chain_n_in
                 self.chain_in=l.output
                 return l
+            elif(layer_type == 'rnorm1'):
+                n_pixels_y,n_pixels_x = get_n_pixels()
+                kernel_size,use_divisor = desc
+                l = layers.RNORM1(
+                            self.chain_in.flatten(ndim=2),
+                            kernel_size,
+                            n_pixels_x,
+                            n_pixels_y,
+                            get_channels(),
+                            self.params.batch_size,
+                            use_divisor
+                        )
+                l.output_shape = self.chain_n_in
+                self.chain_in=l.output
+                return l
             elif(layer_type == 'elastic_transform'):
-                if 'channels' in self.params.__dict__:
-                    channels = self.params.channels
-                elif self.params.RGB:
-                    channels = 3
-                else:
-                    channels = 1
-                n_pixels = math.sqrt(numpy.prod(self.chain_n_in) / channels)
+                n_pixels_y,n_pixels_x = get_n_pixels()
                 l = layers.Elastic(
                             self.chain_in.flatten(ndim=2),
-                            n_pixels,
-                            n_pixels,
+                            n_pixels_x,
+                            n_pixels_y,
                             desc,
-                            channels,
+                            get_channels(),
                             self.trainflag
                         )
                 l.output_shape = self.chain_n_in
@@ -198,7 +232,7 @@ class MLP(object):
                 W = None
                 b = None
 
-            l = make_layer(layer_type,desc,W,b)
+            l = make_layer(layer_type,desc,W,b,i)
             self.hiddenLayers.append(l)
 
             def pretrain(pretraining_set,mode='unsupervised'):
@@ -230,7 +264,7 @@ class MLP(object):
                             print "Warning: reverse pretraining a convolutional layer has no effect"
                             reversedLayers.append(None)
                         else:
-                            l = make_layer(layer_type,desc)
+                            l = make_layer(layer_type,desc,i)
                             l.W = backup[i].W
                             reversedLayers.append(l)
                             i -= 1
