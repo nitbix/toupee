@@ -16,6 +16,7 @@ import parameters
 import cost_functions
 import activations
 import weight_inits
+import learning_rates
 
 defaults = { 'random_seed': None,
              'save_images': False,
