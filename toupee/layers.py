@@ -85,17 +85,19 @@ class RNORM1(Layer):
         self.write_enable = 0.
         self.dropout_rate = 0.
         self.layer_name = 'rnorm1'
+        self.filter_kernel = gaussian_filter(self.kernel_size)
         self.rejoin()
 
     def rejoin(self):
-        filter_shape = [1, self.channels, self.kernel_size, self.kernel_size]
+        kernel_filter_shape = [1, self.channels, self.kernel_size, self.kernel_size]
+        final_filter_shape = [self.channels, self.channels, self.kernel_size, self.kernel_size]
         filters,update = theano.scan(
-                fn=lambda: gaussian_filter(self.kernel_size),
+                fn=lambda: self.filter_kernel,
                 n_steps = self.channels
                 )
-        filters = filters.reshape(filter_shape,ndim=4)
-
-        convout = conv.conv2d(self.inputs, filters=filters, filter_shape=filter_shape, border_mode='full')
+        filters = filters.reshape(kernel_filter_shape,ndim=4)
+        convout = conv.conv2d(self.inputs, filters=filters, 
+                filter_shape=final_filter_shape, border_mode='full')
         mid = int(numpy.floor(self.kernel_size/2.))
         new_X = self.inputs - convout[:,:,mid:-mid,mid:-mid]
         if self.use_divisor:
