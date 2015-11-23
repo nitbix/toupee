@@ -152,7 +152,6 @@ class MLP(object):
                             n_pixels_x,
                             n_pixels_y,
                             get_channels(),
-                            self.params.batch_size,
                             use_divisor
                         )
                 l.output_shape = self.chain_n_in

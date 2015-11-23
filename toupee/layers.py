@@ -69,13 +69,12 @@ class Layer:
 
 
 class RNORM1(Layer):
-    def __init__(self,inputs,kernel_size,x,y,channels,batch_size,use_divisor=False):
+    def __init__(self,inputs,kernel_size,x,y,channels,use_divisor=False):
         self.instances = inputs.shape[0]
         self.out_shape = inputs.shape
         self.x = int(x)
         self.y = int(y)
         self.channels = channels
-        self.batch_size = batch_size
         self.use_divisor = use_divisor
         self.kernel_size = kernel_size
         self.inputs = inputs.reshape([self.instances,self.channels,self.x,self.y])
@@ -89,13 +88,12 @@ class RNORM1(Layer):
         self.rejoin()
 
     def rejoin(self):
-        filter_shape = [self.batch_size, self.channels, self.kernel_size, self.kernel_size]
+        filter_shape = [1, self.channels, self.kernel_size, self.kernel_size]
         filters,update = theano.scan(
                 fn=lambda: gaussian_filter(self.kernel_size),
-                n_steps = self.batch_size * self.channels
+                n_steps = self.channels
                 )
-        filters.reshape(filter_shape)
-        print filter_shape
+        filters = filters.reshape(filter_shape,ndim=4)
 
         convout = conv.conv2d(self.inputs, filters=filters, filter_shape=filter_shape, border_mode='full')
         mid = int(numpy.floor(self.kernel_size/2.))
@@ -313,10 +311,10 @@ class ConvolutionalLayer(Layer):
         """
         assert input_shape[1] == filter_shape[1]
 
-        self.input_shape = input_shape #[batch_size,channels,x,y]
-        self.filter_shape = filter_shape #[map,channels,x,y]
+        self.input_shape = input_shape #[batch_size,channels,y,x]
+        self.filter_shape = filter_shape #[maps,channels,y,x]
         self.pooling = pooling
-        self.pool_size = pool_size #[x,y]
+        self.pool_size = pool_size #[y,x]
         self.border_mode = border_mode
         self.fan_in = numpy.prod(self.filter_shape[1:])
         self.fan_out = self.filter_shape[0] * numpy.prod(self.filter_shape[2:]) / numpy.prod(pool_size)
