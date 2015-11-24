@@ -27,6 +27,32 @@ class LearningRate(yaml.YAMLObject):
     def epoch_hook(self,updates):
         raise NotImplementedError()
 
+class CompositeLearningRate(LearningRate):
+    yaml_tag = u'!CompositeLearningRate'
+
+    def __new__(cls):
+        instance = super(CompositeLearningRate,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        return instance
+
+    def reset(self,updates):
+        if 'current_epoch' not in self.__dict__:
+            self.current_epoch = 1
+        self.active_lr = self.schedule[1]
+        updates = []
+        for e,lr in self.schedule.iteritems():
+            lr.reset(updates)
+
+    def epoch_hook(self,updates):
+        epoch = self.current_epoch + 1
+        if epoch in self.schedule.keys():
+            self.active_lr = self.schedule[epoch]
+        self.active_lr.epoch_hook(updates)
+
+    def get(self):
+        return self.active_lr.get()
+
 class FixedLearningRate(LearningRate):
 
     yaml_tag = u'!FixedLearningRate'
