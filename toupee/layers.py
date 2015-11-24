@@ -70,25 +70,26 @@ class Layer:
 
 class RNORM1(Layer):
     def __init__(self,inputs,kernel_size,x,y,channels,use_divisor=False):
-        self.instances = inputs.shape[0]
-        self.out_shape = inputs.shape
-        self.x = int(x)
-        self.y = int(y)
+        self.w = int(x)
+        self.h = int(y)
         self.channels = channels
         self.use_divisor = use_divisor
         self.kernel_size = kernel_size
-        self.inputs = inputs.reshape([self.instances,self.channels,self.x,self.y])
-        self.n_in = self.channels * self.x * self.y
-        self.n_out = self.channels * self.x * self.y
+        self.n_in = self.channels * self.w * self.h
+        self.n_out = self.channels * self.w * self.h
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
         self.write_enable = 0.
         self.dropout_rate = 0.
         self.layer_name = 'rnorm1'
         self.filter_kernel = gaussian_filter(self.kernel_size)
+        self.inputs = inputs
         self.rejoin()
 
     def rejoin(self):
+        self.instances = self.inputs.shape[0]
+        self.out_shape = self.inputs.shape
+        self.inputs = self.inputs.reshape([self.instances,self.channels,self.w,self.h],ndim=4)
         kernel_filter_shape = [1, self.channels, self.kernel_size, self.kernel_size]
         final_filter_shape = [self.channels, self.channels, self.kernel_size, self.kernel_size]
         filters,update = theano.scan(
@@ -129,13 +130,13 @@ class Elastic(Layer):
     def __init__(self,inputs,x,y,opts,channels,trainflag):
         self.inputs = inputs
         self.trainflag = trainflag
-        self.x = int(x)
+        self.w = int(x)
         self.y = int(y)
         self.channels = channels
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
-        self.n_in = self.channels * self.x * self.y
-        self.n_out = self.channels * self.x * self.y
+        self.n_in = self.channels * self.w * self.h
+        self.n_out = self.channels * self.w * self.h
         self.write_enable = 0.
         self.dropout_rate = 0.
         self.layer_name = 'elastic_transform'
