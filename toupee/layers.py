@@ -131,7 +131,7 @@ class Elastic(Layer):
         self.inputs = inputs
         self.trainflag = trainflag
         self.w = int(x)
-        self.y = int(y)
+        self.h = int(y)
         self.channels = channels
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
