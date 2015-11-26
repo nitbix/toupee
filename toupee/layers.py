@@ -68,7 +68,7 @@ class Layer:
         self.inputs =inputs
 
 
-class RNORM1(Layer):
+class LCN(Layer):
     def __init__(self,inputs,kernel_size,x,y,channels,use_divisor=False):
         self.w = int(x)
         self.h = int(y)
@@ -81,7 +81,7 @@ class RNORM1(Layer):
         self.b = sharedX(numpy.asarray([0.]))
         self.write_enable = 0.
         self.dropout_rate = 0.
-        self.layer_name = 'rnorm1'
+        self.layer_name = 'LCN'
         self.filter_kernel = gaussian_filter(self.kernel_size)
         self.inputs = inputs
         self.rejoin()

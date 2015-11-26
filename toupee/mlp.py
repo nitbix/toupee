@@ -143,10 +143,10 @@ class MLP(object):
                 l.output_shape = self.chain_n_in
                 self.chain_in=l.output
                 return l
-            elif(layer_type == 'rnorm1'):
+            elif(layer_type == 'local_contrast_normalization'):
                 n_pixels_y,n_pixels_x = get_n_pixels()
                 kernel_size,use_divisor = desc
-                l = layers.RNORM1(
+                l = layers.LCN(
                             self.chain_in.flatten(ndim=2),
                             kernel_size,
                             n_pixels_x,

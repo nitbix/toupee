@@ -132,6 +132,7 @@ class OldRProp(RPropVariant):
 class RProp(RPropVariant):
 
     yaml_tag = u'!RProp'
+
     def __new__(cls):
         instance = super(RProp,cls).__new__(cls)
         common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
@@ -358,16 +359,21 @@ class DRProp(RPropVariant):
         self.multiplier_min_delta=0.9
 
     def reset(self,updates):
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0.
+        if 'momentum_decay' not in self.__dict__:
+            self.momentum_decay = 1.
+        self.momentum_var = sharedX(self.momentum)
         self.min_delta = sharedX(self.start_min_delta)
 
     def epoch_hook(self,updates):
         new_min = T.clip(self.min_delta * self.multiplier_min_delta,
                 self.stop_min_delta, self.start_min_delta)
         updates.append((self.min_delta,new_min))
+        updates.append((self.momentum_var,self.momentum_var * self.momentum_decay))
 
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):
-
         if 'momentum' not in self.__dict__:
             self.momentum = 0.
         if 'momentum_decay' not in self.__dict__:
@@ -387,7 +393,6 @@ class DRProp(RPropVariant):
         masked =  T.eq(mask * gparam,0.)
         change_above_zero = T.gt(change,0.)
         change_below_zero = T.lt(change,0.)
-
         def mask_filter(m,u):
             return T.switch(masked, m, u)
 
@@ -409,8 +414,8 @@ class DRProp(RPropVariant):
             T.switch(change_below_zero, zero, gparam)
         )
         step = - T.sgn(gparam) * new_delta
-        d_w = T.switch(change_below_zero, zero, step)
-        d_w = mask_filter(zero,d_w)
+        unmasked_inc = T.switch(change_below_zero, zero, step)
+        d_w = mask_filter(zero,unmasked_inc)
 
         #Momentum
         new_velocity = (velocity * self.momentum_var + d_w)
@@ -420,7 +425,7 @@ class DRProp(RPropVariant):
         updates.append((delta,new_delta))
         updates.append((previous_inc,d_w))
         new_w = param + new_velocity * mask
-        new_w = new_w / T.max(T.abs_(new_w))
+        new_w = new_w
         return new_w
 
 
@@ -440,11 +445,10 @@ class ADRProp(RPropVariant):
         self.max_delta=500
         self.start_min_delta=1e-3
         self.stop_min_delta=1e-8
-        self.steps_min_delta=100
+        self.multiplier_min_delta=0.9
 
     def reset(self,updates):
         self.min_delta = sharedX(self.start_min_delta)
-        self.current_epoch = sharedX(1.)
         if 'momentum' not in self.__dict__:
             self.momentum = 0.
         if 'momentum_decay' not in self.__dict__:
@@ -452,15 +456,9 @@ class ADRProp(RPropVariant):
         self.momentum_var = sharedX(self.momentum)
 
     def epoch_hook(self,updates):
-        if 'current_epoch' not in self.__dict__:
-            self.current_epoch = sharedX(1.)
-        epoch = self.current_epoch + 1
-        new_min = (self.start_min_delta + (
-                     (self.stop_min_delta - self.start_min_delta) /
-                     self.steps_min_delta) *
-                    T.clip(epoch,1,self.steps_min_delta))
+        new_min = T.clip(self.min_delta * self.multiplier_min_delta,
+                self.stop_min_delta, self.start_min_delta)
         updates.append((self.min_delta,new_min))
-        updates.append((self.current_epoch,epoch))
         updates.append((self.momentum_var,self.momentum_var * self.momentum_decay))
 
     def __call__(self, param, learning_rate, gparam, mask, updates,
