@@ -580,6 +580,21 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         train_set_x, train_set_y = (valid_set_x,valid_set_y)
         dataset[0] = (train_set_x,train_set_y)
         dataset[1] = (valid_set_x,valid_set_y)
+    if params.online_transform is not None:
+        if 'channels' not in params.__dict__:
+            if params.RGB:
+                channels = 3
+            else:
+                channels = 1
+        else:
+            channels = params.channels
+        gpu_transformer = data.GPUTransformer(valid_set_x,
+                        x=int(math.sqrt(params.n_in / channels)),
+                        y=int(math.sqrt(params.n_in / channels)),
+                        channels=channels,
+                        progress=False,
+                        save=False,
+                        opts=params.online_transform)
 
     print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
 
@@ -627,18 +642,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 
     def run_epoch(state,results):
         if params.online_transform is not None:
-            if params.RGB:
-                channels = 3
-            else:
-                channels = 1
-            t = data.GPUTransformer(valid_set_x,
-                            x=int(math.sqrt(params.n_in / channels)),
-                            y=int(math.sqrt(params.n_in / channels)),
-                            channels=channels,
-                            progress=False,
-                            save=False,
-                            opts=params.online_transform)
-            train_set_x = t.get_data()
+            train_set_x = gpu_transformer.get_data()
             state.train_model = state.classifier.train_function(
                     state.classifier.index,
                     train_set_x,
