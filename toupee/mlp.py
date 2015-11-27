@@ -784,28 +784,30 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     cl = state.classifier
     del state
     gc.collect()
-    if params.results_db is not None:
+    if 'results_db' in params.__dict__:
         print "saving results to {0}".format(params.results_db)
-        #TODO: Make this a parameter
-        if 'results_db' in params.__dict__:
-            conn = MongoClient(host='193.61.36.31')
-            db = conn[params.results_db]
-            if 'results_table' in params.__dict__: 
-                table_name = params.results_table
+        if 'results_host' in params.__dic__:
+            host = params.results_host
+        else:
+            host = None
+        conn = MongoClient(host=host)
+        db = conn[params.results_db]
+        if 'results_table' in params.__dict__: 
+            table_name = params.results_table
+        else:
+            table_name = 'results'
+        table = db[table_name]
+        def serialize(o):
+            if isinstance(o, numpy.float32):
+                return float(o)
+            elif isinstance(o, CudaNdarray):
+                return numpy.asarray(o).tolist()
+            elif isinstance(o, object):
+                if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
+                    return o.tolist()
+                return json.loads(json.dumps(o.__dict__,default=serialize))
             else:
-                table_name = 'results'
-            table = db[table_name]
-            def serialize(o):
-                if isinstance(o, numpy.float32):
-                    return float(o)
-                elif isinstance(o, CudaNdarray):
-                    return numpy.asarray(o).tolist()
-                elif isinstance(o, object):
-                    if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
-                        return o.tolist()
-                    return json.loads(json.dumps(o.__dict__,default=serialize))
-                else:
-                    raise Exception()
-            table.insert(json.loads(json.dumps(results.__dict__,default=serialize)))
+                raise Exception()
+        table.insert(json.loads(json.dumps(results.__dict__,default=serialize)))
 
     return cl
