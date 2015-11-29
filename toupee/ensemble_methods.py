@@ -72,25 +72,32 @@ class StackingRunner:
     Take an ensemble and produce the stacked output on a dataset
     """
 
+    def join_outputs(self, x, set_x_shared, batch_size):
+        set_x = set_x_shared.eval()
+        n_instances = set_x.shape[0]
+        n_batches = n_instances / batch_size
+        acc = []
+        for b in xrange(0,n_batches):
+            start = b * batch_size
+            end = (start + batch_size) % n_instances
+            curr_x = set_x[start:end]
+            curr_model_outs = [m.p_y_given_x.eval({x:curr_x})
+                                    for m in self.members]
+            acc.append(numpy.concatenate(curr_model_outs,axis=1))
+        r = numpy.concatenate(acc)
+        return sharedX(r)
+
     def __init__(self,members,x,y,train_set,valid_set,params):
         self.members=members
         train_set_x,train_set_y = train_set
         valid_set_x,valid_set_y = valid_set
-        self.train_input_x = theano.function(inputs=[],
-                on_unused_input='warn',
-                outputs=T.concatenate([m.p_y_given_x
-                    for m in self.members],axis=1),
-                givens={x:train_set_x})
-        self.valid_input_x = theano.function(inputs=[],
-                on_unused_input='warn',
-                outputs=T.concatenate([m.p_y_given_x
-                    for m in self.members],axis=1),
-                givens={x:valid_set_x})
+        self.train_input_x = self.join_outputs(x, train_set_x, params.batch_size)
+        self.valid_input_x = self.join_outputs(x, valid_set_x, params.batch_size)
         print 'training stack head'
         self.head_x = T.concatenate([m.p_y_given_x
             for m in self.members],axis=1)
-        dataset = ((sharedX(self.train_input_x(),borrow=True),train_set_y),
-                   (sharedX(self.valid_input_x(),borrow=True),valid_set_y))
+        dataset = ((self.train_input_x,train_set_y),
+                   (self.valid_input_x,valid_set_y))
         pretraining_set = make_pretraining_set(dataset,params.pretraining)
         params.n_in = len(members) * params.main_params.n_out
         params.n_out = params.main_params.n_out
