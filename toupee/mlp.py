@@ -770,10 +770,10 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         print >> sys.stderr, ('The code for file ' +
                               os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
+        results.set_final_observation(state.best_validation_loss * 100., state.test_score * 100., state.best_epoch)
     else:
         print('Selection : Best validation score of {0} %'.format(
               state.best_validation_loss * 100.))
-    results.set_final_observation(state.best_validation_loss * 100., state.test_score * 100., state.best_epoch)
     if params.online_transform is not None or params.join_train_and_valid:
         #restore original datasets that got messed about
         dataset[0] = orig_train_set_x, orig_train_set_y
@@ -784,7 +784,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     cl = state.classifier
     del state
     gc.collect()
-    if 'results_db' in params.__dict__:
+    if 'results_db' in params.__dict__ and test_set_x is not None:
         print "saving results to {0}".format(params.results_db)
         if 'results_host' in params.__dic__:
             host = params.results_host
