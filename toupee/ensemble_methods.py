@@ -22,6 +22,7 @@ from parameters import Parameters
 
 floatX = theano.config.floatX
 
+
 class AveragingRunner:
     """
     Take an ensemble and produce the majority vote output on a dataset
@@ -67,12 +68,14 @@ class WeightedAveraging:
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
         self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
 
+
 class StackingRunner:
     """
     Take an ensemble and produce the stacked output on a dataset
     """
 
-    def join_outputs(self, x, set_x_shared, batch_size):
+    def join_outputs(self, x, set_x_shared, batch_size, p=0.):
+        rng = numpy.random.RandomState()
         set_x = set_x_shared.eval()
         n_instances = set_x.shape[0]
         n_batches = n_instances / batch_size
@@ -81,9 +84,12 @@ class StackingRunner:
             start = b * batch_size
             end = (start + batch_size) % n_instances
             curr_x = set_x[start:end]
-            curr_model_outs = [m.p_y_given_x.eval({x:curr_x})
-                                    for m in self.members]
-            acc.append(numpy.concatenate(curr_model_outs,axis=1))
+            curr_model_outs = numpy.concatenate([m.p_y_given_x.eval({x:curr_x})
+                                    for i,m in enumerate(self.members)], axis=1)
+            n_m = len(self.members)
+            mask = rng.binomial(1, 1.-p, (batch_size,n_m))
+            mask = numpy.repeat(mask, curr_model_outs.shape[1] / n_m, axis = 1)
+            acc.append(curr_model_outs * mask)
         r = numpy.concatenate(acc)
         return sharedX(r)
 
@@ -91,11 +97,15 @@ class StackingRunner:
         self.members=members
         train_set_x,train_set_y = train_set
         valid_set_x,valid_set_y = valid_set
-        self.train_input_x = self.join_outputs(x, train_set_x, params.batch_size)
-        self.valid_input_x = self.join_outputs(x, valid_set_x, params.batch_size)
+        if 'dropstack_prob' not in params.__dict__:
+            p = 0.
+        else:
+            p = params.dropstack_prob
+        self.train_input_x = self.join_outputs(x, train_set_x, params.batch_size, p)
+        self.valid_input_x = self.join_outputs(x, valid_set_x, params.batch_size, p)
         print 'training stack head'
         self.head_x = T.concatenate([m.p_y_given_x
-            for m in self.members],axis=1)
+                                    for m in self.members],axis=1)
         dataset = ((self.train_input_x,train_set_y),
                    (self.valid_input_x,valid_set_y))
         pretraining_set = make_pretraining_set(dataset,params.pretraining)
@@ -106,47 +116,6 @@ class StackingRunner:
         self.y_pred = self.stack_head.y_pred
         self.errors = self.stack_head.errors(y)
 
-
-class DropStackingRunner:
-    """
-    Take an ensemble and produce the dropstacked output on a dataset
-    """
-
-    #TODO: should this be resampling a larger subset?
-    def __init__(self,members,x,y,train_set,valid_set,params):
-        self.rng = numpy.random.RandomState(params.random_seed)
-        self.theano_rng = MRG_RandomStreams(max(self.rng.randint(2 ** 15), 1))
-        self.members=members
-        train_set_x,train_set_y = train_set
-        valid_set_x,valid_set_y = valid_set
-        self.train_input_x = theano.function(inputs=[],
-                on_unused_input='warn',
-                outputs=self.make_masked_input(params.dropstack_prob),
-                givens={x:train_set_x})
-        self.valid_input_x = theano.function(inputs=[],
-                on_unused_input='warn',
-                outputs=self.make_masked_input(params.dropstack_prob),
-                givens={x:valid_set_x})
-        print 'training stack head'
-        self.head_x = T.concatenate([m.p_y_given_x
-            for m in self.members],axis=1)
-        dataset = [(sharedX(self.train_input_x(),borrow=True),train_set_y),
-                   (sharedX(self.valid_input_x(),borrow=True),valid_set_y)]
-        pretraining_set = make_pretraining_set(dataset,params.pretraining)
-        params.n_in = len(members) * params.main_params.n_out
-        params.n_out = params.main_params.n_out
-        self.stack_head = mlp.test_mlp(dataset, params,
-                pretraining_set = pretraining_set, x = self.head_x, y = y)
-        self.y_pred = self.stack_head.y_pred
-        self.errors = self.stack_head.errors(y)
-
-    def make_masked_input(self,prob):
-        masked = []
-        theano_rng = MRG_RandomStreams(max(self.members[0].rng.randint(2 ** 15), 1))
-        mask = theano_rng.binomial(p=1-prob, size=(len(self.members),1))
-        for i,m in enumerate(self.members):
-            masked.append(m.p_y_given_x * mask[i,0])
-        return T.concatenate(masked,axis=1)
 
 class EnsembleMethod(yaml.YAMLObject):
 
@@ -167,7 +136,6 @@ class EnsembleMethod(yaml.YAMLObject):
             m.set_weights(w)
             self.members.append(m)
         return self.members
-
 
 
 class Bagging(EnsembleMethod):
@@ -258,38 +226,6 @@ class Stacking(EnsembleMethod):
             if p not in self.__dict__:
                 self.__dict__[p] = self.params.__dict__[p]
         return StackingRunner(members,x,y,train_set,valid_set,
-                Parameters(**self.__dict__))
-
-    def create_member(self,x,y):
-        mlp_training_dataset = [self.resampler.make_new_train(self.params.resample_size),
-                self.resampler.get_valid()]
-        pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
-        m = mlp.test_mlp(mlp_training_dataset, self.params,
-                pretraining_set = pretraining_set, x=x, y=y)
-        w = m.get_weights()
-        self.members.append(w)
-        return w
-
-    def prepare(self, params, dataset):
-        self.params = params
-        self.dataset = dataset
-        self.resampler = Resampler(dataset)
-        self.members = []
-
-
-class DropStacking(Stacking):
-    """
-    Create a DropStacking Runner from parameters
-    """
-
-    yaml_tag = u'!DropStacking'
-
-    def create_aggregator(self,params,members,x,y,train_set,valid_set):
-        self.main_params = params
-        for p in self.params.__dict__:
-            if p not in self.__dict__:
-                self.__dict__[p] = self.params.__dict__[p]
-        return DropStackingRunner(members,x,y,train_set,valid_set,
                 Parameters(**self.__dict__))
 
     def create_member(self,x,y):
