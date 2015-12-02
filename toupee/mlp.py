@@ -649,7 +649,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     train_set_y,
                     state.classifier.x,
                     state.classifier.y)
-            state.train_error_f = self.eval_function(
+            state.train_error_f = state.classifier.eval_function(
                     state.classifier.index,
                     train_set_x,
                     train_set_y,
