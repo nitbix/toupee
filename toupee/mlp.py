@@ -598,8 +598,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 
     print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
 
-    print '... building the model'
-
     if index is None:
         index = T.lscalar()
     if x is None:
@@ -735,6 +733,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         if params.online_transform is not None:
             del train_set_x
             del state.train_f
+            del state.train_error_f
             gc.collect()
 
     if params.training_method == 'normal':
