@@ -162,6 +162,7 @@ class Bagging(EnsembleMethod):
                 pretraining_set = pretraining_set, x=x, y=y)
         w = m.get_weights()
         self.members.append(w)
+        del m
         return w
 
     def prepare(self, params, dataset):
