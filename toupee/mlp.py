@@ -247,16 +247,13 @@ class MLP(object):
                     self.rejoin_layers(input)
                 if mode in ['reverse', 'reverse-together']:
                     pretraining_set_x, pretraining_set_y = pretraining_set
-                    pretraining_set_y = sharedX(
-                            data.one_hot(pretraining_set_y.eval()))
+                    pretraining_set_y = sharedX(data.one_hot(pretraining_set_y.eval()))
                     x_pretraining = self.x
                     y_pretraining = T.matrix('y_pretraining')
                     reversedLayers = []
-                    self.chain_in_back = self.chain_in
-                    self.chain_n_in_back = self.chain_n_in
-                    self.chain_in = y_pretraining
-                    self.chain_n_in = self.params.n_out
-                    backup = self.hiddenLayers
+                    rev_chain_in = y_pretraining
+                    rev_chain_n_in = self.params.n_out
+                    backup = copy.copy(self.hiddenLayers)
                     i = len(backup) - 1
                     for layer_type,desc in reversed(params.n_hidden[:len(backup)]):
                         if layer_type == 'conv':
@@ -266,23 +263,23 @@ class MLP(object):
                             l = make_layer(layer_type,desc,i)
                             l.W = backup[i].W
                             reversedLayers.append(l)
+                            rev_chain_in = l.output
+                            rev_chain_n_in = desc[0]
                             i -= 1
                     self.hiddenLayers = [x for x in reversedLayers if x is not None]
-                    self.make_top_layer(self.params.n_in, self.chain_in,
-                            self.chain_n_in, rng, 'flat', activations.TanH())
+                    self.make_top_layer(self.params.n_in, rev_chain_in,
+                            rev_chain_n_in, rng, 'flat', activations.TanH())
                     train_f = self.train_function(index, pretraining_set_y,
                         pretraining_set_x, y_pretraining, x_pretraining,
                         self.params.pretrain_update_rule,
                         self.params.pretrain_learning_rate)
                     ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
-                    n_batches =  ptxlen / self.params.batch_size
+                    n_batches = ptxlen / self.params.batch_size
                     for p in range(self.params.pretraining_passes):
                         print "... reverse training layer {0}, pass {1}".format(layer_number,p)
                         for minibatch_index in xrange(n_batches):
                             minibatch_avg_cost = train_f(minibatch_index,1)
                     self.hiddenLayers = backup
-                    self.chain_in= self.chain_in_back 
-                    self.chain_n_in= self.chain_n_in_back 
                     for i,l in enumerate(reversed(self.hiddenLayers)):
                         if reversedLayers[i] is not None:
                             l.W = reversedLayers[i].W
