@@ -795,7 +795,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     gc.collect()
     if 'results_db' in params.__dict__ and test_set_x is not None:
         print "saving results to {0}".format(params.results_db)
-        if 'results_host' in params.__dic__:
+        if 'results_host' in params.__dict__:
             host = params.results_host
         else:
             host = None
