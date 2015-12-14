@@ -82,7 +82,8 @@ class MLP(object):
     def __init__(self, params, rng, input, index, x, y, pretraining_set = None,
             continuation = None):
         """
-        Initialize the parameters for the multilayer perceptron
+        Initialize the parameters for the multilayer perceptron and create the
+        network.
         """
 
         self.hiddenLayers = []
@@ -102,127 +103,6 @@ class MLP(object):
         self.reset_hooks(TrainingState(self))
         self.trainflag = T.scalar('trainflag')
 
-        def make_layer(layer_type,desc,W=None,b=None,i=0):
-            
-            def get_channels():
-                if i == 0:
-                    if 'channels' in self.params.__dict__:
-                        return self.params.channels
-                    elif self.params.RGB:
-                        return 3
-                else:
-                    if len(self.chain_n_in) > 1:
-                        return self.chain_n_in[0]
-                return 1
-
-            def get_n_pixels():
-                if i == 0:
-                    n_pixels_x = math.sqrt(numpy.prod(self.chain_n_in) / get_channels())
-                    n_pixels_y = n_pixels_x
-                else:
-                    if len(self.chain_n_in) == 3:
-                        n_pixels_y = self.chain_n_in[1]
-                        n_pixels_x = self.chain_n_in[2]
-                    else:
-                        n_pixels_x = self.chain_n_in
-                        n_pixels_y = n_pixels_x
-                return (n_pixels_y,n_pixels_x)
-
-            if(layer_type == 'flat'):
-                n_this,drop_this,name_this,activation_this,weight_init = desc
-                l = layers.FlatLayer(rng=rng,
-                                     inputs=self.chain_in.flatten(ndim=2),
-                                     n_in=numpy.prod(self.chain_n_in),
-                                     n_out=numpy.prod(n_this),
-                                     activation=activation_this,
-                                     dropout_rate=drop_this,
-                                     layer_name=name_this,
-                                     weight_init=weight_init,
-                                     W=W,b=b)
-                self.chain_n_in = n_this
-                l.output_shape = self.chain_n_in
-                self.chain_in=l.output
-                return l
-            elif(layer_type == 'LCN'):
-                n_pixels_y,n_pixels_x = get_n_pixels()
-                kernel_size,use_divisor = desc
-                l = layers.LCN(
-                            self.chain_in.flatten(ndim=2),
-                            kernel_size,
-                            n_pixels_x,
-                            n_pixels_y,
-                            get_channels(),
-                            use_divisor
-                        )
-                l.output_shape = self.chain_n_in
-                self.chain_in=l.output
-                return l
-            elif(layer_type == 'elastic_transform'):
-                n_pixels_y,n_pixels_x = get_n_pixels()
-                l = layers.Elastic(
-                            self.chain_in.flatten(ndim=2),
-                            n_pixels_x,
-                            n_pixels_y,
-                            desc,
-                            get_channels(),
-                            self.trainflag
-                        )
-                l.output_shape = self.chain_n_in
-                self.chain_in=l.output
-                return l
-            elif(layer_type == 'dropout'):
-                n_this,drop_this,name_this,activation_this,weight_init = desc
-                l = layers.Dropout(rng=rng,
-                                     inputs=self.chain_in.flatten(ndim=2),
-                                     n_in=numpy.prod(self.chain_n_in),
-                                     n_out=numpy.prod(self.chain_n_in),
-                                     activation=activation_this,
-                                     dropout_rate=drop_this,
-                                     layer_name=name_this,
-                                     )
-                self.chain_n_in = n_this
-                l.output_shape = self.chain_n_in
-                self.chain_in=l.output
-                return l
-            elif(layer_type == 'conv'):
-                input_shape,filter_shape,pool_size,drop_this,name_this,activation_this,pooling,weight_init = desc
-                if input_shape is None:
-                    if self.chain_input_shape is None:
-                        raise Exception("must specify first input shape")
-                    input_shape = self.chain_input_shape
-                else:
-                    if len(input_shape) == 3:
-                        input_shape.insert(0,self.params.batch_size)
-                    self.chain_input_shape = input_shape
-                if len(filter_shape) == 3:
-                    filter_shape.insert(1,input_shape[1])
-                if self.prev_dim is None:
-                    self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
-                l = layers.ConvolutionalLayer(rng=rng,
-                                       inputs=self.chain_in, 
-                                       input_shape=input_shape, 
-                                       filter_shape=filter_shape,
-                                       pool_size=pool_size,
-                                       activation=activation_this,
-                                       dropout_rate=drop_this,
-                                       layer_name = name_this,
-                                       pooling = pooling,
-                                       weight_init = weight_init,
-                                       W=W,b=b)
-                prev_map_number,dim_x,dim_y = self.prev_dim
-                curr_map_number = filter_shape[0]
-                output_dim_x = (dim_x - filter_shape[2] + 1) / pool_size[0]
-                output_dim_y = (dim_y - filter_shape[3] + 1) / pool_size[1]
-                self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
-                l.output_shape = self.chain_n_in
-                self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
-                self.chain_in = l.output
-                self.chain_input_shape = [self.chain_input_shape[0],
-                        curr_map_number,
-                        output_dim_x,
-                        output_dim_y]
-                return l
-
         for i,(layer_type,desc) in enumerate(params.n_hidden):
             if continuation is not None:
                 W = continuation['W'][i]
@@ -231,95 +111,20 @@ class MLP(object):
                 W = None
                 b = None
 
-            l = make_layer(layer_type,desc,W,b,i)
+            l = self.make_layer(layer_type,desc,W,b,i)
             self.hiddenLayers.append(l)
-
-            def pretrain(pretraining_set,mode='unsupervised'):
-                self.reset_hooks(TrainingState(self))
-                if self.params.pretraining_noise is not None:
-                    pretraining_set[0] = data.corrupt(
-                            self.params.pretraining_noise,pretraining_set[0])
-                self.backup_first = None
-                #these all lock the previous layers
-                if mode in ['reverse', 'supervised', 'unsupervised']:
-                    for i in range(0,len(self.hiddenLayers) -1):
-                        self.hiddenLayers[i].write_enable = 0
-                    self.rejoin_layers(input)
-                if mode in ['reverse', 'reverse-together']:
-                    pretraining_set_x, pretraining_set_y = pretraining_set
-                    pretraining_set_y = sharedX(
-                            data.one_hot(pretraining_set_y.eval()))
-                    x_pretraining = self.x
-                    y_pretraining = T.matrix('y_pretraining')
-                    reversedLayers = []
-                    self.chain_in_back = self.chain_in
-                    self.chain_n_in_back = self.chain_n_in
-                    self.chain_in = y_pretraining
-                    self.chain_n_in = self.params.n_out
-                    backup = self.hiddenLayers
-                    i = len(backup) - 1
-                    for layer_type,desc in reversed(params.n_hidden[:len(backup)]):
-                        if layer_type == 'conv':
-                            print "Warning: reverse pretraining a convolutional layer has no effect"
-                            reversedLayers.append(None)
-                        else:
-                            l = make_layer(layer_type,desc,i)
-                            l.W = backup[i].W
-                            reversedLayers.append(l)
-                            i -= 1
-                    self.hiddenLayers = [x for x in reversedLayers if x is not None]
-                    self.make_top_layer(self.params.n_in, self.chain_in_back,
-                            self.chain_n_in, rng, 'flat', activations.TanH())
-                    train_f = self.train_function(index, pretraining_set_y,
-                        pretraining_set_x, y_pretraining, x_pretraining,
-                        self.params.pretrain_update_rule,
-                        self.params.pretrain_learning_rate)
-                    ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
-                    n_batches =  ptxlen / self.params.batch_size
-                    for p in range(self.params.pretraining_passes):
-                        print "... reverse training layer {0}, pass {1}".format(layer_number,p)
-                        for minibatch_index in xrange(n_batches):
-                            minibatch_avg_cost = train_f(minibatch_index,1)
-                    self.hiddenLayers = backup
-                    self.chain_in= self.chain_in_back 
-                    self.chain_n_in= self.chain_n_in_back 
-                    for i,l in enumerate(reversed(self.hiddenLayers)):
-                        if reversedLayers[i] is not None:
-                            l.W = reversedLayers[i].W
-                elif mode in ['supervised', 'supervised-together']:
-                    pretraining_set_x, pretraining_set_y = pretraining_set
-                    x_pretraining = self.x
-                    y_pretraining = self.y
-                    self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng)
-                elif mode in ['unsupervised', 'unsupervised-together']:
-                    pretraining_set_x = pretraining_set[0]
-                    pretraining_set_y = pretraining_set[0]
-                    ptylen = pretraining_set[0].get_value(borrow=True).shape[1]
-                    x_pretraining = self.x
-                    y_pretraining = T.matrix('y_pretraining')
-                    self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, rng,
-                            'flat', activations.TanH())
-                else:
-                    raise Exception("Unknown pretraining mode: %s" % mode)
-                if mode in ['supervised', 'unsupervised', 'unsupervised-together']:
-                    train_f = self.train_function(index, pretraining_set_x,
-                        pretraining_set_y, x_pretraining, y_pretraining)
-                    ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
-                    n_batches =  ptxlen / self.params.batch_size
-                    for p in range(self.params.pretraining_passes):
-                        print "... pretraining layer {0}, pass {1}".format(layer_number,p)
-                        for minibatch_index in xrange(n_batches):
-                            minibatch_avg_cost = train_f(minibatch_index,1)
-                for l in self.hiddenLayers:
-                    l.write_enable = 1
-                self.rejoin_layers(input)
 
             modes = params.pretraining
             if pretraining_set is not None and modes is not None:
                 for mode in modes.split(','):
-                    pretrain(pretraining_set,mode)
+                    self.inline_pretrain(pretraining_set,mode)
             layer_number += 1
+
         self.rejoin_layers(input)
+
+        if pretraining_set is not None and modes is not None:
+            for mode in modes.split(','):
+                self.pretrain(pretraining_set,mode)
         if continuation is not None:
             W = continuation['outW']
             b = continuation['outb']
@@ -328,6 +133,244 @@ class MLP(object):
             b = None
         self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng,
                 layer_type=params.output_layer,W=W,b=b)
+
+
+    def pretrain(self,pretraining_set,mode='unsupervised'):
+        self.reset_hooks(TrainingState(self))
+        if self.params.pretraining_noise is not None:
+            pretraining_set[0] = data.corrupt(
+                    self.params.pretraining_noise,pretraining_set[0])
+        self.backup_first = None
+
+        def reverse_epoch(pinned_layer=None):
+            pretraining_set_x, pretraining_set_y = pretraining_set
+            pretraining_set_y = sharedX(data.one_hot(pretraining_set_y.eval()))
+            x_pretraining = self.x
+            y_pretraining = T.matrix('y_pretraining')
+            reversedLayers = []
+            rev_chain_in = y_pretraining
+            rev_chain_n_in = self.params.n_out
+            backup = copy.copy(self.hiddenLayers)
+            i = len(backup) - 1
+            for layer_type,desc in reversed(self.params.n_hidden[:len(backup)]):
+                if layer_type == 'conv':
+                    print "Warning: reverse pretraining a convolutional layer has no effect"
+                    reversedLayers.append(None)
+                else:
+                    l = self.make_layer(layer_type,desc,i)
+                    l.W = backup[i].W
+                    reversedLayers.append(l)
+                    rev_chain_in = l.output
+                    rev_chain_n_in = desc[0]
+                    i -= 1
+            if pinned_layer is not None and reversedLayers[pinned_layer] is not None:
+                for i in range(0,len(reversedLayers) -1):
+                    if reversedLayers[i] is not None:
+                        reversedLayers[i].write_enable = 0
+                reversedLayers[pinned_layer].write_enable = 1
+            self.hiddenLayers = [x for x in reversedLayers if x is not None]
+            self.make_top_layer(self.params.n_in, rev_chain_in,
+                    rev_chain_n_in, self.rng, 'flat', activations.TanH())
+            train_f = self.train_function(self.index, pretraining_set_y,
+                pretraining_set_x, y_pretraining, x_pretraining,
+                self.params.pretrain_update_rule,
+                self.params.pretrain_learning_rate)
+            ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
+            n_batches = ptxlen / self.params.batch_size
+            for p in range(self.params.pretraining_passes):
+                print ".... pass {0}".format(p)
+                for minibatch_index in xrange(n_batches):
+                    minibatch_avg_cost = train_f(minibatch_index,1)
+            self.hiddenLayers = backup
+            for i,l in enumerate(reversed(self.hiddenLayers)):
+                if reversedLayers[i] is not None:
+                    l.W = reversedLayers[i].W
+
+        if mode == 'reverse':
+            #greedy, one layer at a time
+            for current_layer in xrange(0,len(self.hiddenLayers)):
+                print "... reverse pretraining layer {0}".format(current_layer)
+                reverse_epoch(current_layer)
+            for i in range(0,len(self.hiddenLayers) -1):
+                self.hiddenLayers[i].write_enable = 1
+        elif mode == 'reverse-together':
+            print "... reverse pretraining all layers"
+            reverse_epoch()
+        elif mode in ['supervised', 'supervised-together',
+                'unsupervised', 'unsupervised-together']:
+            #these happen inline
+            return
+        else:
+            raise Exception("Unknown pretraining mode: %s" % mode)
+        for l in self.hiddenLayers:
+            l.write_enable = 1
+        self.rejoin_layers(self.input)
+
+    def inline_pretrain(self,pretraining_set,mode='unsupervised'):
+        self.reset_hooks(TrainingState(self))
+        if self.params.pretraining_noise is not None:
+            pretraining_set[0] = data.corrupt(
+                    self.params.pretraining_noise,pretraining_set[0])
+        self.backup_first = None
+        #these all lock the previous layers
+        if mode in ['supervised', 'unsupervised']:
+            for i in range(0,len(self.hiddenLayers) -1):
+                self.hiddenLayers[i].write_enable = 0
+            self.rejoin_layers(self.input)
+        if mode in ['reverse', 'reverse-together']:
+            #these happen at then end
+            return
+        elif mode in ['supervised', 'supervised-together']:
+            pretraining_set_x, pretraining_set_y = pretraining_set
+            x_pretraining = self.x
+            y_pretraining = self.y
+            self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,self.rng)
+        elif mode in ['unsupervised', 'unsupervised-together']:
+            pretraining_set_x = pretraining_set[0]
+            pretraining_set_y = pretraining_set[0]
+            ptylen = pretraining_set[0].get_value(borrow=True).shape[1]
+            x_pretraining = self.x
+            y_pretraining = T.matrix('y_pretraining')
+            self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, self.rng,
+                    'flat', activations.TanH())
+        else:
+            raise Exception("Unknown pretraining mode: %s" % mode)
+        if mode in ['supervised', 'unsupervised', 'unsupervised-together']:
+            train_f = self.train_function(self.index, pretraining_set_x,
+                pretraining_set_y, x_pretraining, y_pretraining)
+            ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
+            n_batches =  ptxlen / self.params.batch_size
+            for p in range(self.params.pretraining_passes):
+                print "... {0} pretraining layer {1}, pass {2}".format(mode,layer_number,p)
+                for minibatch_index in xrange(n_batches):
+                    minibatch_avg_cost = train_f(minibatch_index,1)
+        for l in self.hiddenLayers:
+            l.write_enable = 1
+        self.rejoin_layers(self.input)
+
+    def get_channels(self,i):
+        """Try to guess the number of channels in the input from information
+        in params or the input shape itself if it is not flat"""
+        if i == 0:
+            if 'channels' in self.params.__dict__:
+                return self.params.channels
+            elif self.params.RGB:
+                return 3
+        else:
+            if len(self.chain_n_in) > 1:
+                return self.chain_n_in[0]
+        return 1
+
+    def get_n_pixels(self,i):
+        """Try to guess the square side of the input image from information
+        in params or the input shape itself if it is not flat"""
+        if i == 0:
+            n_pixels_x = math.sqrt(numpy.prod(self.chain_n_in) / self.get_channels(i))
+            n_pixels_y = n_pixels_x
+        else:
+            if len(self.chain_n_in) == 3:
+                n_pixels_y = self.chain_n_in[1]
+                n_pixels_x = self.chain_n_in[2]
+            else:
+                n_pixels_x = self.chain_n_in
+                n_pixels_y = n_pixels_x
+        return (n_pixels_y,n_pixels_x)
+
+    def make_layer(self,layer_type,desc,W=None,b=None,i=0):
+        if(layer_type == 'flat'):
+            n_this,drop_this,name_this,activation_this,weight_init = desc
+            l = layers.FlatLayer(rng=self.rng,
+                                 inputs=self.chain_in.flatten(ndim=2),
+                                 n_in=numpy.prod(self.chain_n_in),
+                                 n_out=numpy.prod(n_this),
+                                 activation=activation_this,
+                                 dropout_rate=drop_this,
+                                 layer_name=name_this,
+                                 weight_init=weight_init,
+                                 W=W,b=b)
+            self.chain_n_in = n_this
+            l.output_shape = self.chain_n_in
+            self.chain_in=l.output
+            return l
+        elif(layer_type == 'LCN'):
+            n_pixels_y,n_pixels_x = self.get_n_pixels(i)
+            kernel_size,use_divisor = desc
+            l = layers.LCN(
+                        self.chain_in.flatten(ndim=2),
+                        kernel_size,
+                        n_pixels_x,
+                        n_pixels_y,
+                        self.get_channels(i),
+                        use_divisor
+                    )
+            l.output_shape = self.chain_n_in
+            self.chain_in=l.output
+            return l
+        elif(layer_type == 'elastic_transform'):
+            n_pixels_y,n_pixels_x = self.get_n_pixels(i)
+            l = layers.Elastic(
+                        self.chain_in.flatten(ndim=2),
+                        n_pixels_x,
+                        n_pixels_y,
+                        desc,
+                        self.get_channels(i),
+                        self.trainflag
+                    )
+            l.output_shape = self.chain_n_in
+            self.chain_in=l.output
+            return l
+        elif(layer_type == 'dropout'):
+            n_this,drop_this,name_this,activation_this,weight_init = desc
+            l = layers.Dropout(rng=self.rng,
+                                 inputs=self.chain_in.flatten(ndim=2),
+                                 n_in=numpy.prod(self.chain_n_in),
+                                 n_out=numpy.prod(self.chain_n_in),
+                                 activation=activation_this,
+                                 dropout_rate=drop_this,
+                                 layer_name=name_this,
+                                 )
+            self.chain_n_in = n_this
+            l.output_shape = self.chain_n_in
+            self.chain_in=l.output
+            return l
+        elif(layer_type == 'conv'):
+            input_shape,filter_shape,pool_size,drop_this,name_this,activation_this,pooling,weight_init = desc
+            if input_shape is None:
+                if self.chain_input_shape is None:
+                    raise Exception("must specify first input shape")
+                input_shape = self.chain_input_shape
+            else:
+                if len(input_shape) == 3:
+                    input_shape.insert(0,self.params.batch_size)
+                self.chain_input_shape = input_shape
+            if len(filter_shape) == 3:
+                filter_shape.insert(1,input_shape[1])
+            if self.prev_dim is None:
+                self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
+            l = layers.ConvolutionalLayer(rng=self.rng,
+                                   inputs=self.chain_in, 
+                                   input_shape=input_shape, 
+                                   filter_shape=filter_shape,
+                                   pool_size=pool_size,
+                                   activation=activation_this,
+                                   dropout_rate=drop_this,
+                                   layer_name = name_this,
+                                   pooling = pooling,
+                                   weight_init = weight_init,
+                                   W=W,b=b)
+            prev_map_number,dim_x,dim_y = self.prev_dim
+            curr_map_number = filter_shape[0]
+            output_dim_x = (dim_x - filter_shape[2] + 1) / pool_size[0]
+            output_dim_y = (dim_y - filter_shape[3] + 1) / pool_size[1]
+            self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
+            l.output_shape = self.chain_n_in
+            self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
+            self.chain_in = l.output
+            self.chain_input_shape = [self.chain_input_shape[0],
+                    curr_map_number,
+                    output_dim_x,
+                    output_dim_y]
+            return l
 
     def make_top_layer(self, n_out, chain_in, chain_n_in, rng,
             layer_type='softmax', activation=None, name_this='temp_top',
@@ -599,8 +642,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 
     print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
 
-    print '... building the model'
-
     if index is None:
         index = T.lscalar()
     if x is None:
@@ -736,6 +777,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         if params.online_transform is not None:
             del train_set_x
             del state.train_f
+            del state.train_error_f
             gc.collect()
 
     if params.training_method == 'normal':
@@ -800,7 +842,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     gc.collect()
     if 'results_db' in params.__dict__ and test_set_x is not None:
         print "saving results to {0}".format(params.results_db)
-        if 'results_host' in params.__dic__:
+        if 'results_host' in params.__dict__:
             host = params.results_host
         else:
             host = None
