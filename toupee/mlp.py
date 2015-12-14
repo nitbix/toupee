@@ -268,7 +268,7 @@ class MLP(object):
                             reversedLayers.append(l)
                             i -= 1
                     self.hiddenLayers = [x for x in reversedLayers if x is not None]
-                    self.make_top_layer(self.params.n_in, self.chain_in,
+                    self.make_top_layer(self.params.n_in, self.chain_in_back,
                             self.chain_n_in, rng, 'flat', activations.TanH())
                     train_f = self.train_function(index, pretraining_set_y,
                         pretraining_set_x, y_pretraining, x_pretraining,
@@ -594,7 +594,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                         channels=channels,
                         progress=False,
                         save=False,
-                        opts=params.online_transform)
+                        opts=params.online_transform,
+                        seed=params.random_seed)
 
     print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
 
