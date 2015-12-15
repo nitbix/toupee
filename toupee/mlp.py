@@ -637,7 +637,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                         channels=channels,
                         progress=False,
                         save=False,
-                        opts=params.online_transform)
+                        opts=params.online_transform,
+                        seed=params.random_seed)
 
     print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
 

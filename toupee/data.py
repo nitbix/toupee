@@ -175,7 +175,9 @@ class Resampler:
         
     def make_new_train(self,sample_size,distribution=None):
         if distribution is None:
-            sample = np.random.randint(low=0,high=self.train_size,size=sample_size)
+            sample = np.random.randint(low=0,
+                                       high=self.train_size,
+                                       size=sample_size)
         else:
             raise Exception("not implemented");
         sampled_x = []
@@ -330,8 +332,8 @@ class GPUTransformer:
     Credit for this function to theanet https://github.com/rakeshvar/theanet/
     """
 
-    def __init__(self,original_set,x,y,opts,
-                    channels=1,progress=False,save=False):
+    def __init__(self, original_set, x, y, opts, channels = 1, progress=False,
+            save=False, seed=None):
         print("..transforming dataset")
         self.alpha = opts['alpha']
         self.beta  = opts['beta']
@@ -349,7 +351,7 @@ class GPUTransformer:
         self.instances = self.original_x.shape[0]
         inpt = self.original_x.reshape([self.instances,self.channels,self.x,self.y])
 
-        self.srs = T.shared_randomstreams.RandomStreams(rng.randint(1e6))
+        self.srs = T.shared_randomstreams.RandomStreams(seed)
         target = T.as_tensor_variable(np.indices((self.y, self.x)).astype('float32'))
 
         # Translate
