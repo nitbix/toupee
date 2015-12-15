@@ -33,11 +33,13 @@ class Toupee:
 class Results:
 
     def __init__(self,params):
+        self.train_history = []
         self.validation_history = []
         self.test_history = []
         self.params = params.__dict__
 
-    def set_observation(self,validation,test):
+    def set_observation(self,train,validation,test):
+        self.train_history.append(train)
         self.validation_history.append(validation)
         self.test_history.append(test)
 

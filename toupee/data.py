@@ -35,7 +35,7 @@ theano_rng = MRG_RandomStreams(rng.randint(1.0e6))
 
 #import matplotlib.pyplot as plt
 
-def sharedX(value, name=None, borrow=False, dtype=None):
+def sharedX(value, name=None, borrow=True, dtype=None):
     """
     Transform value into a shared variable of type floatX
     borrowed from pylearn2
@@ -47,7 +47,7 @@ def sharedX(value, name=None, borrow=False, dtype=None):
                          name=name,
                          borrow=borrow)
 
-def sharedXscalar(value, name=None, borrow=False):
+def sharedXscalar(value, name=None, borrow=True):
     """
     Transform value into a shared variable scalar
     """

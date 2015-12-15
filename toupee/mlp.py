@@ -26,7 +26,6 @@ import json
 
 import theano
 import theano.tensor as T
-from theano.sandbox.cuda import CudaNdarray
 from theano.sandbox.cuda.basic_ops import gpu_from_host
 from theano.ifelse import ifelse
 from scipy.misc import imsave
@@ -185,6 +184,7 @@ class MLP(object):
             for i,l in enumerate(reversed(self.hiddenLayers)):
                 if reversedLayers[i] is not None:
                     l.W = reversedLayers[i].W
+            del backup
 
         if mode == 'reverse':
             #greedy, one layer at a time
@@ -602,11 +602,11 @@ class MLP(object):
         f = theano.function(inputs=[],
                 outputs=one,
                 on_unused_input='warn',
-                updates=updates,)
+                updates=updates)
         f()
 
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
-        continuation=None):
+        continuation=None,return_results=False):
     results = common.Results(params)
     orig_train_set_x, orig_train_set_y = dataset[0]
     orig_valid_set_x, orig_valid_set_y = dataset[1]
@@ -734,15 +734,27 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     state.best_weights = state.classifier.get_weights()
                     state.test_score = test_loss
                     gc.collect()
-                results.set_observation(this_valid_loss,test_loss)
+                results.set_observation(this_train_loss,this_valid_loss,test_loss)
             state.previous_minibatch_avg_cost = minibatch_avg_cost
             if state.patience <= iter:
                     print('finished patience')
                     state.done_looping = True
                     break
         if params.save_images or params.detailed_stats:
-            e_x = dataset[0][0].eval()
-            e_y = dataset[0][1].eval()
+            e_x = numpy.asarray(dataset[0][0].eval())
+            e_y = numpy.asarray(dataset[0][1].eval())
+            padding_needed = params.batch_size - (len(e_x) % params.batch_size)
+            padded_e_x = numpy.concatenate([
+                    e_x,
+                    e_x[:padding_needed]
+                ])
+            padded_e_y = numpy.concatenate([
+                    e_y,
+                    e_y[:padding_needed]
+                ])
+            e_xs = numpy.split(padded_e_x,len(padded_e_x) / params.batch_size)
+            e_ys = numpy.split(padded_e_y,len(padded_e_y) / params.batch_size)
+            assert len(e_xs) == len(e_ys)
             if params.save_images:
                 for i in xrange(len(state.classifier.hiddenLayers)):
                     imsave('weights-layer{0}-iter{1}.png'.format(i,state.epoch),
@@ -752,7 +764,12 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                         state.classifier.outputLayer.W.get_value()
                       )
             for param, gparam in zip(state.classifier.opt_params, state.classifier.gparams):
-                gradient = numpy.asarray(gparam.eval({x: e_x, y: e_y}))
+                gradients = []
+                for i in xrange(0,len(e_xs)):
+                    gradients.append(
+                        numpy.asarray(gparam.eval({x: e_xs[i], y: e_ys[i]}))
+                    )
+                gradient = numpy.concatenate(gradients)
                 p = numpy.asarray(param.eval())
                 if params.save_images:
                     if len(gradient.shape) == 2:
@@ -770,8 +787,14 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 #computed = state.classifier.classify(dataset[0][0])()
                 #print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
                 print "  learning rate: {0}".format(params.learning_rate.get().get_value())
-                cost = numpy.asarray(state.classifier.cost.eval({x: e_x, y: e_y}))
-                print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
+#                costs = []
+#                for i in xrange(0,len(e_xs)):
+#                    c = numpy.asarray(state.classifier.cost.eval({x: e_xs[i], y: e_ys[i]}))
+#                    if len(c) > 0:
+#                        costs.append(c)
+#                cost = numpy.concatenate(costs)
+#                if len(cost) > 0:
+#                    print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         state.classifier.run_hooks()
         if params.online_transform is not None:
             del train_set_x
@@ -855,14 +878,18 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         def serialize(o):
             if isinstance(o, numpy.float32):
                 return float(o)
-            elif isinstance(o, CudaNdarray):
-                return numpy.asarray(o).tolist()
-            elif isinstance(o, object):
-                if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
-                    return o.tolist()
-                return json.loads(json.dumps(o.__dict__,default=serialize))
             else:
-                raise Exception()
+                try:
+                    return numpy.asarray(o).tolist()
+                except:
+                    if isinstance(o, object):
+                        if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
+                            return o.tolist()
+                        return json.loads(json.dumps(o.__dict__,default=serialize))
+                    else:
+                        raise Exception("don't know how to save {0}".format(type(o)))
         table.insert(json.loads(json.dumps(results.__dict__,default=serialize)))
-
-    return cl
+    if return_results:
+        return cl,results
+    else:
+        return cl
