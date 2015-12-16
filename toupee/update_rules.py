@@ -54,10 +54,48 @@ class SGD(UpdateRule):
             velocity = (self.velocity * self.curr_momentum - learning_rate.get() * gparam)
         else:
             velocity = - learning_rate.get() * gparam
-        new_w = param + self.velocity * mask
+        new_w = param + velocity * mask
         if self.renorm:
             new_w = new_w / T.min(T.abs_(new_w))
         updates.append((self.velocity,velocity))
+        return new_w
+
+class RMSProp(UpdateRule):
+
+    yaml_tag = u'!RMSProp'
+
+    def __new__(cls):
+        instance = super(RMSProp,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        return instance
+
+    def reset(self,updates):
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0.
+        if 'momentum_decay' not in self.__dict__:
+            self.momentum_decay = 1.
+        self.curr_momentum = sharedX(self.momentum)
+
+    def epoch_hook(self,updates):
+        updates.append((self.curr_momentum,self.curr_momentum * self.momentum_decay))
+
+    def __init__(self):
+        pass
+
+    def __call__(self, param, learning_rate, gparam, mask, updates,
+                 current_cost, previous_cost):
+        self.velocity = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
+        self.ms = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
+        ms = 0.9 * self.ms + 0.1 * (gparam ** 2)
+        if self.momentum:
+            velocity = (self.velocity * self.curr_momentum - learning_rate.get() * gparam)
+        else:
+            velocity = - learning_rate.get() * gparam
+        velocity_scaled = velocity / T.sqrt(ms)
+        new_w = param + velocity * mask
+        updates.append((self.velocity,velocity))
+        updates.append((self.ms,ms))
         return new_w
 
 class RPropVariant(UpdateRule):
