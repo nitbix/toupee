@@ -88,11 +88,11 @@ class RMSProp(UpdateRule):
         self.velocity = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         self.ms = sharedX(numpy.zeros(param.shape.eval()),borrow=True)
         ms = 0.9 * self.ms + 0.1 * (gparam ** 2)
+        grad_scaled = gparam / T.sqrt(ms)
         if self.momentum:
-            velocity = (self.velocity * self.curr_momentum - learning_rate.get() * gparam)
+            velocity = (self.velocity * self.curr_momentum - grad_scaled)
         else:
-            velocity = - learning_rate.get() * gparam
-        velocity_scaled = velocity / T.sqrt(ms)
+            velocity = - grad_scaled
         new_w = param + velocity * mask
         updates.append((self.velocity,velocity))
         updates.append((self.ms,ms))
