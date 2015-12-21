@@ -26,12 +26,9 @@ import multiprocessing
 import theano.tensor.signal.conv as sigconv
 from scipy.misc import imsave
 
-from theano.sandbox.rng_mrg import MRG_RandomStreams
 from theano.sandbox.cuda.basic_ops import gpu_from_host
 
 floatX = theano.config.floatX
-rng = numpy.random.RandomState(None)
-theano_rng = MRG_RandomStreams(rng.randint(1.0e6))
 
 #import matplotlib.pyplot as plt
 
@@ -75,7 +72,7 @@ def shared_dataset(data_xy, borrow=True):
     # lets ous get around this issue
     return shared_x, T.cast(shared_y, 'int32')
 
-def mask(p,shape,dtype=floatX):
+def mask(p,shape,theano_rng,dtype=floatX):
     return theano_rng.binomial(p=p, size=shape, dtype=dtype)
 
 def corrupt(data,p):
@@ -243,7 +240,7 @@ class Transformer:
     training set to produce a larger, noisy training set
     """
 
-    def __init__(self,original_set,x,y,alpha,beta,gamma,sigma,noise_var,progress = False):
+    def __init__(self,original_set,x,y,alpha,beta,gamma,sigma,noise_var,rng,progress = False):
         print("..transforming dataset")
         self.progress = progress
         self.x = x
@@ -261,7 +258,6 @@ class Transformer:
         self.final_x = []
         self.instance_no = 0
         instances = len(self.original_x)
-        rng = np.random.RandomState(None)
         self.original_x = np.asarray(self.original_x).reshape(instances,self.x,self.y)
         p = multiprocessing.Pool(32)
         deferred = [p.apply_async(transform_aux_map,args=(self,x)) for x in

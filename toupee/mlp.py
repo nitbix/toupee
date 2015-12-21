@@ -27,7 +27,7 @@ import json
 import theano
 import theano.tensor as T
 from theano.sandbox.cuda.basic_ops import gpu_from_host
-from theano.ifelse import ifelse
+from theano.sandbox.rng_mrg import MRG_RandomStreams
 from scipy.misc import imsave
 
 import data
@@ -78,7 +78,7 @@ class MLP(object):
     Multi-Layer Perceptron (or any other kind of ANN if the layers exist)
     """
 
-    def __init__(self, params, rng, input, index, x, y, pretraining_set = None,
+    def __init__(self, params, rng, theano_rng, input, index, x, y, pretraining_set = None,
             continuation = None):
         """
         Initialize the parameters for the multilayer perceptron and create the
@@ -95,6 +95,7 @@ class MLP(object):
         self.prev_dim = None
         self.params = params
         self.rng = rng
+        self.theano_rng = theano_rng
         layer_number = 0
         self.x = x
         self.y = y
@@ -505,7 +506,8 @@ class MLP(object):
             else:
                 raise Exception("missing write_enable for layer %s" % str(param))
 
-            mask = data.mask(p=include_prob,shape=param.shape,dtype=param.dtype)
+            mask = data.mask(p=include_prob,shape=param.shape,dtype=param.dtype,
+                    theano_rng=self.theano_rng)
             self.layer_masks[str(param)] = mask
             new_update = update_rule(param,
                     learning_rate, gparam, mask * we, updates,
@@ -650,10 +652,11 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         y = T.ivector('y')
 
     rng = numpy.random.RandomState(params.random_seed)
+    theano_rng = MRG_RandomStreams(params.random_seed)
 
     if continuation is None:
-        classifier = MLP(params=params, rng=rng, input=x, index=index, x=x, y=y,
-            pretraining_set=pretraining_set)
+        classifier = MLP(params=params, rng=rng, theano_rng=theano_rng, input=x,
+                index=index, x=x, y=y, pretraining_set=pretraining_set)
     else:
         classifier = MLP(params=params, rng=rng, input=x, index=index, x=x, y=y,
             pretraining_set=pretraining_set, continuation=continuation)
