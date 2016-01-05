@@ -345,12 +345,26 @@ class ConvolutionalLayer(Layer):
         self.delta_b = sharedX(
             value=numpy.zeros_like(self.b.get_value(borrow=True)),
             name='{0}_delta_b'.format(self.layer_name))
-        self.conv_out = conv.conv2d(
+        if self.border_mode == 'same':
+            bm = 'full'
+        else:
+            bm = self.border_mode
+        conv_out = conv.conv2d(
             input=self.inputs,
             filters=self.W,
             filter_shape=self.filter_shape,
             image_shape=self.input_shape,
-            border_mode=self.border_mode) * (1. - self.dropout_rate)
+            border_mode=bm) * (1. - self.dropout_rate)
+
+        if self.border_mode == 'same':
+            shift_x = (self.filter_shape[2] - 1) // 2
+            shift_y = (self.filter_shape[3] - 1) // 2
+            self.conv_out = conv_out[:, :,
+                                shift_x:self.input_shape[2] + shift_x,
+                                shift_y:self.input_shape[3] + shift_y]
+        else:
+            self.conv_out = conv_out
+
         self.y_out = self.activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
         self.pooled_out = downsample.max_pool_2d(input=self.y_out, 
                                                  ds=self.pool_size,

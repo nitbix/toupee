@@ -80,11 +80,15 @@ def corrupt(data,p):
 
 def sub_mean(d):
     x,y = d
-    x = x - numpy.mean(x,axis=1)[:,None]
+    x = x - np.mean(x,axis=0)
     return (x,y)
 
-def load_data(dataset, resize_to=None, shared=True, pickled=True,
-        subtract_mean=False, normalize=False):
+def std_norm(d):
+    x,y = d
+    x = x / np.std(x,axis=0)
+    return(x,y)
+
+def load_data(dataset, resize_to=None, shared=True, pickled=True, center_and_normalise=False):
     ''' Loads the dataset
 
     :type dataset: string
@@ -131,10 +135,10 @@ def load_data(dataset, resize_to=None, shared=True, pickled=True,
                             ),
                             resize_to),
                         test_set[1])
-    if subtract_mean:
-        train_set = sub_mean(train_set)
-        valid_set = sub_mean(valid_set)
-        test_set = sub_mean(test_set)
+    if center_and_normalise:
+        train_set = std_norm(sub_mean(train_set))
+        valid_set = std_norm(sub_mean(valid_set))
+        test_set  = std_norm(sub_mean(test_set))
     if shared:
         test_set_x, test_set_y = shared_dataset(test_set)
         valid_set_x, valid_set_y = shared_dataset(valid_set)

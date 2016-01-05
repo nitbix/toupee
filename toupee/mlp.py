@@ -335,7 +335,11 @@ class MLP(object):
             self.chain_in=l.output
             return l
         elif(layer_type == 'conv'):
-            input_shape,filter_shape,pool_size,drop_this,name_this,activation_this,pooling,weight_init = desc
+            if len(desc) == 8:
+                #default border mode
+                desc.append('valid')
+            (input_shape,filter_shape,pool_size,drop_this,name_this,
+                    activation_this,pooling,weight_init,border_mode) = desc
             if input_shape is None:
                 if self.chain_input_shape is None:
                     raise Exception("must specify first input shape")
@@ -357,12 +361,19 @@ class MLP(object):
                                    dropout_rate=drop_this,
                                    layer_name = name_this,
                                    pooling = pooling,
+                                   border_mode = border_mode,
                                    weight_init = weight_init,
                                    W=W,b=b)
             prev_map_number,dim_x,dim_y = self.prev_dim
             curr_map_number = filter_shape[0]
-            output_dim_x = (dim_x - filter_shape[2] + 1) / pool_size[0]
-            output_dim_y = (dim_y - filter_shape[3] + 1) / pool_size[1]
+            if border_mode == 'same':
+                output_dim_x = dim_x / pool_size[0]
+                output_dim_y = dim_y / pool_size[1]
+            elif border_mode == 'valid':
+                output_dim_x = (dim_x - filter_shape[2] + 1) / pool_size[0]
+                output_dim_y = (dim_y - filter_shape[3] + 1) / pool_size[1]
+            else:
+                raise Exception('Invalid border mode: {0}'.format(border_mode))
             self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
             l.output_shape = self.chain_n_in
             self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
