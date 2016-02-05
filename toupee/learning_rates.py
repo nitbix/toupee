@@ -27,6 +27,9 @@ class LearningRate(yaml.YAMLObject):
     def epoch_hook(self,updates):
         raise NotImplementedError()
 
+    def serialize(self):
+        raise NotImplementedError()
+
 class CompositeLearningRate(LearningRate):
     yaml_tag = u'!CompositeLearningRate'
 
@@ -35,6 +38,9 @@ class CompositeLearningRate(LearningRate):
         common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
         common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
         return instance
+
+    def serialize(self):
+        return 'CompositeLearningRate'
 
     def reset(self,updates):
         if 'current_epoch' not in self.__dict__:
@@ -68,6 +74,9 @@ class FixedLearningRate(LearningRate):
     def epoch_hook(self,updates):
         pass
 
+    def serialize(self):
+        return "FixedLearningRate { rate: {0} }".format(self.rate)
+
 class LinearDecayLearningRate(LearningRate):
 
     yaml_tag = u'!LinearDecayLearningRate'
@@ -100,6 +109,10 @@ class LinearDecayLearningRate(LearningRate):
         updates.append((self.current_rate,new_rate))
         updates.append((self.current_epoch,epoch))
 
+    def serialize(self):
+        return "LinearDecayLearningRate { start: {0} , stop: {1} , steps: {2}}".format(
+                self.start, self.stop, self.steps)
+
 class MultiplicativeDecayLearningRate(LearningRate):
 
     yaml_tag = u'!MultiplicativeDecayLearningRate'
@@ -128,3 +141,6 @@ class MultiplicativeDecayLearningRate(LearningRate):
                             self.start)
         updates.append((self.current_rate,new_rate))
 
+    def serialize(self):
+        return "MultiplicativeDecayLearningRate {{ start: {0} , stop: {1} , multiplier: {2} }}".format(
+                self.start, self.stop, self.multiplier)

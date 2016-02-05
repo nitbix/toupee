@@ -21,6 +21,8 @@ class TanH(Activation):
     yaml_tag = u'!TanH'
     def __call__(self,x):
         return T.tanh(x)
+    def __str__(self):
+        return 'TanH'
 
 class ScaledTanH(Activation):
     yaml_tag = u'!ScaledTanH'
@@ -30,21 +32,29 @@ class ScaledTanH(Activation):
         if 'B' not in self.__dict__:
             self.B = 1.
         return self.A * T.tanh(self.B * x)
+    def __str__(self):
+        return 'ScaledTanH {{ A: {0} , B: {1} }}'.format(self.A,self.B)
 
 class SoftSign(Activation):
     yaml_tag = u'!SoftSign'
     def __call__(self,x):
         return x / (1 + T.abs_(x))
+    def __str__(self):
+        return 'SoftSign'
 
 class Sigmoid(Activation):
     yaml_tag = u'!Sigmoid'
     def __call__(self,x):
         return T.nnet.sigmoid(x)
+    def __str__(self):
+        return 'Sigmoid'
 
 class ReLU(Activation):
     yaml_tag = u'!ReLU'
     def __call__(self,x):
         return T.nnet.relu(x)
+    def __str__(self):
+        return 'ReLU'
 
 class BoundedReLU(Activation):
     yaml_tag = u'!BoundedReLU'
@@ -54,6 +64,8 @@ class BoundedReLU(Activation):
         if 'ceiling' not in self.__dict__:
             self.ceiling = 6
         return T.min(T.nnet.relu(x,alpha=self.rate),self.ceiling)
+    def __str__(self):
+        return 'BoundedReLU'
 
 class LeakyReLU(Activation):
     yaml_tag = u'!LeakyReLU'
@@ -61,3 +73,5 @@ class LeakyReLU(Activation):
         if 'rate' not in self.__dict__:
             self.rate = 0.01
         return T.nnet.relu(x,alpha=self.rate)
+    def __str__(self):
+        return 'LeakyReLU {{ rate: {0} }}'.format(self.rate)

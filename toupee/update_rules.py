@@ -22,6 +22,9 @@ class UpdateRule(yaml.YAMLObject):
                  current_cost, previous_cost):
         raise NotImplementedError()
 
+    def serialize(self):
+        raise NotImplementedError()
+
 class SGD(UpdateRule):
 
     yaml_tag = u'!SGD'
@@ -61,6 +64,8 @@ class SGD(UpdateRule):
         updates.append((self.velocity,velocity))
         return new_w
 
+    def serialize(self):
+        return 'SGD'
 
 class FProp(UpdateRule):
 
@@ -182,6 +187,9 @@ class RMSProp(UpdateRule):
         updates.append((self.ms,ms))
         return new_w
 
+    def serialize(self):
+        return 'RMSProp'
+
 
 class UProp(UpdateRule):
 
@@ -250,6 +258,9 @@ class UProp(UpdateRule):
         updates.append((previous_grad,gparam))
         updates.append((previous_delta_w,delta_w))
         return new_w
+
+    def serialize(self):
+        return 'UProp'
 
 
 class RPropVariant(UpdateRule):
@@ -401,6 +412,9 @@ class RProp(RPropVariant):
         updates.append((delta,new_delta))
         updates.append((previous_inc,d_w))
         return param + new_velocity * mask
+
+    def serialize(self):
+        return 'RProp'
 
 class iRPropPlus(RPropVariant):
 

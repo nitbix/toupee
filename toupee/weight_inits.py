@@ -32,6 +32,9 @@ class ZeroWeightInit(WeightInit):
         W_values = numpy.zeros(shape, dtype=theano.config.floatX)
         return W_values
 
+    def __str__(self):
+        return "ZeroWeightInit"
+
 class UniformWeightInit(WeightInit):
 
     yaml_tag = u'!UniformWeightInit'
@@ -47,6 +50,9 @@ class UniformWeightInit(WeightInit):
                 high=self.max_w,
                 size=shape), dtype=theano.config.floatX)
         return W_values
+
+    def __str__(self):
+        return "UniformWeightInit {{ min_w: {0} , max_w: {1} }}".format(self.min_w, self.max_w)
 
 class GlorotWeightInit(WeightInit):
 
@@ -65,3 +71,6 @@ class GlorotWeightInit(WeightInit):
         if type(activation) is 'toupee.activations.Sigmoid':
             W_values *= 4
         return W_values
+
+    def __str__(self):
+        return "GlorotWeightInit"

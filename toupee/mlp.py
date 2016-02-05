@@ -11,8 +11,6 @@ All code released under Apachev2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 
-import cPickle
-import gzip
 import gc
 import os
 import sys
@@ -749,7 +747,10 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     state.best_weights = state.classifier.get_weights()
                     state.test_score = test_loss
                     gc.collect()
-                results.set_observation(this_train_loss,this_valid_loss,test_loss)
+                results.set_observation(this_train_loss,
+                                        this_valid_loss,
+                                        test_loss,
+                                        numpy.array(minibatch_avg_cost))
             state.previous_minibatch_avg_cost = minibatch_avg_cost
             if state.patience <= iter:
                     print('finished patience')
@@ -900,9 +901,13 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     if isinstance(o, object):
                         if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
                             return o.tolist()
-                        return json.loads(json.dumps(o.__dict__,default=serialize))
+                        try:
+                            return json.loads(json.dumps(o.__dict__,default=serialize))
+                        except:
+                            return str(o)
                     else:
                         raise Exception("don't know how to save {0}".format(type(o)))
+        print json.dumps(results.__dict__,default=serialize)
         table.insert(json.loads(json.dumps(results.__dict__,default=serialize)))
     if return_results:
         return cl,results

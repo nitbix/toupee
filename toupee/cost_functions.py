@@ -18,6 +18,9 @@ class CostFunction(yaml.YAMLObject):
     def __call__(self,model,y):
         raise NotImplementedError()
 
+    def serialize(self):
+        raise NotImplementedError()
+
 class CrossEntropy(CostFunction):
     yaml_tag = u'!CrossEntropy'
     def __call__(self,model,y):
@@ -27,6 +30,9 @@ class CrossEntropy(CostFunction):
         """
         return T.nnet.categorical_crossentropy(model.p_y_given_x,y).mean()
 
+    def serialize(self):
+        return 'CrossEntropy'
+
 class NegLogLikelihood(CostFunction):
     yaml_tag = u'!NegLogLikelihood'
     def __call__(self,model,y):
@@ -35,6 +41,9 @@ class NegLogLikelihood(CostFunction):
         of this model under a given target distribution.
         """
         return -T.mean(T.log(model.p_y_given_x)[T.arange(y.shape[0]), y])
+
+    def serialize(self):
+        return 'NegLogLikelihood'
 
 class MSE(CostFunction):
     yaml_tag = u'!MSE'
@@ -47,6 +56,9 @@ class MSE(CostFunction):
             raise TypeError('y should have the same shape as model.y',
                 ('y', y.type, 'y_pred', model.y.type, 'layer', model.layer_name))
         return T.mean((model.p_y_given_x - y) ** 2)
+
+    def serialize(self):
+        return 'MSE'
 
 class CategoricalMSE(CostFunction):
     yaml_tag = u'!CategoricalMSE'
@@ -61,3 +73,5 @@ class CategoricalMSE(CostFunction):
                 ('y', y.type, 'y_pred', model.y.type, 'layer', model.layer_name))
         return T.mean((model.p_y_given_x - one_hot) ** 2)
 
+    def serialize(self):
+        return 'CategoricalMSE'

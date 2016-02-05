@@ -36,12 +36,14 @@ class Results:
         self.train_history = []
         self.validation_history = []
         self.test_history = []
-        self.params = params.__dict__
+        self.training_costs = []
+        self.params = params.serialize()
 
-    def set_observation(self,train,validation,test):
+    def set_observation(self,train,validation,test,cost):
         self.train_history.append(train)
         self.validation_history.append(validation)
         self.test_history.append(test)
+        self.training_costs.append(cost)
 
     def set_final_observation(self,valid,test,epoch):
         self.best_valid = valid
