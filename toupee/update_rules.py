@@ -65,7 +65,9 @@ class SGD(UpdateRule):
         return new_w
 
     def serialize(self):
-        return 'SGD'
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0
+        return 'SGD {{ momentum: {0} }}'.format(self.momentum)
 
 class FProp(UpdateRule):
 
@@ -188,7 +190,9 @@ class RMSProp(UpdateRule):
         return new_w
 
     def serialize(self):
-        return 'RMSProp'
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0
+        return 'RMSProp {{ momentum: {0} }}'.format(self.momentum)
 
 
 class UProp(UpdateRule):
@@ -260,7 +264,9 @@ class UProp(UpdateRule):
         return new_w
 
     def serialize(self):
-        return 'UProp'
+        if 'momentum' not in self.__dict__:
+            self.momentum = 0
+        return 'UProp {{ momentum: {0} }}'.format(self.momentum)
 
 
 class RPropVariant(UpdateRule):
