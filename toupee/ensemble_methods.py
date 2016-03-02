@@ -14,10 +14,12 @@ import numpy.random
 import theano
 import theano.tensor as T
 import yaml
+import math
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 
 import mlp
-from data import Resampler, Transformer, sharedX, load_data, make_pretraining_set
+from data import Resampler, Transformer, sharedX, load_data, \
+        make_pretraining_set, WeightedResampler
 from parameters import Parameters
 
 floatX = theano.config.floatX
@@ -52,19 +54,17 @@ class MajorityVotingRunner:
         self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
 
 
-class WeightedAveraging:
+class WeightedAveragingRunner:
     """
     Take an Ensemble and produce a weighted average, usually done in AdaBoost
     """
 
-    def __init__(self,members,x,y):
+    def __init__(self,members,x,y,weights):
         self.members=members
         self.x = x
         self.y = y
-        #TODO: make this a Theano variable
-        self.weights = [0 for x in members] + (1. / len(members))
-        self.p_y_given_x = sum([T.eq(T.max(m.p_y_given_x),m.p_y_given_x)
-            for m in self.members])
+        self.p_y_given_x = sum([self.members[i].p_y_given_x * weights[i]
+            for i in range(len(self.members))])
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
         self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
 
@@ -155,10 +155,10 @@ class Bagging(EnsembleMethod):
             return AveragingRunner(members,x,y)
 
     def create_member(self,x,y):
-        mlp_training_dataset = [self.resampler.make_new_train(self.params.resample_size),
+        resampled_train = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid(),self.resampler.get_test()]
-        pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
-        m = mlp.test_mlp(mlp_training_dataset, self.params,
+        pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        m = mlp.test_mlp(resampled_train, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
         w = m.get_weights()
         self.members.append(w)
@@ -172,32 +172,41 @@ class Bagging(EnsembleMethod):
         self.members = []
 
 
-class AdaBoost(EnsembleMethod):
+class AdaBoost_M1(EnsembleMethod):
     """
     Create an AdaBoost Ensemble from parameters
     """
 
-    yaml_tag = u'!AdaBoost'
+    yaml_tag = u'!AdaBoostM1'
 
     def create_aggregator(self,params,members,x,y,train_set,valid_set):
-        #TODO: create weighted aggregator
-        pass
+        return WeightedAveragingRunner(members,x,y,self.alphas)
 
     def create_member(self,x,y):
-        mlp_training_dataset = [self.resampler.make_new_train(self.params.resample_size),
+        resampled_train = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid()]
-        pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
-        m = mlp.test_mlp(mlp_training_dataset, self.params,
+        pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        m = mlp.test_mlp(resampled_train, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
+        orig_train = self.resampler.get_train()
+        yhat = m.classify(orig_train[0])
+        errors = T.neq(orig_train[1], yhat)
+        e = T.sum((errors * self.D)).eval()
+        alpha = .5 * math.log((1-e)/e)
+        w = T.switch(T.eq(errors,1),self.D * T.exp(alpha), self.D * T.exp(-alpha))
+        self.D = w / w.sum()
+        self.resampler.update_weights(self.D.eval())
+        self.alphas.append(alpha)
         self.members.append(m)
         return m
 
     def prepare(self, params, dataset):
-        #TODO: create weighted resampler
         self.params = params
         self.dataset = dataset
-        self.resampler = Resampler(dataset)
+        self.resampler = WeightedResampler(dataset)
+        self.D = sharedX(self.resampler.weights)
         self.members = []
+        self.alphas = []
 
 
 class Stacking(EnsembleMethod):
@@ -230,10 +239,10 @@ class Stacking(EnsembleMethod):
                 Parameters(**self.__dict__))
 
     def create_member(self,x,y):
-        mlp_training_dataset = [self.resampler.make_new_train(self.params.resample_size),
+        resampled_train = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid()]
-        pretraining_set = make_pretraining_set(mlp_training_dataset,self.params.pretraining)
-        m = mlp.test_mlp(mlp_training_dataset, self.params,
+        pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        m = mlp.test_mlp(resampled_train, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
         w = m.get_weights()
         self.members.append(w)

@@ -15,6 +15,7 @@ import gc
 import sys
 import numpy as np
 import scipy.ndimage as ni
+import scipy.stats
 import numpy.random
 import theano
 import theano.tensor as T
@@ -180,7 +181,9 @@ class Resampler:
                                        high=self.train_size,
                                        size=sample_size)
         else:
-            raise Exception("not implemented");
+            values = (range(len(distribution)),distribution)
+            d = scipy.stats.rv_discrete(a=0,b=len(distribution),values=values)
+            sample = d.rvs(size=sample_size)
         sampled_x = []
         sampled_y = []
         for s in sample:
@@ -205,13 +208,16 @@ class Resampler:
 
 
 class WeightedResampler(Resampler):
-#WORK IN PROGRESS
+
+    def __init__(self,dataset):
+        Resampler.__init__(self,dataset)
+        self.weights = numpy.repeat([1.0/self.train_size], self.train_size)
 
     def update_weights(self,new_weights):
-        pass
+        self.weights = new_weights
 
     def make_new_train(self,sample_size):
-        pass
+        return Resampler.make_new_train(self,sample_size,self.weights)
 
 def transform_aux_map(tr,x):
     return tr.apply(x)

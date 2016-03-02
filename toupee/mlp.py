@@ -463,17 +463,79 @@ class MLP(object):
                 }
                )
 
-    def compute(self, eval_set_x, x=None):
+    def compute_single_batch(self, eval_set_x):
         x = self.x
         return theano.function(inputs=[],
             outputs=self.outputLayer.p_y_given_x,
             givens={ x: eval_set_x })
 
-    def classify(self, eval_set_x, x=None):
+    def classify_single_batch(self, eval_set_x):
         x = self.x
         return theano.function(inputs=[],
             outputs=self.outputLayer.y_pred,
             givens={ x: eval_set_x })
+
+    def apply_all_batches(self, f, eval_set_x):
+        x = self.x
+        ys = []
+        original_size = eval_set_x.shape.eval()[0]
+        batches = int(math.floor(float(original_size) / self.params.batch_size))
+        print batches
+        for i in range(batches):
+            ys.append(f(i))
+        residue = original_size % self.params.batch_size
+        padding = self.params.batch_size - residue
+        if residue != 0:
+            one = sharedX(1.)
+#the in-place padding and unpadding is ugly but makes life easier in other
+#places, so that we don't need to alias/copy or do other inefficient things
+            f_pad = theano.function(
+                                inputs=[],
+                                outputs=one,
+                                updates={
+                                    eval_set_x : 
+                                        T.concatenate(
+                                            [eval_set_x,eval_set_x[:padding]]
+                                        )
+                                }
+                            )
+            f_unpad = theano.function(
+                                inputs=[],
+                                outputs=one,
+                                updates={
+                                    eval_set_x : 
+                                            eval_set_x[:original_size]
+                                }
+                            )
+            f_pad()
+            ys.append(f(batches))
+            f_unpad()
+        y = T.concatenate(ys)[:original_size]
+        return y
+
+    def compute(self, eval_set_x):
+        index = T.lscalar()
+        x = self.x
+        f = theano.function(
+                inputs=[index],
+                outputs=self.outputLayer.p_y_given_x,
+                givens={
+                    x: eval_set_x[index * self.params.batch_size:(index + 1) *
+                        self.params.batch_size]
+                })
+        return self.apply_all_batches(f, eval_set_x)
+
+    def classify(self, eval_set_x):
+        index = T.lscalar()
+        x = self.x
+        f = theano.function(
+                inputs=[index],
+                outputs=self.outputLayer.y_pred,
+                givens={
+                    x: eval_set_x[index * self.params.batch_size:(index + 1) *
+                        self.params.batch_size]
+                })
+        return self.apply_all_batches(f, eval_set_x)
 
     def train_function(self, index, train_set_x, train_set_y, x, y,
             update_rule = None, learning_rate = None):
@@ -560,7 +622,7 @@ class MLP(object):
             test_error_f = self.eval_function(self.index, test_set_x, test_set_y,
                 self.x, self.y)
         else:
-            test_error = None
+            test_error_f = None
         return (train_f, train_error_f, valid_error_f, test_error_f)
 
     def copy(self):
