@@ -195,6 +195,51 @@ class RMSProp(UpdateRule):
         return 'RMSProp {{ momentum: {0} }}'.format(self.momentum)
 
 
+class Adam(UpdateRule):
+
+    yaml_tag = u'!Adam'
+
+    def __new__(cls):
+        instance = super(Adam,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        return instance
+
+    def reset(self,updates):
+        if 'beta1' not in self.__dict__:
+            self.beta1 = 0.9
+        if 'beta2' not in self.__dict__:
+            self.beta2 = 0.9
+        self.t = 1
+
+    def epoch_hook(self,updates):
+        self.t += 1
+
+    def __init__(self):
+        pass
+
+    def __call__(self, param, learning_rate, gparam, mask, updates,
+                 current_cost, previous_cost):
+        self.m = sharedX(numpy.zeros(param.shape.eval()), borrow=True)
+        self.v = sharedX(numpy.zeros(param.shape.eval()), borrow=True)
+        m = self.beta1 * self.m + (1 - self.beta1) * gparam
+        v = self.beta2 * self.v + (1 - self.beta2) * (gparam ** 2)
+        m_ = m / (1 - (self.beta1 ** self.t))
+        v_ = v / (1 - (self.beta2 ** self.t))
+        delta_w = m_ / (T.sqrt(v_) + 10 ** -8)
+        new_w = param - learning_rate.get() * delta_w * mask
+        updates.append((self.m,m))
+        updates.append((self.v,v))
+        return new_w
+
+    def serialize(self):
+        if 'beta1' not in self.__dict__:
+            self.beta1 = 0.9
+        if 'beta2' not in self.__dict__:
+            self.beta2 = 0.9
+        return 'Adam {{ beta1: {0}, beta2: {1} }}'.format(self.beta1, self.beta2)
+
+
 class UProp(UpdateRule):
 
     yaml_tag = u'!UProp'
