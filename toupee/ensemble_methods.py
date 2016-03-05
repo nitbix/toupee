@@ -137,6 +137,9 @@ class EnsembleMethod(yaml.YAMLObject):
             self.members.append(m)
         return self.members
 
+    def serialize(self):
+        return 'UnknownEnsemble'
+
 
 class Bagging(EnsembleMethod):
     """
@@ -170,6 +173,9 @@ class Bagging(EnsembleMethod):
         self.dataset = dataset
         self.resampler = Resampler(dataset)
         self.members = []
+
+    def serialize(self):
+        return 'Bagging'
 
 
 class AdaBoost_M1(EnsembleMethod):
@@ -207,6 +213,9 @@ class AdaBoost_M1(EnsembleMethod):
         self.D = sharedX(self.resampler.weights)
         self.members = []
         self.alphas = []
+
+    def serialize(self):
+        return 'AdaBoost_M1'
 
 
 class Stacking(EnsembleMethod):
@@ -253,3 +262,6 @@ class Stacking(EnsembleMethod):
         self.dataset = dataset
         self.resampler = Resampler(dataset)
         self.members = []
+
+    def serialize(self):
+        return 'Stacking'

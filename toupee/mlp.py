@@ -969,7 +969,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                             return str(o)
                     else:
                         raise Exception("don't know how to save {0}".format(type(o)))
-        print json.dumps(results.__dict__,default=serialize)
         table.insert(json.loads(json.dumps(results.__dict__,default=serialize)))
     if return_results:
         return cl,results
