@@ -40,7 +40,9 @@ class CompositeLearningRate(LearningRate):
         return instance
 
     def serialize(self):
-        return 'CompositeLearningRate'
+        schedule_str = ["{0} - {1}".format(e,x.serialize())
+                        for e,x in self.schedule]
+        return 'CompositeLearningRate: {{ {0} }}'.format(",".join(schedule_str))
 
     def reset(self,updates):
         if 'current_epoch' not in self.__dict__:

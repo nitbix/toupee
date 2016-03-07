@@ -209,7 +209,7 @@ class Adam(UpdateRule):
         if 'beta1' not in self.__dict__:
             self.beta1 = 0.9
         if 'beta2' not in self.__dict__:
-            self.beta2 = 0.9
+            self.beta2 = 0.999
         self.t = 1
 
     def epoch_hook(self,updates):
