@@ -37,7 +37,7 @@ class Results:
         self.validation_history = []
         self.test_history = []
         self.training_costs = []
-        self.params = params.serialize()
+        self.params = params
 
     def set_observation(self,train,validation,test,cost):
         self.train_history.append(train)
@@ -49,6 +49,7 @@ class Results:
         self.best_valid = valid
         self.best_test = test
         self.best_epoch = epoch
+        self.params = self.params.serialize()
 
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()
