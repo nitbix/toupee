@@ -77,7 +77,7 @@ class FixedLearningRate(LearningRate):
         pass
 
     def serialize(self):
-        return "FixedLearningRate { rate: {0} }".format(self.rate)
+        return "FixedLearningRate {{ rate: {0} }}".format(self.rate)
 
 class LinearDecayLearningRate(LearningRate):
 
