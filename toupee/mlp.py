@@ -729,8 +729,9 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         classifier = MLP(params=params, rng=rng, theano_rng=theano_rng, input=x,
                 index=index, x=x, y=y, pretraining_set=pretraining_set)
     else:
-        classifier = MLP(params=params, rng=rng, input=x, index=index, x=x, y=y,
-            pretraining_set=pretraining_set, continuation=continuation)
+        classifier = MLP(params=params, rng=rng, theano_rng=theano_rng, input=x,
+                index=index, x=x, y=y, pretraining_set=pretraining_set,
+                continuation=continuation)
 
     state = TrainingState(classifier)
     state.n_batches['train'] = train_set_x.get_value(borrow=True).shape[0] / params.batch_size
@@ -940,12 +941,12 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     cl = state.classifier
     del state
     gc.collect()
-    if 'results_db' in params.__dict__ and test_set_x is not None:
-        print "saving results to {0}".format(params.results_db)
+    if 'results_db' in params.__dict__ :
         if 'results_host' in params.__dict__:
             host = params.results_host
         else:
             host = None
+        print "saving MLP results to {0}@{1}".format(params.results_db,host)
         conn = MongoClient(host=host)
         db = conn[params.results_db]
         if 'results_table' in params.__dict__: 
@@ -958,7 +959,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 return float(o)
             else:
                 try:
-                    return numpy.asarray(o).tolist()
+                    return numpy.asfarray(o).tolist()
                 except:
                     if isinstance(o, object):
                         if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
