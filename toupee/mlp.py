@@ -962,6 +962,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     return numpy.asfarray(o).tolist()
                 except:
                     if isinstance(o, object):
+                        if 'serialize' in dir(o) and callable(getattr(o,'serialize')):
+                            return o.serialize()
                         if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
                             return o.tolist()
                         try:
