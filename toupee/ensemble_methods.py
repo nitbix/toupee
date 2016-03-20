@@ -161,6 +161,7 @@ class Bagging(EnsembleMethod):
         resampled_train = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid(),self.resampler.get_test()]
         pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        self.params.member_number = len(self.members) + 1
         m = mlp.test_mlp(resampled_train, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
         w = m.get_weights()
@@ -178,6 +179,56 @@ class Bagging(EnsembleMethod):
         return 'Bagging'
 
 
+class CompressedBoosting(EnsembleMethod):
+    """
+    Create an AdaBoost Ensemble from parameters
+    """
+
+    yaml_tag = u'!CompressedBoosting'
+
+    def create_aggregator(self,params,members,x,y,train_set,valid_set):
+        #return AveragingRunner(self.member,x,y)
+        return WeightedAveragingRunner(members,x,y,self.alphas)
+
+    def create_member(self,x,y):
+        resampled_train = [self.resampler.make_new_train(self.params.resample_size),
+                self.resampler.get_valid()]
+        pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        self.params.member_number = len(self.members) + 1
+        m = mlp.test_mlp(resampled_train, self.params,
+                pretraining_set = pretraining_set, x=x, y=y,
+                continuation=self.weights)
+        self.weights = m.get_weights()
+        self.params.n_hidden.append(self.params.incremental_layer)
+        t,d = self.params.incremental_layer
+        new_layer = m.make_layer(t,d)
+        self.weights['W'].append(new_layer.W.get_value())
+        self.weights['b'].append(new_layer.b.get_value())
+        orig_train = self.resampler.get_train()
+        yhat = m.classify(orig_train[0])
+        errors = T.neq(orig_train[1], yhat)
+        e = T.sum((errors * self.D)).eval()
+        alpha = .5 * math.log((1-e)/e)
+        w = T.switch(T.eq(errors,1),self.D * T.exp(alpha), self.D * T.exp(-alpha))
+        self.D = w / w.sum()
+        self.resampler.update_weights(self.D.eval())
+        self.members.append(m)
+        self.alphas.append(alpha)
+        return m
+
+    def prepare(self, params, dataset):
+        self.params = params
+        self.dataset = dataset
+        self.resampler = WeightedResampler(dataset)
+        self.D = sharedX(self.resampler.weights)
+        self.weights = None
+        self.members = []
+        self.alphas = []
+
+    def serialize(self):
+        return 'CompressedBoosting'
+
+
 class AdaBoost_M1(EnsembleMethod):
     """
     Create an AdaBoost Ensemble from parameters
@@ -192,6 +243,7 @@ class AdaBoost_M1(EnsembleMethod):
         resampled_train = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid()]
         pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        self.params.member_number = len(self.members) + 1
         m = mlp.test_mlp(resampled_train, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
         orig_train = self.resampler.get_train()
@@ -215,7 +267,7 @@ class AdaBoost_M1(EnsembleMethod):
         self.alphas = []
 
     def serialize(self):
-        return 'AdaBoost_M1'
+        return 'AdaBoostM1'
 
 
 class Stacking(EnsembleMethod):
@@ -251,6 +303,7 @@ class Stacking(EnsembleMethod):
         resampled_train = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid()]
         pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        self.params.member_number = len(self.members) + 1
         m = mlp.test_mlp(resampled_train, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
         w = m.get_weights()
