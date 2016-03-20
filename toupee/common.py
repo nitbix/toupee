@@ -42,7 +42,8 @@ class Results:
     def set_observation(self,train,validation,test,cost):
         self.train_history.append(train)
         self.validation_history.append(validation)
-        self.test_history.append(test)
+        if test is not None:
+            self.test_history.append(test)
         self.training_costs.append(cost)
 
     def set_final_observation(self,valid,test,epoch):
