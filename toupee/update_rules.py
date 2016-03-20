@@ -236,7 +236,7 @@ class Adam(UpdateRule):
         if 'beta1' not in self.__dict__:
             self.beta1 = 0.9
         if 'beta2' not in self.__dict__:
-            self.beta2 = 0.9
+            self.beta2 = 0.999
         return 'Adam {{ beta1: {0}, beta2: {1} }}'.format(self.beta1, self.beta2)
 
 
