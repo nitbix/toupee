@@ -314,7 +314,7 @@ class ARMSProp2(UpdateRule):
 
     def serialize(self):
         self.set_defaults()
-        return 'ARMSProp2 {{ beta1: {0}, beta2:{1} }}'.format(self.beta1,self.beta2)
+        return 'ARMSProp2 {{ beta1: {0}, beta2: {1} }}'.format(self.beta1,self.beta2)
 
 
 class RPropVariant(UpdateRule):
