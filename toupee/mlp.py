@@ -681,21 +681,27 @@ class MLP(object):
 def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         continuation=None,return_results=False):
     results = common.Results(params)
-    orig_train_set_x, orig_train_set_y = dataset[0]
-    orig_valid_set_x, orig_valid_set_y = dataset[1]
-    train_set_x, train_set_y = dataset[0]
-    valid_set_x, valid_set_y = dataset[1]
-    test_set_x, test_set_y = (None,None)
+
+    class processed_data:
+        orig_train_set_x, orig_train_set_y = dataset[0]
+        orig_valid_set_x, orig_valid_set_y = dataset[1]
+        train_set_x, train_set_y = dataset[0]
+        valid_set_x, valid_set_y = dataset[1]
+        test_set_x, test_set_y = (None,None)
 
     if params.online_transform is not None or params.join_train_and_valid:
-        valid_set_x, valid_set_y  = data.shared_dataset(
-                                        (numpy.concatenate([orig_train_set_x.eval({}),orig_valid_set_x.eval({})]),
-                                         numpy.concatenate([orig_train_set_y.eval({}),orig_valid_set_y.eval({})])
+        processed_data.valid_set_x, processed_data.valid_set_y  = data.shared_dataset(
+                                        (numpy.concatenate([
+                                            processed_data.orig_train_set_x.eval({}),
+                                            processed_data.orig_valid_set_x.eval({})]),
+                                         numpy.concatenate([
+                                            processed_data.orig_train_set_y.eval({}),
+                                            processed_data.orig_valid_set_y.eval({})])
                                         )
                                     )
-        train_set_x, train_set_y = (valid_set_x,valid_set_y)
-        dataset[0] = (train_set_x,train_set_y)
-        dataset[1] = (valid_set_x,valid_set_y)
+        processed_data.train_set_x, processed_data.train_set_y = (processed_data.valid_set_x,processed_data.valid_set_y)
+        dataset[0] = (processed_data.train_set_x,processed_data.train_set_y)
+        dataset[1] = (processed_data.valid_set_x,processed_data.valid_set_y)
     if params.online_transform is not None:
         if 'channels' not in params.__dict__:
             if params.RGB:
@@ -704,7 +710,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 channels = 1
         else:
             channels = params.channels
-        gpu_transformer = data.GPUTransformer(valid_set_x,
+        gpu_transformer = data.GPUTransformer(processed_data.valid_set_x,
                         x=int(math.sqrt(params.n_in / channels)),
                         y=int(math.sqrt(params.n_in / channels)),
                         channels=channels,
@@ -713,7 +719,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                         opts=params.online_transform,
                         seed=params.random_seed)
 
-    print "training samples: {0}".format( train_set_x.get_value(borrow=True).shape[0])
+    print "training samples: {0}".format( processed_data.train_set_x.get_value(borrow=True).shape[0])
 
     if index is None:
         index = T.lscalar()
@@ -734,11 +740,11 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 continuation=continuation)
 
     state = TrainingState(classifier)
-    state.n_batches['train'] = train_set_x.get_value(borrow=True).shape[0] / params.batch_size
-    state.n_batches['valid'] = valid_set_x.get_value(borrow=True).shape[0] / params.batch_size
+    state.n_batches['train'] = processed_data.train_set_x.get_value(borrow=True).shape[0] / params.batch_size
+    state.n_batches['valid'] = processed_data.valid_set_x.get_value(borrow=True).shape[0] / params.batch_size
     if len(dataset) > 2:
-        test_set_x, test_set_y = dataset[2]
-        state.n_batches['test'] = test_set_x.get_value(borrow=True).shape[0] / params.batch_size
+        processed_data.test_set_x, processed_data.test_set_y = dataset[2]
+        state.n_batches['test'] = processed_data.test_set_x.get_value(borrow=True).shape[0] / params.batch_size
 
     print '... {0} training'.format(params.training_method)
 
@@ -758,20 +764,35 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     start_time = time.clock()
 
     def run_epoch(state,results):
-        if params.online_transform is not None:
-            train_set_x = gpu_transformer.get_data()
+
+        def make_train_functions():
             state.train_f = state.classifier.train_function(
                     state.classifier.index,
-                    train_set_x,
-                    train_set_y,
+                    processed_data.train_set_x,
+                    processed_data.train_set_y,
                     state.classifier.x,
                     state.classifier.y)
             state.train_error_f = state.classifier.eval_function(
                     state.classifier.index,
-                    train_set_x,
-                    train_set_y,
+                    processed_data.train_set_x,
+                    processed_data.train_set_y,
                     state.classifier.x,
                     state.classifier.y)
+
+        if params.online_transform is not None:
+            processed_data.train_set_x = gpu_transformer.get_data()
+            make_train_functions()
+
+        if params.shuffle_dataset:
+            tsx = processed_data.train_set_x.eval({})
+            tsy = processed_data.train_set_y.eval({})
+            new_tsx = []
+            new_tsy = []
+            for i in numpy.random.permutation(len(tsx)):
+                new_tsx.append(numpy.asarray(tsx[i]))
+                new_tsy.append(numpy.asarray(tsy[i]))
+            processed_data.train_set_x, processed_data.train_set_y = data.shared_dataset((new_tsx,new_tsy))
+            make_train_functions()
 
         training_costs = []
         for minibatch_index in xrange(state.n_batches['train']):
@@ -876,7 +897,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 #                    print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         state.classifier.run_hooks()
         if params.online_transform is not None:
-            del train_set_x
+            del processed_data.train_set_x
             del state.train_f
             del state.train_error_f
             gc.collect()
@@ -919,7 +940,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 print "t: {0}".format(epoch_end - epoch_start)
             state.classifier.set_weights(state.best_weights)
     end_time = time.clock()
-    if test_set_x is not None:
+    if processed_data.test_set_x is not None:
         print(('Optimization complete. Best valid score of %f %% '
                'obtained at iteration %i, epoch %i, with test performance %f %%') %
               (state.best_valid_loss * 100., state.best_iter + 1,
@@ -933,11 +954,11 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
               state.best_valid_loss * 100.))
     if params.online_transform is not None or params.join_train_and_valid:
         #restore original datasets that got messed about
-        dataset[0] = orig_train_set_x, orig_train_set_y
-        dataset[1] = orig_valid_set_x, orig_valid_set_y
-        del test_set_x
-        test_set_x = dataset[0][0]
-        valid_set_x = dataset[1][0]
+        dataset[0] = processed_data.orig_train_set_x, processed_data.orig_train_set_y
+        dataset[1] = processed_data.orig_valid_set_x, processed_data.orig_valid_set_y
+        del processed_data.test_set_x
+        processed_data.test_set_x = dataset[0][0]
+        processed_data.valid_set_x = dataset[1][0]
     cl = state.classifier
     del state
     gc.collect()
