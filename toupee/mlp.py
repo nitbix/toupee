@@ -538,7 +538,7 @@ class MLP(object):
         return self.apply_all_batches(f, eval_set_x)
 
     def train_function(self, index, train_set_x, train_set_y, x, y,
-            update_rule = None, learning_rate = None):
+            update_rule = None, learning_rate = None, update_input=False):
         if update_rule is None:
             update_rule = self.params.update_rule
         if learning_rate is None:
@@ -552,6 +552,7 @@ class MLP(object):
         for param in self.opt_params:
             gparam = T.grad(self.cost, param)
             self.gparams.append(gparam)
+        input_grad = T.grad(self.cost, x)
         updates = []
 
         dropout_rates = {}
@@ -589,6 +590,11 @@ class MLP(object):
                 if u is not None:
                     updates += u
             updates.append((param, new_update))
+        if update_input:
+            new_input_update = update_rule(x, learning_rate, input_grad, 1.,
+                    updates, self.cost, self.previous_cost)
+            self.layer_updates[str(x)] = new_input_update
+            updates.append((x, new_input_update))
         rf = theano.function(
                 inputs=[index,self.previous_cost],
                 outputs=gpu_from_host(self.cost),
@@ -614,7 +620,7 @@ class MLP(object):
             train_error_f = None
         else:
             train_f = self.train_function(self.index, train_set_x, train_set_y,
-                self.x, self.y)
+                self.x, self.y, update_input = self.params.update_input)
             train_error_f = self.eval_function(self.index, train_set_x,
                     train_set_y, self.x, self.y)
         if len(dataset) > 2:
@@ -759,6 +765,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 
     def run_epoch(state,results):
         if params.online_transform is not None:
+            if params.update_input:
+                raise "Cannot have online_transform and update_input"
             train_set_x = gpu_transformer.get_data()
             state.train_f = state.classifier.train_function(
                     state.classifier.index,
