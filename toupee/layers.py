@@ -11,8 +11,7 @@ __docformat__ = 'restructedtext en'
 import numpy
 import theano
 import theano.tensor as T
-from theano.tensor.signal import downsample
-from theano.tensor.nnet import conv
+from theano.tensor.signal import pool
 from theano.ifelse import ifelse
 from utils import gaussian_filter
 from data import sharedX,GPUTransformer
@@ -97,21 +96,21 @@ class LCN(Layer):
                 n_steps = self.channels
                 )
         filters = filters.reshape(kernel_filter_shape,ndim=4)
-        convout = conv.conv2d(self.inputs, filters=filters, 
+        convout = T.nnet.conv2d(self.inputs, filters=filters, 
                 filter_shape=final_filter_shape, border_mode='full')
         mid = int(numpy.floor(self.kernel_size/2.))
         new_X = self.inputs - convout[:,:,mid:-mid,mid:-mid]
         if self.use_divisor:
             # Scale down norm of kernel_sizexkernel_size patch
-            sum_sqr_XX = conv.conv2d(T.sqr(T.abs_(new_X)), filters=filters, 
+            sum_sqr_XX = T.nnet.conv2d(T.sqr(T.abs_(new_X)), filters=filters, 
                                 filter_shape=filter_shape, border_mode='full')
 
             denom = T.sqrt(sum_sqr_XX[:,:,mid:-mid,mid:-mid])
             per_img_mean = denom.mean(axis=[2,3])
             divisor = T.largest(per_img_mean.dimshuffle(0,1,'x','x'), denom)
             divisor = T.maximum(divisor, threshold)
-
             new_X /= divisor
+
         self.y = new_X.reshape(self.out_shape)
         self.params = []
         self.rebuild()
@@ -349,11 +348,11 @@ class ConvolutionalLayer(Layer):
             bm = 'full'
         else:
             bm = self.border_mode
-        conv_out = conv.conv2d(
+        conv_out = T.nnet.conv2d(
             input=self.inputs,
             filters=self.W,
             filter_shape=self.filter_shape,
-            image_shape=self.input_shape,
+            input_shape=self.input_shape,
             border_mode=bm) * (1. - self.dropout_rate)
 
         if self.border_mode == 'same':
@@ -366,7 +365,7 @@ class ConvolutionalLayer(Layer):
             self.conv_out = conv_out
 
         self.y_out = self.activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
-        self.pooled_out = downsample.max_pool_2d(input=self.y_out, 
+        self.pooled_out = pool.pool_2d(input=self.y_out, 
                                                  ds=self.pool_size,
                                                  ignore_border=True,
                                                  mode=self.pooling)
