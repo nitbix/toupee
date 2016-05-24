@@ -31,6 +31,7 @@ defaults = { 'random_seed': None,
              'center_and_normalise': False,
              'RGB': False,
              'shuffle_dataset': False,
+             'update_input': False,
            }
 def load_parameters(filename):
     with open(filename) as f:

@@ -289,8 +289,6 @@ class MLP(object):
                                  W=W,b=b)
             self.chain_n_in = n_this
             l.output_shape = self.chain_n_in
-            self.chain_in=l.output
-            return l
         elif(layer_type == 'LCN'):
             n_pixels_y,n_pixels_x = self.get_n_pixels(i)
             kernel_size,use_divisor = desc
@@ -303,8 +301,6 @@ class MLP(object):
                         use_divisor
                     )
             l.output_shape = self.chain_n_in
-            self.chain_in=l.output
-            return l
         elif(layer_type == 'elastic_transform'):
             n_pixels_y,n_pixels_x = self.get_n_pixels(i)
             l = layers.Elastic(
@@ -316,8 +312,6 @@ class MLP(object):
                         self.trainflag
                     )
             l.output_shape = self.chain_n_in
-            self.chain_in=l.output
-            return l
         elif(layer_type == 'dropout'):
             n_this,drop_this,name_this,activation_this,weight_init = desc
             l = layers.Dropout(rng=self.rng,
@@ -330,8 +324,6 @@ class MLP(object):
                                  )
             self.chain_n_in = n_this
             l.output_shape = self.chain_n_in
-            self.chain_in=l.output
-            return l
         elif(layer_type == 'conv'):
             if len(desc) == 8:
                 #default border mode
@@ -375,12 +367,14 @@ class MLP(object):
             self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
             l.output_shape = self.chain_n_in
             self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
-            self.chain_in = l.output
             self.chain_input_shape = [self.chain_input_shape[0],
                     curr_map_number,
                     output_dim_x,
                     output_dim_y]
-            return l
+        self.chain_in = l.output
+        #numpy.set_printoptions(threshold=numpy.nan)
+        #print numpy.asarray(l.W.eval({}))
+        return l
 
     def make_top_layer(self, n_out, chain_in, chain_n_in, rng,
             layer_type='softmax', activation=None, name_this='temp_top',
@@ -480,7 +474,6 @@ class MLP(object):
         ys = []
         original_size = eval_set_x.shape.eval()[0]
         batches = int(math.floor(float(original_size) / self.params.batch_size))
-        print batches
         for i in range(batches):
             ys.append(f(i))
         residue = original_size % self.params.batch_size
@@ -552,7 +545,6 @@ class MLP(object):
         for param in self.opt_params:
             gparam = T.grad(self.cost, param)
             self.gparams.append(gparam)
-        input_grad = T.grad(self.cost, x)
         updates = []
 
         dropout_rates = {}
@@ -591,10 +583,14 @@ class MLP(object):
                     updates += u
             updates.append((param, new_update))
         if update_input:
-            new_input_update = update_rule(x, learning_rate, input_grad, 1.,
-                    updates, self.cost, self.previous_cost)
-            self.layer_updates[str(x)] = new_input_update
-            updates.append((x, new_input_update))
+            train_slice = train_set_x[
+                    index * self.params.batch_size:
+                    (index + 1) * self.params.batch_size
+            ]
+            input_grad = T.grad(self.cost, x)
+            input_update = T.inc_subtensor(train_slice, input_grad)
+            self.layer_updates[str(x)] = input_update
+            updates.append((train_set_x, input_update))
         rf = theano.function(
                 inputs=[index,self.previous_cost],
                 outputs=gpu_from_host(self.cost),
@@ -801,6 +797,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 new_tsy.append(numpy.asarray(tsy[i]))
             processed_data.train_set_x, processed_data.train_set_y = data.shared_dataset((new_tsx,new_tsy))
             make_train_functions()
+
 
         training_costs = []
         for minibatch_index in xrange(state.n_batches['train']):
