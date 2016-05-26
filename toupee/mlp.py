@@ -831,8 +831,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
             if params.update_input:
                 raise "Cannot have online_transform and update_input"
             (processed_data.train_set_x, processed_data.train_set_y) = gpu_transformer.get_data()
-            print processed_data.train_set_x.shape.eval()
-            print processed_data.train_set_y.shape.eval()
             make_train_functions()
 
         if params.shuffle_dataset:
