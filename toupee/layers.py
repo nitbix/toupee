@@ -285,12 +285,93 @@ class LogSoftMax(Layer):
         self.params = [self.W]
         self.rebuild()
 
+class ConvFilter(Layer):
+    """
+    A Convolutional Layer, as per Convolutional Neural Networks. Includes
+    filter, no pooling.
+    """
+    def __init__(self, rng, inputs, input_shape, filter_shape, W=None, b=None,
+             activation=T.tanh,dropout_rate=0,layer_name='conv',
+             border_mode='valid',weight_init=None):
+        """
+        :type rng: numpy.random.RandomState
+        :param rng: a random number generator used to initialize weights
+
+        :type input: theano.tensor.dmatrix
+        :param input: a symbolic tensor of shape (n_examples, n_in)
+
+        :type n_in: int
+        :param n_in: dimensionality of input
+
+        :type n_out: int
+        :param n_out: number of hidden units
+
+        :type activation: theano.Op or function
+        :param activation: Non linearity to be applied in the hidden
+                           layer
+        """
+        assert input_shape[1] == filter_shape[1]
+
+        self.input_shape = input_shape #[batch_size,channels,y,x]
+        self.filter_shape = filter_shape #[maps,channels,y,x]
+        self.border_mode = border_mode
+        self.fan_in = numpy.prod(self.filter_shape[1:])
+        self.fan_out = self.filter_shape[0] * numpy.prod(self.filter_shape[2:])
+
+        #W and b are slightly different for convnets - we need filter_shape
+        if weight_init is None:
+            weight_init = weight_inits.GlorotWeightInit()
+        if W is None:
+            W = weight_init(rng,self.fan_in,self.fan_out,layer_name + '_W',
+                    activation, self.filter_shape)
+        if b is None:
+            b = weight_inits.ZeroWeightInit()(rng,self.filter_shape[0],None,
+                    layer_name + '_b', None)
+        Layer.__init__(self,rng,T.reshape(inputs,self.input_shape,ndim=4),self.filter_shape[0],
+                self.filter_shape[1], activation,dropout_rate,layer_name,W,b)
+        self.rebuild()
+
+    def set_input(self,inputs):
+        self.inputs = T.reshape(inputs,self.input_shape,ndim=4)
+
+    def rebuild(self):
+        self.delta_W = sharedX(
+            value=numpy.zeros(self.filter_shape),
+            name='{0}_delta_W'.format(self.layer_name))
+        self.delta_b = sharedX(
+            value=numpy.zeros_like(self.b.get_value(borrow=True)),
+            name='{0}_delta_b'.format(self.layer_name))
+        if self.border_mode == 'same':
+            bm = 'full'
+        else:
+            bm = self.border_mode
+        conv_out = T.nnet.conv2d(
+            input=self.inputs,
+            filters=self.W,
+            filter_shape=self.filter_shape,
+            input_shape=self.input_shape,
+            border_mode=bm) * (1. - self.dropout_rate)
+
+        if self.border_mode == 'same':
+            shift_x = (self.filter_shape[2] - 1) // 2
+            shift_y = (self.filter_shape[3] - 1) // 2
+            self.conv_out = conv_out[:, :,
+                                shift_x:self.input_shape[2] + shift_x,
+                                shift_y:self.input_shape[3] + shift_y]
+        else:
+            self.conv_out = conv_out
+
+        self.y_out = self.activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
+        self.output = self.y_out
+        self.params = [self.W, self.b]
+
+    def rejoin(self):
+        self.rebuild()
 
 class ConvolutionalLayer(Layer):
     """
     A Convolutional Layer, as per Convolutional Neural Networks. Includes filter, and pooling.
     """
-    #TODO: rejoin and rebuild
     def __init__(self, rng, inputs, input_shape, filter_shape, pool_size, W=None, b=None,
              activation=T.tanh,dropout_rate=0,layer_name='conv',
              border_mode='valid',pooling='max',weight_init=None):

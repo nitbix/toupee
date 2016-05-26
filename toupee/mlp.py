@@ -151,7 +151,7 @@ class MLP(object):
             backup = copy.copy(self.hiddenLayers)
             i = len(backup) - 1
             for layer_type,desc in reversed(self.params.n_hidden[:len(backup)]):
-                if layer_type == 'conv':
+                if layer_type in ['conv', 'convonly']:
                     print "Warning: reverse pretraining a convolutional layer has no effect"
                     reversedLayers.append(None)
                 else:
@@ -324,6 +324,51 @@ class MLP(object):
                                  )
             self.chain_n_in = n_this
             l.output_shape = self.chain_n_in
+        elif(layer_type == 'convfilter'):
+            if len(desc) == 6:
+                #default border mode
+                desc.append('valid')
+            (input_shape,filter_shape,drop_this,name_this,
+                    activation_this,weight_init,border_mode) = desc
+            if input_shape is None:
+                if self.chain_input_shape is None:
+                    raise Exception("must specify first input shape")
+                input_shape = self.chain_input_shape
+            else:
+                if len(input_shape) == 3:
+                    input_shape.insert(0,self.params.batch_size)
+                self.chain_input_shape = input_shape
+            if len(filter_shape) == 3:
+                filter_shape.insert(1,input_shape[1])
+            if self.prev_dim is None:
+                self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
+            l = layers.ConvFilter(rng=self.rng,
+                                  inputs=self.chain_in, 
+                                  input_shape=input_shape, 
+                                  filter_shape=filter_shape,
+                                  activation=activation_this,
+                                  dropout_rate=drop_this,
+                                  layer_name = name_this,
+                                  border_mode = border_mode,
+                                  weight_init = weight_init,
+                                  W=W,b=b)
+            prev_map_number,dim_x,dim_y = self.prev_dim
+            curr_map_number = filter_shape[0]
+            if border_mode == 'same':
+                output_dim_x = dim_x
+                output_dim_y = dim_y
+            elif border_mode == 'valid':
+                output_dim_x = dim_x - filter_shape[2] + 1
+                output_dim_y = dim_y - filter_shape[3] + 1
+            else:
+                raise Exception('Invalid border mode: {0}'.format(border_mode))
+            self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
+            l.output_shape = self.chain_n_in
+            self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
+            self.chain_input_shape = [self.chain_input_shape[0],
+                    curr_map_number,
+                    output_dim_x,
+                    output_dim_y]
         elif(layer_type == 'conv'):
             if len(desc) == 8:
                 #default border mode
@@ -691,7 +736,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         valid_set_x, valid_set_y = dataset[1]
         test_set_x, test_set_y = (None,None)
 
-    if params.online_transform is not None or params.join_train_and_valid:
+    if params.join_train_and_valid:
         processed_data.valid_set_x, processed_data.valid_set_y  = data.shared_dataset(
                                         (numpy.concatenate([
                                             processed_data.orig_train_set_x.eval({}),
@@ -712,7 +757,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 channels = 1
         else:
             channels = params.channels
-        gpu_transformer = data.GPUTransformer(processed_data.valid_set_x,
+        gpu_transformer = data.GPUTransformer( (processed_data.train_set_x,
+                                                processed_data.train_set_y),
                         x=int(math.sqrt(params.n_in / channels)),
                         y=int(math.sqrt(params.n_in / channels)),
                         channels=channels,
@@ -784,7 +830,9 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         if params.online_transform is not None:
             if params.update_input:
                 raise "Cannot have online_transform and update_input"
-            processed_data.train_set_x = gpu_transformer.get_data()
+            (processed_data.train_set_x, processed_data.train_set_y) = gpu_transformer.get_data()
+            print processed_data.train_set_x.shape.eval()
+            print processed_data.train_set_y.shape.eval()
             make_train_functions()
 
         if params.shuffle_dataset:

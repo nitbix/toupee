@@ -349,11 +349,12 @@ class GPUTransformer:
         self.translation = opts['translation']
         self.bilinear = opts['bilinear']
         self.invert = opts['invert'] if 'invert' in opts else False
+        self.flip = opts['flip'] if 'flip' in opts else False
         self.center_uncertainty = opts['center_uncertainty'] if 'center_uncertainty' in opts else 0.
         self.x = int(x)
         self.y = int(y)
         self.channels = channels
-        self.original_x = original_set
+        (self.original_x, self.original_y) = original_set
         self.instances = self.original_x.shape[0]
         inpt = self.original_x.reshape([self.instances,self.channels,self.x,self.y])
 
@@ -428,7 +429,17 @@ class GPUTransformer:
         if self.invert:
             output = 1. - output
 
-        self.final_x = output.reshape([self.instances,self.channels * self.x * self.y])
+        if self.flip:
+            flip_x = output[:,:,::-1,:]
+            output = T.concatenate([output, flip_x], axis=0)
+            self.output_instances = self.instances * 2
+            self.output_y = T.concatenate([self.original_y, self.original_y],axis=0)
+        else:
+            self.output_instances = self.instances
+            self.output_y = self.original_y
+
+        self.final_x = output.reshape([self.output_instances,self.channels * self.x * self.y])
+        self.final_y = self.output_y
 
         if save:
             self.save_images()
@@ -449,7 +460,8 @@ class GPUTransformer:
         gc.collect()
 
     def get_data(self):
-        return sharedX(self.final_x.eval())
+        return (sharedX(self.final_x.eval(), dtype=self.final_x.dtype),
+                sharedX(self.final_y.eval(), dtype=self.final_y.dtype))
 
 def one_hot(dataset):
     b = np.zeros((dataset.size, dataset.max()+1),dtype=floatX)
