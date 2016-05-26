@@ -972,7 +972,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
             host = params.results_host
         else:
             host = None
-        print "saving MLP results to {0}@{1}".format(params.results_db,host)
         conn = MongoClient(host=host)
         db = conn[params.results_db]
         if 'results_table' in params.__dict__: 
@@ -980,6 +979,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         else:
             table_name = 'results'
         table = db[table_name]
+        print "saving MLP results to {0}@{1}:{2}".format(params.results_db,host,table)
         def serialize(o):
             if isinstance(o, numpy.float32):
                 return float(o)
