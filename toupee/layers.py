@@ -213,7 +213,6 @@ class FlatLayer(Layer):
         self.rebuild()
 
     def rebuild(self):
-        self.params = []
         if self.batch_normalization:
             self.y = T.nnet.bn.batch_normalization(inputs = self.y, gamma =
                     self.gamma, beta = self.beta,
