@@ -101,7 +101,7 @@ class MLP(object):
         self.reset_hooks(TrainingState(self))
         self.trainflag = T.scalar('trainflag')
 
-        for i,(layer_type,desc) in enumerate(params.n_hidden):
+        for i,(layer_type,desc) in enumerate(self.params.n_hidden):
             if continuation is not None:
                 W = continuation['W'][i]
                 b = continuation['b'][i]
@@ -112,7 +112,7 @@ class MLP(object):
             l = self.make_layer(layer_type,desc,W,b,i)
             self.hiddenLayers.append(l)
 
-            modes = params.pretraining
+            modes = self.params.pretraining
             if pretraining_set is not None and modes is not None:
                 for mode in modes.split(','):
                     self.inline_pretrain(pretraining_set,mode)
@@ -129,8 +129,15 @@ class MLP(object):
         else:
             W = None
             b = None
-        self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,rng,
-                layer_type=params.output_layer,W=W,b=b)
+        self.make_top_layer(
+                self.params.n_out,
+                self.chain_in,
+                self.chain_n_in,
+                rng,
+                layer_type = self.params.output_layer,
+                W = W,
+                b = b,
+                options = self.params.output_layer_options)
 
 
     def pretrain(self,pretraining_set,mode='unsupervised'):
@@ -168,7 +175,8 @@ class MLP(object):
                 reversedLayers[pinned_layer].write_enable = 1
             self.hiddenLayers = [x for x in reversedLayers if x is not None]
             self.make_top_layer(self.params.n_in, rev_chain_in,
-                    rev_chain_n_in, self.rng, 'flat', activations.TanH())
+                    rev_chain_n_in, self.rng, 'flat', activations.TanH(),
+                    options = self.params.output_layer_options)
             train_f = self.train_function(self.index, pretraining_set_y,
                 pretraining_set_x, y_pretraining, x_pretraining,
                 self.params.pretrain_update_rule,
@@ -223,7 +231,8 @@ class MLP(object):
             pretraining_set_x, pretraining_set_y = pretraining_set
             x_pretraining = self.x
             y_pretraining = self.y
-            self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,self.rng)
+            self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,self.rng,
+                    options = self.params.output_layer_options)
         elif mode in ['unsupervised', 'unsupervised-together']:
             pretraining_set_x = pretraining_set[0]
             pretraining_set_y = pretraining_set[0]
@@ -231,7 +240,8 @@ class MLP(object):
             x_pretraining = self.x
             y_pretraining = T.matrix('y_pretraining')
             self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, self.rng,
-                    'flat', activations.TanH())
+                    'flat', activations.TanH(),
+                    options = self.params.output_layer_options)
         else:
             raise Exception("Unknown pretraining mode: %s" % mode)
         if mode in ['supervised', 'unsupervised', 'unsupervised-together']:
@@ -277,16 +287,20 @@ class MLP(object):
 
     def make_layer(self,layer_type,desc,W=None,b=None,i=0):
         if(layer_type == 'flat'):
-            n_this,drop_this,name_this,activation_this,weight_init = desc
-            l = layers.FlatLayer(rng=self.rng,
-                                 inputs=self.chain_in.flatten(ndim=2),
-                                 n_in=numpy.prod(self.chain_n_in),
-                                 n_out=numpy.prod(n_this),
-                                 activation=activation_this,
-                                 dropout_rate=drop_this,
-                                 layer_name=name_this,
-                                 weight_init=weight_init,
-                                 W=W,b=b)
+            if len(desc) == 5:
+                #default no-options
+                desc.append({})
+            (n_this, drop_this, name_this, activation_this, weight_init, 
+                    options) = desc
+            l = layers.FlatLayer(rng = self.rng,
+                                 inputs = self.chain_in.flatten(ndim=2),
+                                 n_in = numpy.prod(self.chain_n_in),
+                                 n_out = numpy.prod(n_this),
+                                 activation = activation_this,
+                                 dropout_rate = drop_this,
+                                 layer_name = name_this,
+                                 weight_init = weight_init,
+                                 W = W, b = b, options = options)
             self.chain_n_in = n_this
             l.output_shape = self.chain_n_in
         elif(layer_type == 'LCN'):
@@ -328,8 +342,11 @@ class MLP(object):
             if len(desc) == 6:
                 #default border mode
                 desc.append('valid')
+            if len(desc) == 7:
+                #default no-options
+                desc.append({})
             (input_shape,filter_shape,drop_this,name_this,
-                    activation_this,weight_init,border_mode) = desc
+                    activation_this,weight_init,border_mode,options) = desc
             if input_shape is None:
                 if self.chain_input_shape is None:
                     raise Exception("must specify first input shape")
@@ -342,16 +359,16 @@ class MLP(object):
                 filter_shape.insert(1,input_shape[1])
             if self.prev_dim is None:
                 self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
-            l = layers.ConvFilter(rng=self.rng,
-                                  inputs=self.chain_in, 
-                                  input_shape=input_shape, 
-                                  filter_shape=filter_shape,
-                                  activation=activation_this,
-                                  dropout_rate=drop_this,
+            l = layers.ConvFilter(rng = self.rng,
+                                  inputs = self.chain_in, 
+                                  input_shape = input_shape, 
+                                  filter_shape = filter_shape,
+                                  activation = activation_this,
+                                  dropout_rate = drop_this,
                                   layer_name = name_this,
                                   border_mode = border_mode,
                                   weight_init = weight_init,
-                                  W=W,b=b)
+                                  W = W, b = b, options = options)
             prev_map_number,dim_x,dim_y = self.prev_dim
             curr_map_number = filter_shape[0]
             if border_mode == 'same':
@@ -369,12 +386,17 @@ class MLP(object):
                     curr_map_number,
                     output_dim_x,
                     output_dim_y]
+
         elif(layer_type == 'conv'):
             if len(desc) == 8:
                 #default border mode
                 desc.append('valid')
-            (input_shape,filter_shape,pool_size,drop_this,name_this,
-                    activation_this,pooling,weight_init,border_mode) = desc
+            if len(desc) == 9:
+                #default no-options
+                desc.append({})
+            (input_shape, filter_shape, pool_size, drop_this, name_this,
+                    activation_this, pooling, weight_init, border_mode,
+                    options) = desc
             if input_shape is None:
                 if self.chain_input_shape is None:
                     raise Exception("must specify first input shape")
@@ -387,18 +409,19 @@ class MLP(object):
                 filter_shape.insert(1,input_shape[1])
             if self.prev_dim is None:
                 self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
-            l = layers.ConvolutionalLayer(rng=self.rng,
-                                   inputs=self.chain_in, 
-                                   input_shape=input_shape, 
-                                   filter_shape=filter_shape,
-                                   pool_size=pool_size,
-                                   activation=activation_this,
-                                   dropout_rate=drop_this,
+            l = layers.ConvolutionalLayer(
+                                   rng = self.rng,
+                                   inputs = self.chain_in, 
+                                   input_shape = input_shape, 
+                                   filter_shape = filter_shape,
+                                   pool_size = pool_size,
+                                   activation = activation_this,
+                                   dropout_rate = drop_this,
                                    layer_name = name_this,
                                    pooling = pooling,
                                    border_mode = border_mode,
                                    weight_init = weight_init,
-                                   W=W,b=b)
+                                   W = W,b = b, options = options)
             prev_map_number,dim_x,dim_y = self.prev_dim
             curr_map_number = filter_shape[0]
             if border_mode == 'same':
@@ -423,7 +446,7 @@ class MLP(object):
 
     def make_top_layer(self, n_out, chain_in, chain_n_in, rng,
             layer_type='softmax', activation=None, name_this='temp_top',
-            W = None, b = None):
+            W = None, b = None, options = {}):
         """
         Finalize the construction by making a top layer (either to use in
         pretraining or to use in the final version)
@@ -437,7 +460,7 @@ class MLP(object):
                 activation=activation,
                 dropout_rate=0,
                 layer_name='softmax',
-                W=W, b=b)
+                W=W, b=b, options = options)
             self.cost_function = self.params.cost_function
             self.p_y_given_x = self.outputLayer.p_y_given_x
             self.errors = self.outputLayer.errors
@@ -451,7 +474,7 @@ class MLP(object):
                 activation=activation,
                 dropout_rate=0,
                 layer_name='softmax',
-                W=W,b=b)
+                W=W, b=b, options = options)
             self.cost_function = self.params.cost_function
             self.p_y_given_x = self.outputLayer.p_y_given_x
             self.errors = self.outputLayer.errors
@@ -462,7 +485,7 @@ class MLP(object):
                 n_in=numpy.prod(chain_n_in), n_out=n_out,
                 activation=activation,dropout_rate=0,
                 layer_name=name_this,
-                W=W,b=b)
+                W=W,b=b, options = options)
             self.cost_function = cost_functions.MSE()
 
         self.L1 = sum([abs(hiddenLayer.W).sum()
@@ -597,8 +620,12 @@ class MLP(object):
         def unpack(layer):
             dropout_rates[layer.layer_name + '_W'] = layer.dropout_rate
             dropout_rates[layer.layer_name + '_b'] = 0.
+            dropout_rates[layer.layer_name + '_beta'] = 0.
+            dropout_rates[layer.layer_name + '_gamma'] = 0.
             write_enables[layer.layer_name + '_W'] = layer.write_enable
             write_enables[layer.layer_name + '_b'] = layer.write_enable
+            write_enables[layer.layer_name + '_beta'] = layer.write_enable
+            write_enables[layer.layer_name + '_gamma'] = layer.write_enable
 
         for layer in self.hiddenLayers:
             unpack(layer)
@@ -977,8 +1004,11 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
             state.classifier.hiddenLayers.append(all_layers[l])
             state.classifier.rejoin_layers(x)
             state.classifier.make_top_layer(
-                    params.n_out,state.classifier.hiddenLayers[l].output,
-                    state.classifier.hiddenLayers[l].output_shape,rng
+                    params.n_out,
+                    state.classifier.hiddenLayers[l].output,
+                    state.classifier.hiddenLayers[l].output_shape,
+                    rng,
+                    options = params.output_layer_options
                     )
             print ".... generating models"
             state.set_models(state.classifier.make_models(dataset))

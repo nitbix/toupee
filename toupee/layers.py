@@ -19,13 +19,21 @@ import weight_inits
 
 floatX = theano.config.floatX
 
+def parse_option(options, key, default):
+    if key in options:
+        return options[key]
+    else:
+        return default
+
 class Layer:
-    def __init__(self,rng,inputs,n_in,n_out,activation,
-                 dropout_rate,layer_name,W=None,b=None,weight_init=None):
+    def __init__(self, rng, inputs, n_in, n_out, activation,
+                 dropout_rate, layer_name, W=None, b=None, weight_init=None,
+                 options = {}):
         self.inputs = inputs
         self.dropout_rate=dropout_rate
         self.layer_name=layer_name
         self.activation = activation
+        self.batch_normalization = parse_option(options, 'batch_normalization', False)
 
         if weight_init is None:
             weight_init = weight_inits.GlorotWeightInit()
@@ -40,6 +48,9 @@ class Layer:
         self.b = b
         self.n_in = n_in
         self.n_out = n_out
+        self.gamma = sharedX(numpy.ones((n_out,)), name = self.layer_name + '_gamma')
+        self.beta = sharedX(numpy.zeros((n_out,)), name = self.layer_name + '_beta')
+
         self.write_enable = 1.
         self.rejoin()
 
@@ -48,7 +59,10 @@ class Layer:
 
     def rejoin(self):
         self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate) + self.b
-        self.params = [self.W, self.b]
+        if self.batch_normalization:
+            self.params = [self.W, self.b, self.beta, self.gamma]
+        else:
+            self.params = [self.W, self.b]
 
     def rebuild(self):
         raise NotImplementedError()
@@ -192,12 +206,21 @@ class FlatLayer(Layer):
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
                  activation=T.tanh,dropout_rate=0,layer_name='hidden',
-                 weight_init=None):
-        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,
-                dropout_rate,layer_name,W,b,weight_init=weight_init)
+                 weight_init=None, options = {}):
+        Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out, 
+                activation, dropout_rate, layer_name, W, b, 
+                weight_init = weight_init, options = options)
         self.rebuild()
 
     def rebuild(self):
+        self.params = []
+        if self.batch_normalization:
+            self.y = T.nnet.bn.batch_normalization(inputs = self.y, gamma =
+                    self.gamma, beta = self.beta,
+                    mean = self.y.mean((0,), keepdims=True),
+                    std = self.y.std((0,), keepdims = True),
+                    mode='low_mem')
+
         self.output = (self.y if self.activation is None
                        else self.activation(self.y))
         self.p_y_given_x = self.output
@@ -213,15 +236,24 @@ class SoftMax(Layer):
     """
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
-                 activation=T.tanh,dropout_rate=0,layer_name='hidden',
-                 weight_init=None):
-        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,
-                dropout_rate,layer_name,W,b,weight_init=weight_init)
+                 activation = T.tanh, dropout_rate = 0., layer_name = 'hidden',
+                 weight_init = None, options  = {}):
+        Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out,
+                activation, dropout_rate, layer_name, W, b,
+                weight_init = weight_init, options = options)
         self.rebuild()
 
     def rebuild(self):
         self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
-        self.params = [self.W]
+        if self.batch_normalization:
+            self.y = T.nnet.bn.batch_normalization(inputs = self.y, gamma =
+                    self.gamma, beta = self.beta,
+                    mean = self.y.mean((0,), keepdims=True),
+                    std = self.y.std((0,), keepdims = True),
+                    mode='low_mem')
+            self.params = [self.W, self.beta, self.gamma]
+        else:
+            self.params = [self.W]
         self.p_y_given_x = T.nnet.softmax(self.y)
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
 
@@ -252,15 +284,24 @@ class LogSoftMax(Layer):
     """
 
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
-                 activation=T.tanh,dropout_rate=0,layer_name='hidden',
-                 weight_init=None):
-        Layer.__init__(self,rng,inputs.flatten(ndim=2),n_in,n_out,activation,
-                dropout_rate,layer_name,W,b,weight_init=weight_init)
+                 activation = T.tanh, dropout_rate = 0, layer_name = 'hidden',
+                 weight_init = None, options = {}):
+        Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out,
+                activation, dropout_rate, layer_name, W, b,
+                weight_init = weight_init, options = options)
         self.rebuild()
 
     def rebuild(self):
         self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
-        self.params = [self.W]
+        if self.batch_normalization:
+            self.y = T.nnet.bn.batch_normalization(inputs = self.y, gamma =
+                    self.gamma, beta = self.beta,
+                    mean = self.y.mean((0,), keepdims=True),
+                    std = self.y.std((0,), keepdims = True),
+                    mode='low_mem')
+            self.params = [self.W, self.beta, self.gamma]
+        else:
+            self.params = [self.W]
         ydev = self.y - self.y.max(1,keepdims=True)
         self.p_y_given_x = ydev - T.log(T.sum(T.exp(ydev),axis=1,keepdims=True))
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
@@ -290,9 +331,10 @@ class ConvFilter(Layer):
     A Convolutional Layer, as per Convolutional Neural Networks. Includes
     filter, no pooling.
     """
-    def __init__(self, rng, inputs, input_shape, filter_shape, W=None, b=None,
-             activation=T.tanh,dropout_rate=0,layer_name='conv',
-             border_mode='valid',weight_init=None):
+    def __init__(self, rng, inputs, input_shape, filter_shape, W = None, b = None,
+             activation = T.tanh, dropout_rate = 0., layer_name = 'conv',
+             border_mode = 'valid', weight_init = None,
+             options = {}):
         """
         :type rng: numpy.random.RandomState
         :param rng: a random number generator used to initialize weights
@@ -327,8 +369,9 @@ class ConvFilter(Layer):
         if b is None:
             b = weight_inits.ZeroWeightInit()(rng,self.filter_shape[0],None,
                     layer_name + '_b', None)
-        Layer.__init__(self,rng,T.reshape(inputs,self.input_shape,ndim=4),self.filter_shape[0],
-                self.filter_shape[1], activation,dropout_rate,layer_name,W,b)
+        Layer.__init__(self, rng, T.reshape(inputs, self.input_shape, ndim=4),
+                self.filter_shape[0], self.filter_shape[1], activation,
+                dropout_rate, layer_name, W, b, options)
         self.rebuild()
 
     def set_input(self,inputs):
@@ -361,9 +404,18 @@ class ConvFilter(Layer):
         else:
             self.conv_out = conv_out
 
+        self.params = []
+        if self.batch_normalization:
+            self.conv_out = T.nnet.bn.batch_normalization(inputs = self.conv_out, gamma =
+                    self.gamma, beta = self.beta,
+                    mean = self.conv_out.mean((0,), keepdims=True),
+                    std = self.conv_out.std((0,), keepdims = True),
+                    mode='low_mem')
+            self.params.extend([self.beta, self.gamma])
+
         self.y_out = self.activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
         self.output = self.y_out
-        self.params = [self.W, self.b]
+        self.params.extend([self.W, self.b])
 
     def rejoin(self):
         self.rebuild()
@@ -372,9 +424,10 @@ class ConvolutionalLayer(Layer):
     """
     A Convolutional Layer, as per Convolutional Neural Networks. Includes filter, and pooling.
     """
-    def __init__(self, rng, inputs, input_shape, filter_shape, pool_size, W=None, b=None,
-             activation=T.tanh,dropout_rate=0,layer_name='conv',
-             border_mode='valid',pooling='max',weight_init=None):
+    def __init__(self, rng, inputs, input_shape, filter_shape, pool_size,
+             W = None, b = None, activation = T.tanh, dropout_rate = 0.,
+             layer_name = 'conv', border_mode = 'valid', pooling = 'max',
+             weight_init= None, options = {}):
         """
         :type rng: numpy.random.RandomState
         :param rng: a random number generator used to initialize weights
@@ -411,8 +464,9 @@ class ConvolutionalLayer(Layer):
         if b is None:
             b = weight_inits.ZeroWeightInit()(rng,self.filter_shape[0],None,
                     layer_name + '_b', None)
-        Layer.__init__(self,rng,T.reshape(inputs,self.input_shape,ndim=4),self.filter_shape[0],
-                self.filter_shape[1], activation,dropout_rate,layer_name,W,b)
+        Layer.__init__(self, rng, T.reshape(inputs,self.input_shape,ndim=4), 
+                self.filter_shape[0], self.filter_shape[1], activation,
+                dropout_rate, layer_name, W, b)
         self.rebuild()
 
     def set_input(self,inputs):
@@ -445,13 +499,22 @@ class ConvolutionalLayer(Layer):
         else:
             self.conv_out = conv_out
 
+        self.params = []
+        if self.batch_normalization:
+            self.conv_out = T.nnet.bn.batch_normalization(inputs = self.conv_out, gamma =
+                    self.gamma, beta = self.beta,
+                    mean = self.conv_out.mean((0,), keepdims=True),
+                    std = self.conv_out.std((0,), keepdims = True),
+                    mode='low_mem')
+            self.params.extend([self.beta, self.gamma])
+
         self.y_out = self.activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
         self.pooled_out = pool.pool_2d(input=self.y_out, 
                                                  ds=self.pool_size,
                                                  ignore_border=True,
                                                  mode=self.pooling)
         self.output = self.pooled_out
-        self.params = [self.W, self.b]
+        self.params.extend([self.W, self.b])
 
     def rejoin(self):
         self.rebuild()
