@@ -661,7 +661,7 @@ class MLP(object):
             ]
             input_grad = T.grad(self.cost, x)
             input_update = T.inc_subtensor(train_slice, input_grad)
-            self.layer_updates[str(x)] = input_update
+            self.layer_updates[str(x)] = input_grad
             updates.append((train_set_x, input_update))
         rf = theano.function(
                 inputs=[index,self.previous_cost],
@@ -880,6 +880,43 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
             iter = (state.epoch - 1) * state.n_batches['train'] + minibatch_index
             if (iter + 1) % valid_frequency == 0 \
                     or (minibatch_index + 1) == state.n_batches['train']:
+                if params.save_images and params.update_input:
+                        img_save_dir = 'images_out_cifar'
+                        eux = numpy.asarray(processed_data.train_set_x.eval())
+                        if params.RGB:
+                            imx = math.sqrt(eux.shape[1] / 3)
+                        else:
+                            imx = math.sqrt(eux.shape[1])
+                        g = state.classifier.layer_updates['x'].eval(
+                                { x: processed_data.train_set_x.eval()[0:params.batch_size],
+                                  y: processed_data.train_set_y.eval()[0:params.batch_size]}
+                            )
+                        if params.RGB:
+                            g = numpy.asarray(g).reshape([params.batch_size,3,imx,imx])
+                        else:
+                            g = numpy.asarray(g).reshape([params.batch_size,imx,imx])
+                        for i in range(10):
+                            d = img_save_dir + '/input_change-{0}'.format(i)
+                            if not os.path.exists(d):
+                                os.makedirs(d)
+                            gi = g[i]
+                            imsave('{0}/iter{1}.png'.format(d,state.epoch),
+                                    gi * 255)
+                            d = img_save_dir + '/updated_input-{0}'.format(i)
+                            if not os.path.exists(d):
+                                os.makedirs(d)
+                            if params.RGB:
+                                img = eux[i].reshape([3,imx,imx])
+                            else:
+                                img = eux[i].reshape([imx,imx])
+                            imsave('{0}/iter{1}.png'.format(d,state.epoch),
+                                    img + g[0])
+                            d = img_save_dir + '/input_change-{0}-normalised'.format(i)
+                            if not os.path.exists(d):
+                                os.makedirs(d)
+                            gi = g[i]
+                            imsave('{0}/iter{1}.png'.format(d,state.epoch),
+                                    gi * 255 / numpy.amax(gi))
                 train_losses = [state.train_error_f(i) for i
                                      in xrange(state.n_batches['train'])]
                 this_train_loss = numpy.mean(train_losses)
@@ -918,53 +955,53 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     print('finished patience')
                     state.done_looping = True
                     break
-        if params.save_images or params.detailed_stats:
-            e_x = numpy.asarray(dataset[0][0].eval())
-            e_y = numpy.asarray(dataset[0][1].eval())
-            padding_needed = params.batch_size - (len(e_x) % params.batch_size)
-            padded_e_x = numpy.concatenate([
-                    e_x,
-                    e_x[:padding_needed]
-                ])
-            padded_e_y = numpy.concatenate([
-                    e_y,
-                    e_y[:padding_needed]
-                ])
-            e_xs = numpy.split(padded_e_x,len(padded_e_x) / params.batch_size)
-            e_ys = numpy.split(padded_e_y,len(padded_e_y) / params.batch_size)
-            assert len(e_xs) == len(e_ys)
-            if params.save_images:
-                for i in xrange(len(state.classifier.hiddenLayers)):
-                    imsave('weights-layer{0}-iter{1}.png'.format(i,state.epoch),
-                            state.classifier.hiddenLayers[i].W.get_value()
-                          )
-                imsave('weights-outputlayer-iter{0}.png'.format(state.epoch),
-                        state.classifier.outputLayer.W.get_value()
-                      )
-            for param, gparam in zip(state.classifier.opt_params, state.classifier.gparams):
-                gradients = []
-                for i in xrange(0,len(e_xs)):
-                    gradients.append(
-                        numpy.asarray(gparam.eval({x: e_xs[i], y: e_ys[i]}))
-                    )
-                gradient = numpy.concatenate(gradients)
-                p = numpy.asarray(param.eval())
-                if params.save_images:
-                    if len(gradient.shape) == 2:
-                      imsave('gradient-{0}-iter{1}.png'.format(str(param),state.epoch),gradient * 255)
-                if params.detailed_stats:
-                    print "  {0} grad max: {1}".format(str(param),gradient.max())
-                    print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
-                del gradient
-                gc.collect()
+        #if params.save_images or params.detailed_stats:
+            #e_x = numpy.asarray(dataset[0][0].eval())
+            #e_y = numpy.asarray(dataset[0][1].eval())
+            #padding_needed = params.batch_size - (len(e_x) % params.batch_size)
+            #padded_e_x = numpy.concatenate([
+            #        e_x,
+            #        e_x[:padding_needed]
+            #    ])
+            #padded_e_y = numpy.concatenate([
+            #        e_y,
+            #        e_y[:padding_needed]
+            #    ])
+            #e_xs = numpy.split(padded_e_x,len(padded_e_x) / params.batch_size)
+            #e_ys = numpy.split(padded_e_y,len(padded_e_y) / params.batch_size)
+            #assert len(e_xs) == len(e_ys)
+            #if params.save_images:
+                #for i in xrange(len(state.classifier.hiddenLayers)):
+                #    imsave('weights-layer{0}-iter{1}.png'.format(i,state.epoch),
+                #            state.classifier.hiddenLayers[i].W.get_value()
+                #          )
+                #imsave('weights-outputlayer-iter{0}.png'.format(state.epoch),
+                #        state.classifier.outputLayer.W.get_value()
+                #      )
+            #for param, gparam in zip(state.classifier.opt_params, state.classifier.gparams):
+            #    gradients = []
+            #    for i in xrange(0,len(e_xs)):
+            #        gradients.append(
+            #            numpy.asarray(gparam.eval({x: e_xs[i], y: e_ys[i]}))
+            #        )
+            #    gradient = numpy.concatenate(gradients)
+            #    p = numpy.asarray(param.eval())
+            #    if params.save_images:
+            #        if len(gradient.shape) == 2:
+            #          imsave('gradient-{0}-iter{1}.png'.format(str(param),state.epoch),gradient * 255)
+            #    if params.detailed_stats:
+            #        print "  {0} grad max: {1}".format(str(param),gradient.max())
+            #        print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
+            #    del gradient
+            #    gc.collect()
 
-            if params.detailed_stats:
-                #for l,m in state.classifier.layer_updates.iteritems():
-                #    print l
-                #    print m.eval({x: e_x, y: e_y})
-                #computed = state.classifier.classify(dataset[0][0])()
-                #print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
-                print "  learning rate: {0}".format(params.learning_rate.get().get_value())
+            #if params.detailed_stats:
+            #    #for l,m in state.classifier.layer_updates.iteritems():
+            #    #    print l
+            #    #    print m.eval({x: e_x, y: e_y})
+            #    #computed = state.classifier.classify(dataset[0][0])()
+            #    #print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
+            #    print "  learning rate: {0}".format(params.learning_rate.get().get_value())
 #                costs = []
 #                for i in xrange(0,len(e_xs)):
 #                    c = numpy.asarray(state.classifier.cost.eval({x: e_xs[i], y: e_ys[i]}))
