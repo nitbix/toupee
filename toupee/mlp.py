@@ -326,6 +326,16 @@ class MLP(object):
                         self.trainflag
                     )
             l.output_shape = self.chain_n_in
+        elif(layer_type == 'global_pooling'):
+            (dimensions, mode) = desc
+            l = layers.GlobalPooling(rng = self.rng,
+                                      inputs = self.chain_in,
+                                      layer_name = 'average_pooling',
+                                      dimensions = dimensions,
+                                      mode = mode
+                                 )
+            self.chain_n_in = self.chain_n_in[0]
+            l.output_shape = self.chain_n_in
         elif(layer_type == 'dropout'):
             n_this,drop_this,name_this,activation_this,weight_init = desc
             l = layers.Dropout(rng=self.rng,
@@ -379,9 +389,11 @@ class MLP(object):
                 output_dim_y = dim_y - filter_shape[3] + 1
             else:
                 raise Exception('Invalid border mode: {0}'.format(border_mode))
-            self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
+            output_dim_x = output_dim_x / l.strides[0]
+            output_dim_y = output_dim_y / l.strides[1]
+            self.chain_n_in = (curr_map_number, output_dim_x, output_dim_y)
             l.output_shape = self.chain_n_in
-            self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
+            self.prev_dim = (curr_map_number, output_dim_x, output_dim_y)
             self.chain_input_shape = [self.chain_input_shape[0],
                     curr_map_number,
                     output_dim_x,
@@ -425,13 +437,15 @@ class MLP(object):
             prev_map_number,dim_x,dim_y = self.prev_dim
             curr_map_number = filter_shape[0]
             if border_mode == 'same':
-                output_dim_x = dim_x / pool_size[0]
-                output_dim_y = dim_y / pool_size[1]
+                output_dim_x = dim_x
+                output_dim_y = dim_y
             elif border_mode == 'valid':
-                output_dim_x = (dim_x - filter_shape[2] + 1) / pool_size[0]
-                output_dim_y = (dim_y - filter_shape[3] + 1) / pool_size[1]
+                output_dim_x = (dim_x - filter_shape[2] + 1)
+                output_dim_y = (dim_y - filter_shape[3] + 1)
             else:
                 raise Exception('Invalid border mode: {0}'.format(border_mode))
+            output_dim_x = output_dim_x / (l.strides[0] * l.pooling_strides[0])
+            output_dim_y = output_dim_y / (l.strides[1] * l.pooling_strides[1])
             self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
             l.output_shape = self.chain_n_in
             self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
