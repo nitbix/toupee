@@ -171,12 +171,46 @@ class Elastic(Layer):
     def set_weights(self,W,b):
         pass
 
+class GlobalPooling(Layer):
+    def __init__(self, rng, inputs, layer_name, dimensions, mode):
+        self.inputs = inputs
+        self.layer_name = layer_name
+        self.dropout_rate = 0.
+        self.W = sharedX(numpy.asarray([0.]))
+        self.b = sharedX(numpy.asarray([0.]))
+        self.dimensions = dimensions
+        self.write_enable = 0.
+        self.mode = mode
+        self.rejoin()
+
+    def rejoin(self):
+        if self.mode == 'max':
+            self.f = T.max
+        elif self.mode == 'average':
+            self.f = T.mean
+        else:
+            raise "Unknown pooling function: {0}".format(self.mode)
+        self.y = self.f(self.inputs.flatten(3), axis = -1)
+        self.output = self.y
+        self.params = []
+        self.rebuild()
+
+    def rebuild(self):
+        self.output = self.y
+        self.p_y_given_x = self.output
+
+    def copy_weights(self,other):
+        pass
+
+    def set_weights(self,W,b):
+        pass
+
 class Dropout(Layer):
     def __init__(self,rng,inputs,n_in,n_out,activation,
                  dropout_rate,layer_name,W=None,b=None,weight_init=None):
         self.inputs = inputs
-        self.dropout_rate=dropout_rate
-        self.layer_name=layer_name
+        self.dropout_rate = dropout_rate
+        self.layer_name = layer_name
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
         self.n_in = n_in
@@ -237,22 +271,26 @@ class SoftMax(Layer):
     def __init__(self, rng, inputs, n_in, n_out, W=None, b=None,
                  activation = T.tanh, dropout_rate = 0., layer_name = 'hidden',
                  weight_init = None, options  = {}):
+        self.has_weights = parse_option(options, 'has_weights', True)
         Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out,
                 activation, dropout_rate, layer_name, W, b,
                 weight_init = weight_init, options = options)
         self.rebuild()
 
     def rebuild(self):
-        self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
+        if self.has_weights:
+            self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
+            self.params = [self.W]
+        else:
+            self.y = self.inputs
+            self.params = []
         if self.batch_normalization:
             self.y = T.nnet.bn.batch_normalization(inputs = self.y, gamma =
                     self.gamma, beta = self.beta,
                     mean = self.y.mean((0,), keepdims=True),
                     std = self.y.std((0,), keepdims = True),
                     mode='low_mem')
-            self.params = [self.W, self.beta, self.gamma]
-        else:
-            self.params = [self.W]
+            self.params.extend([self.beta, self.gamma])
         self.p_y_given_x = T.nnet.softmax(self.y)
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
 
@@ -358,6 +396,7 @@ class ConvFilter(Layer):
         self.border_mode = border_mode
         self.fan_in = numpy.prod(self.filter_shape[1:])
         self.fan_out = self.filter_shape[0] * numpy.prod(self.filter_shape[2:])
+        self.strides = parse_option(options,'strides',(1,1))
 
         #W and b are slightly different for convnets - we need filter_shape
         if weight_init is None:
@@ -392,6 +431,7 @@ class ConvFilter(Layer):
             filters=self.W,
             filter_shape=self.filter_shape,
             input_shape=self.input_shape,
+            subsample=self.strides,
             border_mode=bm) * (1. - self.dropout_rate)
 
         if self.border_mode == 'same':
@@ -453,6 +493,8 @@ class ConvolutionalLayer(Layer):
         self.border_mode = border_mode
         self.fan_in = numpy.prod(self.filter_shape[1:])
         self.fan_out = self.filter_shape[0] * numpy.prod(self.filter_shape[2:]) / numpy.prod(pool_size)
+        self.strides = parse_option(options, 'strides', (1,1))
+        self.pooling_strides = parse_option(options, 'pooling_strides', self.pool_size)
 
         #W and b are slightly different for convnets - we need filter_shape
         if weight_init is None:
@@ -487,6 +529,7 @@ class ConvolutionalLayer(Layer):
             filters=self.W,
             filter_shape=self.filter_shape,
             input_shape=self.input_shape,
+            subsample=self.strides,
             border_mode=bm) * (1. - self.dropout_rate)
 
         if self.border_mode == 'same':
@@ -508,10 +551,11 @@ class ConvolutionalLayer(Layer):
             self.params.extend([self.beta, self.gamma])
 
         self.y_out = self.activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
-        self.pooled_out = pool.pool_2d(input=self.y_out, 
-                                                 ds=self.pool_size,
-                                                 ignore_border=True,
-                                                 mode=self.pooling)
+        self.pooled_out = pool.pool_2d(input = self.y_out, 
+                                       st = self.pooling_strides,
+                                       ds = self.pool_size,
+                                       ignore_border = True,
+                                       mode = self.pooling)
         self.output = self.pooled_out
         self.params.extend([self.W, self.b])
 
