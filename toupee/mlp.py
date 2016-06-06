@@ -336,14 +336,14 @@ class MLP(object):
             self.chain_n_in = self.chain_n_in[0]
             l.output_shape = self.chain_n_in
         elif(layer_type == 'linear'):
-            n_this, drop_this, name_this = desc
+            drop_this, name_this = desc
             l = layers.Linear(rng=self.rng,
                                  inputs=self.chain_in.flatten(ndim=2),
                                  n_in=numpy.prod(self.chain_n_in),
-                                 n_out=numpy.prod(n_this),
                                  dropout_rate=drop_this,
                                  layer_name=name_this,
                                  )
+
         elif(layer_type == 'pool'):
             if len(desc) == 3:
                 #default no-options

@@ -205,7 +205,7 @@ class GlobalPooling(Layer):
         pass
 
 class Linear(Layer):
-    def __init__(self, rng, inputs, n_in, n_out, dropout_rate, layer_name):
+    def __init__(self, rng, inputs, n_in, dropout_rate, layer_name):
         self.inputs = inputs
         self.dropout_rate = dropout_rate
         self.layer_name = layer_name
@@ -528,10 +528,12 @@ class Pool2D(Layer):
         self.b = sharedX(numpy.asarray([0.]))
 
         self.output_shape = input_shape[:2] + numpy.divide(input_shape[2:], self.strides)
-        Layer.__init__(self, rng, T.reshape(inputs,self.input_shape,ndim=4), 
-                self.input_shape[0], self.input_shape[1], activation,
-                0., layer_name, W, b)
-        self.rebuild()
+        self.inputs = inputs
+        self.layer_name = layer_name
+        self.n_in = numpy.prod(input_shape)
+        self.n_out = self.n_in / numpy.prod(pool_size)
+        self.write_enable = 0.
+        self.rejoin()
 
     def set_input(self,inputs):
         self.inputs = T.reshape(inputs,self.input_shape,ndim=4)
