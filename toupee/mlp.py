@@ -355,7 +355,6 @@ class MLP(object):
             l = layers.Pool2D(rng = self.rng,
                                inputs = self.chain_in,
                                input_shape = self.chain_n_in,
-                               dropout_rate = drop_this,
                                pool_size = pool_size,
                                layer_name = name_this,
                                pooling = pooling,
