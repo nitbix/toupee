@@ -345,17 +345,26 @@ class MLP(object):
                                  layer_name=name_this,
                                  )
         elif(layer_type == 'pool'):
-            drop_this, name_this, options = desc
-            l = layes.PoolingLayer(rng = self.rng,)
+            pooling , name_this, pool_size, options = desc
+            l = layers.Pool2D(rng = self.rng,
+                               inputs = self.chain_in,
+                               input_shape = self.chain_n_in,
+                               dropout_rate = drop_this,
+                               pool_size = pool_size,
+                               layer_name = name_this,
+                               pooling = pooling,
+                               options = options
+                              )
 
         elif(layer_type == 'nin' or layer_type == 'mlpconv'):
-            drop_this, name_this = desc
+            drop_this, name_this, options = desc
             l = layers.NiN(rng=self.rng,
-                                 inputs=self.chain_in,
+                                 inputs = self.chain_in,
                                  input_shape = self.chain_n_in,
-                                 n_out=numpy.prod(self.chain_n_in),
-                                 dropout_rate=drop_this,
-                                 layer_name=name_this,
+                                 n_out = numpy.prod(self.chain_n_in),
+                                 dropout_rate = drop_this,
+                                 layer_name = name_this,
+                                 options = options
                                  )
             self.chain_n_in = [ self.chain_n_in[0], n_this] + self.chain_n_in[2:]
         elif(layer_type == 'convfilter'):

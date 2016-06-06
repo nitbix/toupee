@@ -506,14 +506,12 @@ class ConvFilter(Layer):
     def rejoin(self):
         self.rebuild()
 
-class PoolingLayer(Layer):
+class Pool2D(Layer):
     """
-    Local pooling layer.
+    Local 2D pooling layer.
     """
-    def __init__(self, rng, inputs, input_shape, pool_size,
-             W = None, b = None, activation = T.tanh, dropout_rate = 0.,
-             layer_name = 'conv', border_mode = 'valid', pooling = 'max',
-             weight_init= None, options = {}):
+    def __init__(self, rng, inputs, input_shape, pool_size, layer_name = 'conv',
+            pooling = 'max', options = {}):
         """
         :type rng: numpy.random.RandomState
         :param rng: a random number generator used to initialize weights
@@ -534,7 +532,7 @@ class PoolingLayer(Layer):
         self.output_shape = input_shape[:2] + numpy.divide(input_shape[2:], self.strides)
         Layer.__init__(self, rng, T.reshape(inputs,self.input_shape,ndim=4), 
                 self.filter_shape[0], self.filter_shape[1], activation,
-                dropout_rate, layer_name, W, b)
+                0., layer_name, W, b)
         self.rebuild()
 
     def set_input(self,inputs):
