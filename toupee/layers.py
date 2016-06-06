@@ -528,6 +528,7 @@ class Pool2D(Layer):
         self.b = sharedX(numpy.asarray([0.]))
 
         self.output_shape = input_shape[:2] + numpy.divide(input_shape[2:], self.strides)
+        self.dropout_rate = 0.
         self.inputs = inputs
         self.layer_name = layer_name
         self.n_in = numpy.prod(input_shape)
