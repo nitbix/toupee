@@ -245,6 +245,55 @@ class FlatLayer(Layer):
         self.rebuild()
 
     def rebuild(self):
+        self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate) + self.b
+        if self.batch_normalization:
+            self.y = T.nnet.bn.batch_normalization(inputs = self.y, gamma =
+                    self.gamma, beta = self.beta,
+                    mean = self.y.mean((0,), keepdims=True),
+                    std = self.y.std((0,), keepdims = True),
+                    mode='low_mem')
+
+        self.output = (self.y if self.activation is None
+                       else self.activation(self.y))
+        self.p_y_given_x = self.output
+
+    def rejoin(self):
+        Layer.rejoin(self)
+        self.rebuild()
+
+
+class NiN(Layer):
+    """
+    Network-in-Network: see https://arxiv.org/pdf/1312.4400.pdf
+    """
+
+    def __init__(self, rng, inputs, n_out, W=None, b=None,
+                 activation=T.tanh,dropout_rate=0,layer_name='hidden',
+                 weight_init=None, options = {}):
+        self.untie_biases = parse_option(options, 'untie_biases', False)
+        n_in = self.input_shape[1]
+        if b is None:
+            if self.untie_biases:
+                biases_shape = (num_units,) + self.output_shape[2:]
+            else:
+                biases_shape = (num_units,)
+            b = weight_inits.ZeroWeightInit()(rng,biases_shape,None,layer_name + '_b',None)
+        Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out, 
+                activation, dropout_rate, layer_name, W, b, 
+                weight_init = weight_init, options = options)
+        self.rebuild()
+
+    def rebuild(self):
+        self.y = T.tensordot(self.W, self.inputs, axes=[[0], [1]])
+        remaining_dims = range(2, self.inputs.ndim)
+        self.y = self.y.dimshuffle(1, 0, *remainingdims)
+        if self.b is not None:
+            if self.untie_biases:
+                remaining_dims_biases = range(1, self.inputs.ndim - 1)
+            else:
+                remaining_dims_biases = ['x'] * (self.inputs.ndim - 2)
+            b_shuffled = self.b.dimshuffle('x', 0, *remaining_dims_biases)
+            self.y = self.y + b_shuffled
         if self.batch_normalization:
             self.y = T.nnet.bn.batch_normalization(inputs = self.y, gamma =
                     self.gamma, beta = self.beta,
@@ -456,6 +505,54 @@ class ConvFilter(Layer):
 
     def rejoin(self):
         self.rebuild()
+
+class PoolingLayer(Layer):
+    """
+    Local pooling layer.
+    """
+    def __init__(self, rng, inputs, input_shape, pool_size,
+             W = None, b = None, activation = T.tanh, dropout_rate = 0.,
+             layer_name = 'conv', border_mode = 'valid', pooling = 'max',
+             weight_init= None, options = {}):
+        """
+        :type rng: numpy.random.RandomState
+        :param rng: a random number generator used to initialize weights
+
+        :type input: theano.tensor.dmatrix
+        :param input: a symbolic tensor of shape (n_examples, n_in)
+        """
+        assert input_shape[1] == filter_shape[1]
+
+        self.input_shape = input_shape #[batch_size,channels,y,x]
+        self.pooling = pooling
+        self.pool_size = pool_size #[y,x]
+        self.strides = parse_option(options, 'strides', (1,1))
+
+        self.W = sharedX(numpy.asarray([0.]))
+        self.b = sharedX(numpy.asarray([0.]))
+
+        self.output_shape = input_shape[:2] + numpy.divide(input_shape[2:], self.strides)
+        Layer.__init__(self, rng, T.reshape(inputs,self.input_shape,ndim=4), 
+                self.filter_shape[0], self.filter_shape[1], activation,
+                dropout_rate, layer_name, W, b)
+        self.rebuild()
+
+    def set_input(self,inputs):
+        self.inputs = T.reshape(inputs,self.input_shape,ndim=4)
+
+    def rebuild(self):
+        self.y_out = pool.pool_2d(input = self.inputs, 
+                                       st = self.strides,
+                                       ds = self.pool_size,
+                                       ignore_border = True,
+                                       mode = self.pooling)
+        self.output = self.y_out
+        self.params = []
+
+    def rejoin(self):
+        self.rebuild()
+
+
 
 class ConvolutionalLayer(Layer):
     """
