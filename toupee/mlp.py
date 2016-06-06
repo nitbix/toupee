@@ -364,7 +364,7 @@ class MLP(object):
             self.chain_n_in = self.chain_input_shape
 
         elif(layer_type == 'nin' or layer_type == 'mlpconv'):
-            if len(desc) == 2:
+            if len(desc) == 3:
                 #default no-options
                 desc.append({})
             n_this, drop_this, name_this, options = desc
