@@ -267,10 +267,11 @@ class NiN(Layer):
     Network-in-Network: see https://arxiv.org/pdf/1312.4400.pdf
     """
 
-    def __init__(self, rng, inputs, n_out, W=None, b=None,
+    def __init__(self, rng, inputs, input_shape, n_out, W=None, b=None,
                  activation=T.tanh,dropout_rate=0,layer_name='hidden',
                  weight_init=None, options = {}):
         self.untie_biases = parse_option(options, 'untie_biases', False)
+        self.input_shape = input_shape
         n_in = self.input_shape[1]
         if b is None:
             if self.untie_biases:
