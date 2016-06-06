@@ -354,7 +354,7 @@ class MLP(object):
             input_shape = self.chain_input_shape
             l = layers.Pool2D(rng = self.rng,
                                inputs = self.chain_in,
-                               input_shape = self.chain_n_in,
+                               input_shape = self.chain_input_shape,
                                pool_size = pool_size,
                                layer_name = name_this,
                                pooling = pooling,
