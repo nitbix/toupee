@@ -327,7 +327,7 @@ class MLP(object):
                     )
             l.output_shape = self.chain_n_in
         elif(layer_type == 'global_pooling'):
-            (mode) = desc
+            (mode,) = desc
             l = layers.GlobalPooling(rng = self.rng,
                                       inputs = self.chain_in,
                                       layer_name = 'average_pooling',
