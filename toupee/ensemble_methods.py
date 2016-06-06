@@ -237,7 +237,7 @@ class DIB(EnsembleMethod):
     def prepare(self, params, dataset):
         self.params = params
         self.dataset = dataset
-        self.resampler = WeightedResampler(dataset, seed = params.seed)
+        self.resampler = WeightedResampler(dataset, seed = params.random_seed)
         self.D = sharedX(self.resampler.weights)
         self.weights = None
         self.members = []
