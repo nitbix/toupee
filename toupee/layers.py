@@ -529,7 +529,7 @@ class Pool2D(Layer):
 
         self.output_shape = input_shape[:2] + numpy.divide(input_shape[2:], self.strides)
         Layer.__init__(self, rng, T.reshape(inputs,self.input_shape,ndim=4), 
-                self.filter_shape[0], self.filter_shape[1], activation,
+                self.input_shape[0], self.input_shape[1], activation,
                 0., layer_name, W, b)
         self.rebuild()
 
