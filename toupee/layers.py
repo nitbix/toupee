@@ -522,7 +522,7 @@ class Pool2D(Layer):
         self.input_shape = input_shape #[batch_size,channels,y,x]
         self.pooling = pooling
         self.pool_size = pool_size #[y,x]
-        self.strides = parse_option(options, 'strides', (1,1))
+        self.strides = parse_option(options, 'strides', pool_size)
 
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
