@@ -345,7 +345,7 @@ class MLP(object):
                                  layer_name=name_this,
                                  )
         elif(layer_type == 'pool'):
-            pooling , name_this, pool_size, options = desc
+            pooling , pool_size, name_this, options = desc
             if self.chain_input_shape is None:
                 raise Exception("must specify first input shape")
             input_shape = self.chain_input_shape
