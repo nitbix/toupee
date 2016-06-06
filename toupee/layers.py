@@ -280,7 +280,7 @@ class NiN(Layer):
             else:
                 biases_shape = n_out
             b = weight_inits.ZeroWeightInit()(rng,biases_shape,None,layer_name + '_b',None)
-        Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out, 
+        Layer.__init__(self, rng, inputs, n_in, n_out, 
                 activation, dropout_rate, layer_name, W, b, 
                 weight_init = weight_init, options = options)
         self.rebuild()
