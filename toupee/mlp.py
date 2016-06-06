@@ -327,27 +327,23 @@ class MLP(object):
                     )
             l.output_shape = self.chain_n_in
         elif(layer_type == 'global_pooling'):
-            (dimensions, mode) = desc
+            (mode) = desc
             l = layers.GlobalPooling(rng = self.rng,
                                       inputs = self.chain_in,
                                       layer_name = 'average_pooling',
-                                      dimensions = dimensions,
                                       mode = mode
                                  )
             self.chain_n_in = self.chain_n_in[0]
             l.output_shape = self.chain_n_in
-        elif(layer_type == 'dropout'):
-            n_this,drop_this,name_this,activation_this,weight_init = desc
-            l = layers.Dropout(rng=self.rng,
+        elif(layer_type == 'linear'):
+            drop_this, name_this = desc
+            l = layers.Linear(rng=self.rng,
                                  inputs=self.chain_in.flatten(ndim=2),
                                  n_in=numpy.prod(self.chain_n_in),
                                  n_out=numpy.prod(self.chain_n_in),
-                                 activation=activation_this,
                                  dropout_rate=drop_this,
                                  layer_name=name_this,
                                  )
-            self.chain_n_in = n_this
-            l.output_shape = self.chain_n_in
         elif(layer_type == 'convfilter'):
             if len(desc) == 6:
                 #default border mode

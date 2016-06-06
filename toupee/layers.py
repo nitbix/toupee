@@ -172,7 +172,7 @@ class Elastic(Layer):
         pass
 
 class GlobalPooling(Layer):
-    def __init__(self, rng, inputs, layer_name, dimensions, mode):
+    def __init__(self, rng, inputs, layer_name, mode):
         self.inputs = inputs
         self.layer_name = layer_name
         self.dropout_rate = 0.
@@ -205,9 +205,8 @@ class GlobalPooling(Layer):
     def set_weights(self,W,b):
         pass
 
-class Dropout(Layer):
-    def __init__(self,rng,inputs,n_in,n_out,activation,
-                 dropout_rate,layer_name,W=None,b=None,weight_init=None):
+class Linear(Layer):
+    def __init__(self, rng, inputs, n_in, n_out, dropout_rate, layer_name):
         self.inputs = inputs
         self.dropout_rate = dropout_rate
         self.layer_name = layer_name
