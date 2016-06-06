@@ -346,6 +346,9 @@ class MLP(object):
                                  )
         elif(layer_type == 'pool'):
             pooling , name_this, pool_size, options = desc
+            if self.chain_input_shape is None:
+                raise Exception("must specify first input shape")
+            input_shape = self.chain_input_shape
             l = layers.Pool2D(rng = self.rng,
                                inputs = self.chain_in,
                                input_shape = self.chain_n_in,
@@ -355,18 +358,22 @@ class MLP(object):
                                pooling = pooling,
                                options = options
                               )
+            self.chain_input_shape = l.output_shape
+            self.chain_n_in = self.chain_input_shape
 
         elif(layer_type == 'nin' or layer_type == 'mlpconv'):
             drop_this, name_this, options = desc
             l = layers.NiN(rng=self.rng,
                                  inputs = self.chain_in,
-                                 input_shape = self.chain_n_in,
+                                 input_shape = self.chain_input_shape,
                                  n_out = numpy.prod(self.chain_n_in),
                                  dropout_rate = drop_this,
                                  layer_name = name_this,
                                  options = options
                                  )
-            self.chain_n_in = [ self.chain_n_in[0], n_this] + self.chain_n_in[2:]
+            self.chain_input_shape = [ self.chain_n_in[0], n_this] + self.chain_n_in[2:]
+            self.chain_n_in = self.chain_input_shape
+
         elif(layer_type == 'convfilter'):
             if len(desc) == 6:
                 #default border mode
