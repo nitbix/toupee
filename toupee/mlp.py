@@ -345,6 +345,9 @@ class MLP(object):
                                  layer_name=name_this,
                                  )
         elif(layer_type == 'pool'):
+            if len(desc) == 3:
+                #default no-options
+                desc.append({})
             pooling , pool_size, name_this, options = desc
             if self.chain_input_shape is None:
                 raise Exception("must specify first input shape")
@@ -362,6 +365,9 @@ class MLP(object):
             self.chain_n_in = self.chain_input_shape
 
         elif(layer_type == 'nin' or layer_type == 'mlpconv'):
+            if len(desc) == 2:
+                #default no-options
+                desc.append({})
             drop_this, name_this, options = desc
             l = layers.NiN(rng=self.rng,
                                  inputs = self.chain_in,
