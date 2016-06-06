@@ -15,12 +15,14 @@ import theano
 import theano.tensor as T
 import yaml
 import math
+import copy
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 
 import mlp
 from data import Resampler, Transformer, sharedX, load_data, \
         make_pretraining_set, WeightedResampler
 from parameters import Parameters
+import common
 
 floatX = theano.config.floatX
 
@@ -117,7 +119,11 @@ class StackingRunner:
         self.errors = self.stack_head.errors(y)
 
 
-class EnsembleMethod(yaml.YAMLObject):
+class EnsembleMethod(common.ConfiguredObject):
+
+    def _default_value(self, param_name, value):
+        if param_name not in self.__dict__:
+            self.__dict__[param_name] = value
 
     def create_aggregator(self,x,y,train_set,valid_set):
         raise NotImplementedException()
@@ -179,31 +185,44 @@ class Bagging(EnsembleMethod):
         return 'Bagging'
 
 
-class CompressedBoosting(EnsembleMethod):
+class DIB(EnsembleMethod):
     """
     Create an AdaBoost Ensemble from parameters
     """
 
-    yaml_tag = u'!CompressedBoosting'
+    yaml_tag = u'!DIB'
+
+    def set_defaults(self):
+        self._default_value('incremental_index', -1)
+        self._default_value('grow_forward', False)
 
     def create_aggregator(self,params,members,x,y,train_set,valid_set):
         #return AveragingRunner(self.member,x,y)
         return WeightedAveragingRunner(members,x,y,self.alphas)
 
     def create_member(self,x,y):
+        rng = numpy.random.RandomState(self.params.random_seed)
+        self.set_defaults()
         resampled_train = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid()]
         pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
         self.params.member_number = len(self.members) + 1
+        if self.params.member_number > 1:
+            self.params.n_epochs = self.n_epochs_after_first
         m = mlp.test_mlp(resampled_train, self.params,
                 pretraining_set = pretraining_set, x=x, y=y,
                 continuation=self.weights)
         self.weights = m.get_weights()
-        self.params.n_hidden.append(self.params.incremental_layer)
-        t,d = self.params.incremental_layer
-        new_layer = m.make_layer(t,d)
-        self.weights['W'].append(new_layer.W.get_value())
-        self.weights['b'].append(new_layer.b.get_value())
+        index = self.incremental_index
+        if self.grow_forward:
+            index += len(self.members)
+        if index == -1:
+            index = len(self.params.n_hidden)
+        self.params.n_hidden.insert(index,copy.deepcopy(self.incremental_layer))
+        self.weights['W'] = self.weights['W'][:index] + [ None for i in range(index,len(self.params.n_hidden))]
+        self.weights['b'] = self.weights['b'][:index] + [ None for i in range(index,len(self.params.n_hidden))]
+        self.weights['outb'] = None
+        self.weights['outW'] = None
         orig_train = self.resampler.get_train()
         yhat = m.classify(orig_train[0])
         errors = T.neq(orig_train[1], yhat)
@@ -226,7 +245,14 @@ class CompressedBoosting(EnsembleMethod):
         self.alphas = []
 
     def serialize(self):
-        return 'CompressedBoosting'
+        self.set_defaults()
+        return """
+DIB {{
+    n_epochs_after_first: {0},
+    grow_forward: {1},
+    incremental_index: {2}
+}}
+        """.format(self.n_epochs_after_first, self.grow_forward, self.incremental_index)
 
 
 class AdaBoost_M1(EnsembleMethod):

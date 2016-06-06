@@ -9,6 +9,7 @@ All code released under Apachev2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import numpy
+import yaml
 import theano
 import theano.tensor as T
 from data import sharedX
@@ -51,6 +52,12 @@ class Results:
         self.best_test = test
         self.best_epoch = epoch
         self.params = self.params.serialize()
+
+class ConfiguredObject(yaml.YAMLObject):
+
+    def _default_value(self, param_name, value):
+        if param_name not in self.__dict__:
+            self.__dict__[param_name] = value
 
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()

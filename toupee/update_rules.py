@@ -16,11 +16,7 @@ import yaml
 from data import sharedX
 import common
 
-class UpdateRule(yaml.YAMLObject):
-
-    def _default_value(self, param_name, value):
-        if param_name not in self.__dict__:
-            self.__dict__[param_name] = value
+class UpdateRule(common.ConfiguredObject):
 
     def __call__(self, param, learning_rate, gparam, mask, updates,
                  current_cost, previous_cost):

@@ -454,8 +454,6 @@ class MLP(object):
                     output_dim_x,
                     output_dim_y]
         self.chain_in = l.output
-        #numpy.set_printoptions(threshold=numpy.nan)
-        #print numpy.asarray(l.W.eval({}))
         return l
 
     def make_top_layer(self, n_out, chain_in, chain_n_in, rng,
