@@ -165,7 +165,7 @@ class Resampler:
     distribution
     """
 
-    def __init__(self,dataset):
+    def __init__(self, dataset, seed = 42):
         self.train,self.valid,self.test = dataset
         self.train_x, self.train_y = self.train
         self.valid_x, self.valid_y = self.valid
@@ -174,6 +174,7 @@ class Resampler:
         self.s_train = None
         self.s_valid = None
         self.s_test = None
+        np.random.seed(seed)
         
     def make_new_train(self,sample_size,distribution=None):
         if distribution is None:
@@ -209,8 +210,8 @@ class Resampler:
 
 class WeightedResampler(Resampler):
 
-    def __init__(self,dataset):
-        Resampler.__init__(self,dataset)
+    def __init__(self, dataset, seed = 42):
+        Resampler.__init__(self, dataset, seed)
         self.weights = numpy.repeat([1.0/self.train_size], self.train_size)
 
     def update_weights(self,new_weights):

@@ -201,7 +201,6 @@ class DIB(EnsembleMethod):
         return WeightedAveragingRunner(members,x,y,self.alphas)
 
     def create_member(self,x,y):
-        rng = numpy.random.RandomState(self.params.random_seed)
         self.set_defaults()
         resampled_train = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid()]
@@ -238,7 +237,7 @@ class DIB(EnsembleMethod):
     def prepare(self, params, dataset):
         self.params = params
         self.dataset = dataset
-        self.resampler = WeightedResampler(dataset)
+        self.resampler = WeightedResampler(dataset, seed = params.seed)
         self.D = sharedX(self.resampler.weights)
         self.weights = None
         self.members = []
