@@ -519,8 +519,6 @@ class Pool2D(Layer):
         :type input: theano.tensor.dmatrix
         :param input: a symbolic tensor of shape (n_examples, n_in)
         """
-        assert input_shape[1] == filter_shape[1]
-
         self.input_shape = input_shape #[batch_size,channels,y,x]
         self.pooling = pooling
         self.pool_size = pool_size #[y,x]
