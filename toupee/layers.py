@@ -275,7 +275,7 @@ class NiN(Layer):
         n_in = self.input_shape[1]
         if b is None:
             if self.untie_biases:
-                biases_shape = (n_out,) + self.output_shape[2:]
+                biases_shape = [n_out].extend(self.output_shape[2:])
             else:
                 biases_shape = (n_out,)
             b = weight_inits.ZeroWeightInit()(rng,biases_shape,None,layer_name + '_b',None)
