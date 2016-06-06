@@ -376,7 +376,9 @@ class MLP(object):
                                  layer_name = name_this,
                                  options = options
                                  )
-            self.chain_input_shape = [ self.chain_n_in[0], n_this] + self.chain_n_in[2:]
+            chain_input_shape = [ self.chain_input_shape[0], n_this ]
+            chain_input_shape.extend(self.chain_input_shape[2:])
+            self.chain_input_shape = chain_input_shape
             self.chain_n_in = self.chain_input_shape
 
         elif(layer_type == 'convfilter'):

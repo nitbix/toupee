@@ -279,7 +279,6 @@ class NiN(Layer):
                 biases_shape = [n_out].extend(self.output_shape[2:])
             else:
                 biases_shape = n_out
-            print biases_shape
             b = weight_inits.ZeroWeightInit()(rng,biases_shape,None,layer_name + '_b',None)
         Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out, 
                 activation, dropout_rate, layer_name, W, b, 
@@ -289,7 +288,7 @@ class NiN(Layer):
     def rebuild(self):
         self.y = T.tensordot(self.W, self.inputs, axes=[[0], [1]])
         remaining_dims = range(2, self.inputs.ndim)
-        self.y = self.y.dimshuffle(1, 0, *remainingdims)
+        self.y = self.y.dimshuffle(1, 0, *remaining_dims)
         if self.b is not None:
             if self.untie_biases:
                 remaining_dims_biases = range(1, self.inputs.ndim - 1)
