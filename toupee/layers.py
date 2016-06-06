@@ -275,9 +275,11 @@ class NiN(Layer):
         n_in = self.input_shape[1]
         if b is None:
             if self.untie_biases:
+                #TODO: for this to work we need to make inits take a shape
                 biases_shape = [n_out].extend(self.output_shape[2:])
             else:
-                biases_shape = (n_out,)
+                biases_shape = n_out
+            print biases_shape
             b = weight_inits.ZeroWeightInit()(rng,biases_shape,None,layer_name + '_b',None)
         Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out, 
                 activation, dropout_rate, layer_name, W, b, 
