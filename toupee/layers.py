@@ -178,7 +178,6 @@ class GlobalPooling(Layer):
         self.dropout_rate = 0.
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
-        self.dimensions = dimensions
         self.write_enable = 0.
         self.mode = mode
         self.rejoin()
