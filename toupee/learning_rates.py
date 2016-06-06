@@ -41,7 +41,7 @@ class CompositeLearningRate(LearningRate):
 
     def serialize(self):
         schedule_str = ["{0} - {1}".format(e,x.serialize())
-                        for e,x in self.schedule]
+                        for e,x in self.schedule.iteritems()]
         return 'CompositeLearningRate: {{ {0} }}'.format(",".join(schedule_str))
 
     def reset(self,updates):
