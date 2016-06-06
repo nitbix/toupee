@@ -367,11 +367,11 @@ class MLP(object):
             if len(desc) == 2:
                 #default no-options
                 desc.append({})
-            drop_this, name_this, options = desc
+            n_this, drop_this, name_this, options = desc
             l = layers.NiN(rng=self.rng,
                                  inputs = self.chain_in,
                                  input_shape = self.chain_input_shape,
-                                 n_out = numpy.prod(self.chain_n_in),
+                                 n_out = numpy.prod(n_this),
                                  dropout_rate = drop_this,
                                  layer_name = name_this,
                                  options = options
