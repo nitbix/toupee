@@ -267,18 +267,20 @@ class NiN(Layer):
     Network-in-Network: see https://arxiv.org/pdf/1312.4400.pdf
     """
 
-    def __init__(self, rng, inputs, n_out, W=None, b=None,
+    def __init__(self, rng, inputs, input_shape, n_out, W=None, b=None,
                  activation=T.tanh,dropout_rate=0,layer_name='hidden',
                  weight_init=None, options = {}):
         self.untie_biases = parse_option(options, 'untie_biases', False)
+        self.input_shape = input_shape
         n_in = self.input_shape[1]
         if b is None:
             if self.untie_biases:
-                biases_shape = (n_out,) + self.output_shape[2:]
+                #TODO: for this to work we need to make inits take a shape
+                biases_shape = [n_out].extend(self.output_shape[2:])
             else:
-                biases_shape = (n_out,)
+                biases_shape = n_out
             b = weight_inits.ZeroWeightInit()(rng,biases_shape,None,layer_name + '_b',None)
-        Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out, 
+        Layer.__init__(self, rng, inputs, n_in, n_out, 
                 activation, dropout_rate, layer_name, W, b, 
                 weight_init = weight_init, options = options)
         self.rebuild()
@@ -286,7 +288,7 @@ class NiN(Layer):
     def rebuild(self):
         self.y = T.tensordot(self.W, self.inputs, axes=[[0], [1]])
         remaining_dims = range(2, self.inputs.ndim)
-        self.y = self.y.dimshuffle(1, 0, *remainingdims)
+        self.y = self.y.dimshuffle(1, 0, *remaining_dims)
         if self.b is not None:
             if self.untie_biases:
                 remaining_dims_biases = range(1, self.inputs.ndim - 1)
