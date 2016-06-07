@@ -1136,25 +1136,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
             table_name = 'results'
         table = db[table_name]
         print "saving MLP results to {0}@{1}:{2}".format(params.results_db,host,table)
-        def serialize(o):
-            if isinstance(o, numpy.float32):
-                return float(o)
-            else:
-                try:
-                    return numpy.asfarray(o).tolist()
-                except:
-                    if isinstance(o, object):
-                        if 'serialize' in dir(o) and callable(getattr(o,'serialize')):
-                            return o.serialize()
-                        if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
-                            return o.tolist()
-                        try:
-                            return json.loads(json.dumps(o.__dict__,default=serialize))
-                        except:
-                            return str(o)
-                    else:
-                        raise Exception("don't know how to save {0}".format(type(o)))
-        table.insert(json.loads(json.dumps(results.__dict__,default=serialize)))
+        table.insert(json.loads(json.dumps(results.__dict__,default=common.serialize)))
     if return_results:
         return cl,results
     else:
