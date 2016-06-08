@@ -25,6 +25,19 @@ def parse_option(options, key, default):
     else:
         return default
 
+def pool_output_length(input_length, pool_size, stride, pad, ignore_border):
+    if ignore_border:
+        output_length = input_length + 2 * pad - pool_size + 1
+        output_length = (output_length + stride - 1) // stride
+    else:
+        assert pad == 0
+        if stride >= pool_size:
+            output_length = (input_length + stride - 1) // stride
+        else:
+            output_length = max(
+                0, (input_length - pool_size + stride - 1) // stride) + 1
+    return output_length
+
 class Layer:
     def __init__(self, rng, inputs, n_in, n_out, activation,
                  dropout_rate, layer_name, W=None, b=None, weight_init=None,
@@ -171,6 +184,7 @@ class Elastic(Layer):
     def set_weights(self,W,b):
         pass
 
+
 class GlobalPooling(Layer):
     def __init__(self, rng, inputs, layer_name, mode):
         self.inputs = inputs
@@ -204,6 +218,7 @@ class GlobalPooling(Layer):
     def set_weights(self,W,b):
         pass
 
+
 class Linear(Layer):
     def __init__(self, rng, inputs, n_in, dropout_rate, layer_name):
         self.inputs = inputs
@@ -230,6 +245,7 @@ class Linear(Layer):
 
     def set_weights(self,W,b):
         pass
+
 
 class FlatLayer(Layer):
     """
@@ -523,16 +539,26 @@ class Pool2D(Layer):
         """
         self.input_shape = input_shape #[batch_size,channels,y,x]
         self.pooling = pooling
+        self.layer_name = layer_name
         self.pool_size = pool_size #[y,x]
         self.strides = parse_option(options, 'strides', pool_size)
+        self.ignore_border = parse_option(options, 'ignore_border', True)
+        self.pad = parse_option(options, 'pad', (0,0))
 
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
 
-        self.output_shape = [input_shape[1]]
-        self.output_shape.extend(numpy.divide(input_shape[2:], self.strides))
+        self.output_shape = input_shape[:2]
+        for i in range(len(input_shape) - 2):
+            self.output_shape.append(
+                pool_output_length(self.input_shape[i+2],
+                                   self.pool_size[i],
+                                   self.strides[i],
+                                   self.pad[i],
+                                   self.ignore_border)
+            )
         self.dropout_rate = 0.
-        self.inputs = inputs
+        self.inputs = inputs.reshape(input_shape)
         self.layer_name = layer_name
         self.n_in = numpy.prod(input_shape)
         self.n_out = self.n_in / numpy.prod(pool_size)
@@ -546,115 +572,11 @@ class Pool2D(Layer):
         self.y_out = pool.pool_2d(input = self.inputs, 
                                        st = self.strides,
                                        ds = self.pool_size,
-                                       ignore_border = True,
+                                       ignore_border = self.ignore_border,
+                                       padding = self.pad,
                                        mode = self.pooling)
         self.output = self.y_out
         self.params = []
-
-    def rejoin(self):
-        self.rebuild()
-
-
-
-class ConvolutionalLayer(Layer):
-    """
-    A Convolutional Layer, as per Convolutional Neural Networks. Includes filter, and pooling.
-    """
-    def __init__(self, rng, inputs, input_shape, filter_shape, pool_size,
-             W = None, b = None, activation = T.tanh, dropout_rate = 0.,
-             layer_name = 'conv', border_mode = 'valid', pooling = 'max',
-             weight_init= None, options = {}):
-        """
-        :type rng: numpy.random.RandomState
-        :param rng: a random number generator used to initialize weights
-
-        :type input: theano.tensor.dmatrix
-        :param input: a symbolic tensor of shape (n_examples, n_in)
-
-        :type n_in: int
-        :param n_in: dimensionality of input
-
-        :type n_out: int
-        :param n_out: number of hidden units
-
-        :type activation: theano.Op or function
-        :param activation: Non linearity to be applied in the hidden
-                           layer
-        """
-        assert input_shape[1] == filter_shape[1]
-
-        self.input_shape = input_shape #[batch_size,channels,y,x]
-        self.filter_shape = filter_shape #[maps,channels,y,x]
-        self.pooling = pooling
-        self.pool_size = pool_size #[y,x]
-        self.border_mode = border_mode
-        self.fan_in = numpy.prod(self.filter_shape[1:])
-        self.fan_out = self.filter_shape[0] * numpy.prod(self.filter_shape[2:]) / numpy.prod(pool_size)
-        self.strides = parse_option(options, 'strides', (1,1))
-        self.pooling_strides = parse_option(options, 'pooling_strides', self.pool_size)
-
-        #W and b are slightly different for convnets - we need filter_shape
-        if weight_init is None:
-            weight_init = weight_inits.GlorotWeightInit()
-        if W is None:
-            W = weight_init(rng,self.fan_in,self.fan_out,layer_name + '_W',
-                    activation, self.filter_shape)
-        if b is None:
-            b = weight_inits.ZeroWeightInit()(rng,self.filter_shape[0],None,
-                    layer_name + '_b', None)
-        Layer.__init__(self, rng, T.reshape(inputs,self.input_shape,ndim=4), 
-                self.filter_shape[0], self.filter_shape[1], activation,
-                dropout_rate, layer_name, W, b)
-        self.rebuild()
-
-    def set_input(self,inputs):
-        self.inputs = T.reshape(inputs,self.input_shape,ndim=4)
-
-    def rebuild(self):
-        self.delta_W = sharedX(
-            value=numpy.zeros(self.filter_shape),
-            name='{0}_delta_W'.format(self.layer_name))
-        self.delta_b = sharedX(
-            value=numpy.zeros_like(self.b.get_value(borrow=True)),
-            name='{0}_delta_b'.format(self.layer_name))
-        if self.border_mode == 'same':
-            bm = 'full'
-        else:
-            bm = self.border_mode
-        conv_out = T.nnet.conv2d(
-            input=self.inputs,
-            filters=self.W,
-            filter_shape=self.filter_shape,
-            input_shape=self.input_shape,
-            subsample=self.strides,
-            border_mode=bm) * (1. - self.dropout_rate)
-
-        if self.border_mode == 'same':
-            shift_x = (self.filter_shape[2] - 1) // 2
-            shift_y = (self.filter_shape[3] - 1) // 2
-            self.conv_out = conv_out[:, :,
-                                shift_x:self.input_shape[2] + shift_x,
-                                shift_y:self.input_shape[3] + shift_y]
-        else:
-            self.conv_out = conv_out
-
-        self.params = []
-        if self.batch_normalization:
-            self.conv_out = T.nnet.bn.batch_normalization(inputs = self.conv_out, gamma =
-                    self.gamma, beta = self.beta,
-                    mean = self.conv_out.mean((0,), keepdims=True),
-                    std = self.conv_out.std((0,), keepdims = True),
-                    mode='low_mem')
-            self.params.extend([self.beta, self.gamma])
-
-        self.y_out = self.activation(self.conv_out + self.b.dimshuffle('x',0,'x','x'))
-        self.pooled_out = pool.pool_2d(input = self.y_out, 
-                                       st = self.pooling_strides,
-                                       ds = self.pool_size,
-                                       ignore_border = True,
-                                       mode = self.pooling)
-        self.output = self.pooled_out
-        self.params.extend([self.W, self.b])
 
     def rejoin(self):
         self.rebuild()

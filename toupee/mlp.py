@@ -111,7 +111,6 @@ class MLP(object):
 
             l = self.make_layer(layer_type,desc,W,b,i)
             self.hiddenLayers.append(l)
-
             modes = self.params.pretraining
             if pretraining_set is not None and modes is not None:
                 for mode in modes.split(','):
@@ -286,6 +285,7 @@ class MLP(object):
         return (n_pixels_y,n_pixels_x)
 
     def make_layer(self,layer_type,desc,W=None,b=None,i=0):
+
         if(layer_type == 'flat'):
             if len(desc) == 5:
                 #default no-options
@@ -303,6 +303,7 @@ class MLP(object):
                                  W = W, b = b, options = options)
             self.chain_n_in = n_this
             l.output_shape = self.chain_n_in
+
         elif(layer_type == 'LCN'):
             n_pixels_y,n_pixels_x = self.get_n_pixels(i)
             kernel_size,use_divisor = desc
@@ -315,6 +316,7 @@ class MLP(object):
                         use_divisor
                     )
             l.output_shape = self.chain_n_in
+
         elif(layer_type == 'elastic_transform'):
             n_pixels_y,n_pixels_x = self.get_n_pixels(i)
             l = layers.Elastic(
@@ -326,6 +328,7 @@ class MLP(object):
                         self.trainflag
                     )
             l.output_shape = self.chain_n_in
+
         elif(layer_type == 'global_pooling'):
             (mode,) = desc
             l = layers.GlobalPooling(rng = self.rng,
@@ -335,16 +338,17 @@ class MLP(object):
                                  )
             self.chain_n_in = self.chain_n_in[0]
             l.output_shape = self.chain_n_in
+
         elif(layer_type == 'linear'):
             drop_this, name_this = desc
             l = layers.Linear(rng=self.rng,
-                                 inputs=self.chain_in.flatten(ndim=2),
-                                 n_in=numpy.prod(self.chain_n_in),
-                                 dropout_rate=drop_this,
-                                 layer_name=name_this,
-                                 )
+                              inputs=self.chain_in.flatten(ndim=2),
+                              n_in=numpy.prod(self.chain_n_in),
+                              dropout_rate=drop_this,
+                              layer_name=name_this,
+                             )
 
-        elif(layer_type == 'pool'):
+        elif(layer_type == 'pool2d'):
             if len(desc) == 3:
                 #default no-options
                 desc.append({})
@@ -353,15 +357,15 @@ class MLP(object):
                 raise Exception("must specify first input shape")
             input_shape = self.chain_input_shape
             l = layers.Pool2D(rng = self.rng,
-                               inputs = self.chain_in,
-                               input_shape = self.chain_input_shape,
-                               pool_size = pool_size,
-                               layer_name = name_this,
-                               pooling = pooling,
-                               options = options
-                              )
+                              inputs = self.chain_in,
+                              input_shape = self.chain_input_shape,
+                              pool_size = pool_size,
+                              layer_name = name_this,
+                              pooling = pooling,
+                              options = options
+                             )
             self.chain_input_shape = l.output_shape
-            self.chain_n_in = self.chain_input_shape
+            self.chain_n_in = self.chain_input_shape[1:]
 
         elif(layer_type == 'nin' or layer_type == 'mlpconv'):
             if len(desc) == 3:
@@ -379,7 +383,7 @@ class MLP(object):
             chain_input_shape = [ self.chain_input_shape[0], n_this ]
             chain_input_shape.extend(self.chain_input_shape[2:])
             self.chain_input_shape = chain_input_shape
-            self.chain_n_in = self.chain_input_shape
+            self.chain_n_in = self.chain_input_shape[1:]
 
         elif(layer_type == 'convfilter'):
             if len(desc) == 6:
@@ -400,8 +404,6 @@ class MLP(object):
                 self.chain_input_shape = input_shape
             if len(filter_shape) == 3:
                 filter_shape.insert(1,input_shape[1])
-            if self.prev_dim is None:
-                self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
             l = layers.ConvFilter(rng = self.rng,
                                   inputs = self.chain_in, 
                                   input_shape = input_shape, 
@@ -412,7 +414,7 @@ class MLP(object):
                                   border_mode = border_mode,
                                   weight_init = weight_init,
                                   W = W, b = b, options = options)
-            prev_map_number,dim_x,dim_y = self.prev_dim
+            dim_x,dim_y = input_shape[2],input_shape[3]
             curr_map_number = filter_shape[0]
             if border_mode == 'same':
                 output_dim_x = dim_x
@@ -432,60 +434,6 @@ class MLP(object):
                     output_dim_x,
                     output_dim_y]
 
-        elif(layer_type == 'conv'):
-            if len(desc) == 8:
-                #default border mode
-                desc.append('valid')
-            if len(desc) == 9:
-                #default no-options
-                desc.append({})
-            (input_shape, filter_shape, pool_size, drop_this, name_this,
-                    activation_this, pooling, weight_init, border_mode,
-                    options) = desc
-            if input_shape is None:
-                if self.chain_input_shape is None:
-                    raise Exception("must specify first input shape")
-                input_shape = self.chain_input_shape
-            else:
-                if len(input_shape) == 3:
-                    input_shape.insert(0,self.params.batch_size)
-                self.chain_input_shape = input_shape
-            if len(filter_shape) == 3:
-                filter_shape.insert(1,input_shape[1])
-            if self.prev_dim is None:
-                self.prev_dim = (input_shape[1],input_shape[2],input_shape[3])
-            l = layers.ConvolutionalLayer(
-                                   rng = self.rng,
-                                   inputs = self.chain_in, 
-                                   input_shape = input_shape, 
-                                   filter_shape = filter_shape,
-                                   pool_size = pool_size,
-                                   activation = activation_this,
-                                   dropout_rate = drop_this,
-                                   layer_name = name_this,
-                                   pooling = pooling,
-                                   border_mode = border_mode,
-                                   weight_init = weight_init,
-                                   W = W,b = b, options = options)
-            prev_map_number,dim_x,dim_y = self.prev_dim
-            curr_map_number = filter_shape[0]
-            if border_mode == 'same':
-                output_dim_x = dim_x
-                output_dim_y = dim_y
-            elif border_mode == 'valid':
-                output_dim_x = (dim_x - filter_shape[2] + 1)
-                output_dim_y = (dim_y - filter_shape[3] + 1)
-            else:
-                raise Exception('Invalid border mode: {0}'.format(border_mode))
-            output_dim_x = output_dim_x / (l.strides[0] * l.pooling_strides[0])
-            output_dim_y = output_dim_y / (l.strides[1] * l.pooling_strides[1])
-            self.chain_n_in = (curr_map_number,output_dim_x,output_dim_y)
-            l.output_shape = self.chain_n_in
-            self.prev_dim = (curr_map_number,output_dim_x,output_dim_y)
-            self.chain_input_shape = [self.chain_input_shape[0],
-                    curr_map_number,
-                    output_dim_x,
-                    output_dim_y]
         self.chain_in = l.output
         return l
 
