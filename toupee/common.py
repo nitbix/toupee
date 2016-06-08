@@ -59,5 +59,25 @@ class ConfiguredObject(yaml.YAMLObject):
         if param_name not in self.__dict__:
             self.__dict__[param_name] = value
 
+def serialize(o):
+    if isinstance(o, numpy.float32):
+        return float(o)
+    else:
+        try:
+            return numpy.asfarray(o).tolist()
+        except:
+            if isinstance(o, object):
+                if 'serialize' in dir(o) and callable(getattr(o,'serialize')):
+                    print o
+                    return o.serialize()
+                if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
+                    return o.tolist()
+                try:
+                    return json.loads(json.dumps(o.__dict__,default=serialize))
+                except:
+                    return str(o)
+            else:
+                raise Exception("don't know how to save {0}".format(type(o)))
+
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()
