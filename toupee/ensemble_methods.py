@@ -197,7 +197,6 @@ class DIB(EnsembleMethod):
         self._default_value('grow_forward', False)
 
     def create_aggregator(self,params,members,x,y,train_set,valid_set):
-        #return AveragingRunner(self.member,x,y)
         return WeightedAveragingRunner(members,x,y,self.alphas)
 
     def create_member(self,x,y):
@@ -235,7 +234,7 @@ class DIB(EnsembleMethod):
         return m
 
     def prepare(self, params, dataset):
-        self.params = params
+        self.params = copy.deepcopy(params)
         self.dataset = dataset
         self.resampler = WeightedResampler(dataset, seed = params.random_seed)
         self.D = sharedX(self.resampler.weights)
@@ -249,9 +248,13 @@ class DIB(EnsembleMethod):
 DIB {{
     n_epochs_after_first: {0},
     grow_forward: {1},
-    incremental_index: {2}
+    incremental_index: {2},
+    incremental_layer: {3}
 }}
-        """.format(self.n_epochs_after_first, self.grow_forward, self.incremental_index)
+        """.format(self.n_epochs_after_first,
+                   self.grow_forward,
+                   self.incremental_index,
+                   self.incremental_layer)
 
 
 class AdaBoost_M1(EnsembleMethod):
