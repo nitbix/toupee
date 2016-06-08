@@ -40,8 +40,8 @@ def pool_output_length(input_length, pool_size, stride, pad, ignore_border):
 
 class Layer:
     def __init__(self, rng, inputs, n_in, n_out, activation,
-                 dropout_rate, layer_name, W=None, b=None, weight_init=None,
-                 options = {}):
+                 dropout_rate, layer_name, W = None, b = None,
+                 weight_init = None, gamma = None, beta = None, options = {}):
         self.inputs = inputs
         self.dropout_rate=dropout_rate
         self.layer_name=layer_name
@@ -61,8 +61,14 @@ class Layer:
         self.b = b
         self.n_in = n_in
         self.n_out = n_out
-        self.gamma = sharedX(numpy.ones((n_out,)), name = self.layer_name + '_gamma')
-        self.beta = sharedX(numpy.zeros((n_out,)), name = self.layer_name + '_beta')
+        if gamma is None:
+            self.gamma = sharedX(numpy.ones((n_out,)), name = self.layer_name + '_gamma')
+        else:
+            self.gamma = gamma
+        if beta is None:
+            self.beta = sharedX(numpy.zeros((n_out,)), name = self.layer_name + '_beta')
+        else:
+            self.beta = beta
 
         self.write_enable = 1.
         self.rejoin()
@@ -288,17 +294,21 @@ class NiN(Layer):
                  weight_init=None, options = {}):
         self.untie_biases = parse_option(options, 'untie_biases', False)
         self.input_shape = input_shape
+        self.layer_name = layer_name
         n_in = self.input_shape[1]
+        b_shape = [n_out].extend(self.input_shape[2:])
         if b is None:
             if self.untie_biases:
                 #TODO: for this to work we need to make inits take a shape
-                biases_shape = [n_out].extend(self.output_shape[2:])
+                biases_shape = b_shape
             else:
                 biases_shape = n_out
             b = weight_inits.ZeroWeightInit()(rng,biases_shape,None,layer_name + '_b',None)
+        gamma = sharedX(numpy.ones(b_shape), name = self.layer_name + '_gamma')
+        beta = sharedX(numpy.zeros(b_shape), name = self.layer_name + '_beta')
         Layer.__init__(self, rng, inputs, n_in, n_out, 
-                activation, dropout_rate, layer_name, W, b, 
-                weight_init = weight_init, options = options)
+                activation, dropout_rate, layer_name, W, b, gamma = gamma,
+                beta = beta, weight_init = weight_init, options = options)
         self.rebuild()
 
     def rebuild(self):
