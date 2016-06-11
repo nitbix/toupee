@@ -64,12 +64,16 @@ class GaussianWeightInit(WeightInit):
                 shape = (n_in,)
             else:
                 shape = (n_in, n_out)
+        if 'mean' not in self.__dict__:
+            self.mean = 0
+        if 'std' not in self.__dict__:
+            self.std = 1
         W_values = numpy.asarray(rng.normal(self.mean, self.std, size=shape),
                 dtype=theano.config.floatX)
         return W_values
 
     def __str__(self):
-        return "UniformWeightInit {{ min_w: {0} , max_w: {1} }}".format(self.min_w, self.max_w)
+        return "GaussianWeightInit {{ mean: {0} , std: {1} }}".format(self.mean, self.std)
 
 class GlorotWeightInit(WeightInit):
 
