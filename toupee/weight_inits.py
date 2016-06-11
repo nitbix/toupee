@@ -54,6 +54,23 @@ class UniformWeightInit(WeightInit):
     def __str__(self):
         return "UniformWeightInit {{ min_w: {0} , max_w: {1} }}".format(self.min_w, self.max_w)
 
+class GaussianWeightInit(WeightInit):
+
+    yaml_tag = u'!GaussianWeightInit'
+
+    def __call__(self,rng,n_in,n_out,weight_name,activation,shape=None):
+        if shape is None:
+            if n_out is None:
+                shape = (n_in,)
+            else:
+                shape = (n_in, n_out)
+        W_values = numpy.asarray(rng.normal(self.mean, self.std, size=shape),
+                dtype=theano.config.floatX)
+        return W_values
+
+    def __str__(self):
+        return "UniformWeightInit {{ min_w: {0} , max_w: {1} }}".format(self.min_w, self.max_w)
+
 class GlorotWeightInit(WeightInit):
 
     yaml_tag = u'!GlorotWeightInit'
