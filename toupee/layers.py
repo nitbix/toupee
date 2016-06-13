@@ -464,7 +464,9 @@ class ConvFilter(Layer):
         :param activation: Non linearity to be applied in the hidden
                            layer
         """
-        assert input_shape[1] == filter_shape[1]
+        if input_shape[1] != filter_shape[1]:
+            print "Incompatible shapes: {0} (input) <!=> {1} (filter) in layer {2}".format(input_shape,filter_shape,layer_name)
+            exit(1)
 
         self.input_shape = input_shape #[batch_size,channels,y,x]
         self.filter_shape = filter_shape #[maps,channels,y,x]
