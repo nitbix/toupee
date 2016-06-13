@@ -49,7 +49,8 @@ class Results:
 
     def set_final_observation(self,valid,test,epoch):
         self.best_valid = valid
-        self.best_test = test
+        if test is not None:
+            self.best_test = test
         self.best_epoch = epoch
         self.params = self.params.serialize()
 
