@@ -220,7 +220,7 @@ class DIB(EnsembleMethod):
         #we have to force recalculation of the following layer
         next_layer_type, next_layer_conf = self.params.n_hidden[index + 1]
         filter_shape = next_layer_conf[1]
-        if len(filter_shape) != 3:
+        if next_layer_type == 'convfilter' and len(filter_shape) != 3:
             self.params.n_hidden[index + 1][1][1] = [filter_shape[0],filter_shape[2],filter_shape[3]]
         self.weights['W'] = self.weights['W'][:index] + [ None for i in range(index,len(self.params.n_hidden))]
         self.weights['b'] = self.weights['b'][:index] + [ None for i in range(index,len(self.params.n_hidden))]
