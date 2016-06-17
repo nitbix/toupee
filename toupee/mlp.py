@@ -367,7 +367,7 @@ class MLP(object):
             self.chain_input_shape = l.output_shape
             self.chain_n_in = self.chain_input_shape[1:]
 
-        elif(layer_type == 'nin' or layer_type == 'mlpconv'):
+        elif layer_type in ['nin', 'mlpconv']:
             if len(desc) == 3:
                 #default no-options
                 desc.append({})
@@ -385,7 +385,7 @@ class MLP(object):
             self.chain_input_shape = chain_input_shape
             self.chain_n_in = self.chain_input_shape[1:]
 
-        elif(layer_type == 'convfilter'):
+        elif layer_type in ['convfilter', 'conv2d']:
             if len(desc) == 6:
                 #default border mode
                 desc.append('valid')
@@ -404,7 +404,7 @@ class MLP(object):
                 self.chain_input_shape = input_shape
             if len(filter_shape) == 3:
                 filter_shape.insert(1,input_shape[1])
-            l = layers.ConvFilter(rng = self.rng,
+            l = layers.Conv2D(rng = self.rng,
                                   inputs = self.chain_in, 
                                   input_shape = input_shape, 
                                   filter_shape = filter_shape,

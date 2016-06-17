@@ -25,6 +25,41 @@ class UpdateRule(common.ConfiguredObject):
     def serialize(self):
         raise NotImplementedError()
 
+class CompositeUpdateRule(UpdateRule):
+    #TODO: this does not work because the rule needs to be swapped externally
+    yaml_tag = u'!CompositeUpdateRule'
+
+    def __new__(cls):
+        instance = super(Composite,cls).__new__(cls)
+        common.toupee_global_instance.add_epoch_hook(lambda x: instance.epoch_hook(x))
+        common.toupee_global_instance.add_reset_hook(lambda x: instance.reset(x))
+        instance.reset()
+        return instance
+
+    def serialize(self):
+        schedule_str = ["{0} - {1}".format(e,x.serialize())
+                        for e,x in self.schedule.iteritems()]
+        return 'CompositeUpdateRule: {{ {0} }}'.format(",".join(schedule_str))
+
+    def reset(self,updates):
+        if 'current_epoch' not in self.__dict__:
+            self.current_epoch = sharedX(1)
+        self.active_rule = self.schedule[1]
+        updates = []
+        self.rule_functions = {}
+        for e,rule in self.schedule.iteritems():
+            rule.reset(updates)
+            self.rule_functions[e] = rule()
+
+    def epoch_hook(self,updates):
+        epoch = self.current_epoch + 1
+        if epoch in self.schedule.keys():
+            self.active_rule = self.schedule[epoch]
+        self.active_rule.epoch_hook(updates)
+
+    def __call__(self):
+        pass
+
 class SGD(UpdateRule):
 
     yaml_tag = u'!SGD'

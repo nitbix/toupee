@@ -438,7 +438,7 @@ class LogSoftMax(Layer):
         self.params = [self.W]
         self.rebuild()
 
-class ConvFilter(Layer):
+class Conv2D(Layer):
     """
     A Convolutional Layer, as per Convolutional Neural Networks. Includes
     filter, no pooling.
