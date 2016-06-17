@@ -1061,6 +1061,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
         results.set_final_observation(state.best_valid_loss * 100., state.test_score * 100., state.best_epoch)
     else:
+        results.set_final_observation(state.best_valid_loss * 100., None, state.best_epoch)
         print('Selection : Best valid score of {0} %'.format(
               state.best_valid_loss * 100.))
     if params.online_transform is not None or params.join_train_and_valid:
