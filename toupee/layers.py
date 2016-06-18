@@ -347,6 +347,11 @@ class SoftMax(Layer):
                  activation = T.tanh, dropout_rate = 0., layer_name = 'hidden',
                  weight_init = None, options  = {}):
         self.has_weights = parse_option(options, 'has_weights', True)
+        if not self.has_weights:
+            W = [0.]
+            b = [0.]
+            self.write_enable = 0.
+            dropout_rate = 0.
         Layer.__init__(self, rng, inputs.flatten(ndim=2), n_in, n_out,
                 activation, dropout_rate, layer_name, W, b,
                 weight_init = weight_init, options = options)
