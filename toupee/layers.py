@@ -382,7 +382,7 @@ class SoftMax(Layer):
         if y.dtype.startswith('int'):
             return T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
         else:
-            raise NotImplementedError()
+            return T.mean(T.neq(self.y_pred, T.argmax(y)), dtype=floatX, acc_dtype=floatX)
 
     def rejoin(self):
         self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
@@ -431,7 +431,7 @@ class LogSoftMax(Layer):
         if y.dtype.startswith('int'):
             return T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
         else:
-            raise NotImplementedError()
+            return T.mean(T.neq(self.y_pred, T.argmax(y)), dtype=floatX, acc_dtype=floatX)
 
     def rejoin(self):
         self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)

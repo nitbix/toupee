@@ -23,17 +23,36 @@ from data import Resampler, Transformer, sharedX, load_data, \
         make_pretraining_set, WeightedResampler
 from parameters import Parameters
 import common
+import utils
 
 floatX = theano.config.floatX
 
+class Aggregator:
+    """
+    Base class for all aggregating methods
+    """
+    def __init__(self):
+        pass
 
-class AveragingRunner:
+    def _batched_computation(self, set_x, f):
+        index = T.lscalar()
+        f = utils.set_slicer(self.x, index, set_x, f, self.params.batch_size)
+        return utils.apply_all_batches(self.x, f, set_x, self.params.batch_size)
+
+    def compute(self, set_x):
+        return self._batched_computation(set_x, self.p_y_given_x)
+
+    def classify(self, set_x):
+        return self._batched_computation(set_x, self.y_pred)
+
+class AveragingRunner(Aggregator):
     """
     Take an ensemble and produce the majority vote output on a dataset
     """
 
-    def __init__(self,members,x,y):
-        self.members=members
+    def __init__(self,members,x,y,params):
+        self.params = params
+        self.members = members
         self.x = x
         self.y = y
         self.p_y_given_x = sum([m.p_y_given_x for m in self.members]) / len(members)
@@ -41,13 +60,14 @@ class AveragingRunner:
         self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
 
 
-class MajorityVotingRunner:
+class MajorityVotingRunner(Aggregator):
     """
     Take an ensemble and produce the majority vote output on a dataset
     """
 
-    def __init__(self,members,x,y):
-        self.members=members
+    def __init__(self,members,x,y,params):
+        self.params = params
+        self.members = members
         self.x = x
         self.y = y
         self.p_y_given_x = sum([T.eq(T.max(m.p_y_given_x),m.p_y_given_x)
@@ -56,13 +76,14 @@ class MajorityVotingRunner:
         self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
 
 
-class WeightedAveragingRunner:
+class WeightedAveragingRunner(Aggregator):
     """
     Take an Ensemble and produce a weighted average, usually done in AdaBoost
     """
 
-    def __init__(self,members,x,y,weights):
-        self.members=members
+    def __init__(self,members,x,y,weights,params):
+        self.params = params
+        self.members = members
         self.x = x
         self.y = y
         self.p_y_given_x = sum([self.members[i].p_y_given_x * weights[i]
@@ -71,7 +92,7 @@ class WeightedAveragingRunner:
         self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
 
 
-class StackingRunner:
+class StackingRunner(Aggregator):
     """
     Take an ensemble and produce the stacked output on a dataset
     """
@@ -96,7 +117,8 @@ class StackingRunner:
         return sharedX(r)
 
     def __init__(self,members,x,y,train_set,valid_set,params):
-        self.members=members
+        self.params = params
+        self.members = members
         train_set_x,train_set_y = train_set
         valid_set_x,valid_set_y = valid_set
         if 'dropstack_prob' not in params.__dict__:
@@ -159,9 +181,9 @@ class Bagging(EnsembleMethod):
     
     def create_aggregator(self,params,members,x,y,train_set,valid_set):
         if 'voting' in self.__dict__ and self.voting:
-            return MajorityVotingRunner(members,x,y)
+            return MajorityVotingRunner(members,x,y,params)
         else:
-            return AveragingRunner(members,x,y)
+            return AveragingRunner(members,x,y,params)
 
     def create_member(self,x,y):
         resampled_train = [self.resampler.make_new_train(self.params.resample_size),
@@ -172,8 +194,7 @@ class Bagging(EnsembleMethod):
                 pretraining_set = pretraining_set, x=x, y=y)
         w = m.get_weights()
         self.members.append(w)
-        del m
-        return w
+        return m
 
     def prepare(self, params, dataset):
         self.params = params
@@ -197,7 +218,7 @@ class DIB(EnsembleMethod):
         self._default_value('grow_forward', False)
 
     def create_aggregator(self,params,members,x,y,train_set,valid_set):
-        return WeightedAveragingRunner(members,x,y,self.alphas)
+        return WeightedAveragingRunner(members,x,y,self.alphas,params)
 
     def create_member(self,x,y):
         self.set_defaults()
@@ -270,7 +291,7 @@ class AdaBoost_M1(EnsembleMethod):
     yaml_tag = u'!AdaBoostM1'
 
     def create_aggregator(self,params,members,x,y,train_set,valid_set):
-        return WeightedAveragingRunner(members,x,y,self.alphas)
+            return WeightedAveragingRunner(members,x,y,self.alphas,params)
 
     def create_member(self,x,y):
         resampled_train = [self.resampler.make_new_train(self.params.resample_size),
@@ -341,7 +362,7 @@ class Stacking(EnsembleMethod):
                 pretraining_set = pretraining_set, x=x, y=y)
         w = m.get_weights()
         self.members.append(w)
-        return w
+        return m
 
     def prepare(self, params, dataset):
         self.params = params

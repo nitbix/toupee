@@ -28,7 +28,10 @@ class CrossEntropy(CostFunction):
         Return the categorical cross-entropy of the prediction
         of this model under a given target distribution.
         """
-        return T.nnet.categorical_crossentropy(model.p_y_given_x,y).mean()
+        if y.dtype.startswith('int'):
+            return T.nnet.categorical_crossentropy(model.p_y_given_x,y).mean()
+        else:
+            return T.nnet.crossentropy(model.p_y_given_x,y).mean()
 
     def serialize(self):
         return 'CrossEntropy'
