@@ -36,6 +36,7 @@ import config
 import cost_functions
 import activations
 import common
+import utils
 
 floatX = theano.config.floatX
 
@@ -316,6 +317,18 @@ class MLP(object):
                         use_divisor
                     )
             l.output_shape = self.chain_n_in
+
+        elif(layer_type == 'LRN'):
+            alpha, k, beta, n = desc
+            l = layers.LRN(
+                        inputs = self.chain_in,
+                        input_shape = self.chain_input_shape,
+                        alpha = alpha,
+                        k = k,
+                        beta = beta,
+                        n = n
+                    )
+            l.output_shape = self.chain_input_shape
 
         elif(layer_type == 'elastic_transform'):
             n_pixels_y,n_pixels_x = self.get_n_pixels(i)
@@ -948,7 +961,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     print('finished patience')
                     state.done_looping = True
                     break
-        #if params.save_images or params.detailed_stats:
+        if params.save_images or params.detailed_stats:
             #e_x = numpy.asarray(dataset[0][0].eval())
             #e_y = numpy.asarray(dataset[0][1].eval())
             #padding_needed = params.batch_size - (len(e_x) % params.batch_size)
@@ -988,13 +1001,13 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
             #    del gradient
             #    gc.collect()
 
-            #if params.detailed_stats:
-            #    #for l,m in state.classifier.layer_updates.iteritems():
-            #    #    print l
-            #    #    print m.eval({x: e_x, y: e_y})
-            #    #computed = state.classifier.classify(dataset[0][0])()
-            #    #print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
-            #    print "  learning rate: {0}".format(params.learning_rate.get().get_value())
+            if params.detailed_stats:
+                #for l,m in state.classifier.layer_updates.iteritems():
+                #    print l
+                #    print m.eval({x: e_x, y: e_y})
+                computed = state.classifier.classify(dataset[0][0]).eval()
+                print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
+                print "  learning rate: {0}".format(params.learning_rate.get().get_value())
 #                costs = []
 #                for i in xrange(0,len(e_xs)):
 #                    c = numpy.asarray(state.classifier.cost.eval({x: e_xs[i], y: e_ys[i]}))

@@ -34,16 +34,13 @@ class Aggregator:
     def __init__(self):
         pass
 
-    def _batched_computation(self, set_x, f):
-        index = T.lscalar()
-        f = utils.set_slicer(self.x, index, set_x, f, self.params.batch_size)
-        return utils.apply_all_batches(self.x, f, set_x, self.params.batch_size)
-
     def compute(self, set_x):
-        return self._batched_computation(set_x, self.p_y_given_x)
+        return utils.batched_computation(self.x, set_x, self.p_y_given_x,
+                self.params.batch_size)
 
     def classify(self, set_x):
-        return self._batched_computation(set_x, self.y_pred)
+        return utils.batched_computation(self.x, set_x, self.y_pred,
+                self.params.batch_size)
 
 class AveragingRunner(Aggregator):
     """

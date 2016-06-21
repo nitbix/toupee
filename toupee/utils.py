@@ -72,3 +72,8 @@ def set_slicer(x, i, set_x, output, batch_size):
         outputs = output,
         givens = { x: set_x[ i * batch_size : (i + 1) * batch_size ] }
     )
+
+def batched_computation(x, set_x, f, batch_size):
+    index = T.lscalar()
+    f = set_slicer(x, index, set_x, f, batch_size)
+    return apply_all_batches(x, f, set_x, batch_size)

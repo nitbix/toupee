@@ -158,6 +158,49 @@ class LCN(Layer):
     def set_weights(self,W,b):
         pass
 
+class LRN(Layer):
+    def __init__(self, inputs, input_shape, alpha=1e-4, k=2, beta=0.75, n=5):
+        self.alpha = alpha
+        self.k = k
+        self.beta = beta
+        self.n = n
+        if n % 2 == 0:
+            raise NotImplementedError("Only works with odd n")
+        self.W = sharedX(numpy.asarray([0.]))
+        self.b = sharedX(numpy.asarray([0.]))
+        self.write_enable = 0.
+        self.dropout_rate = 0.
+        self.layer_name = 'LRN'
+        self.inputs = inputs
+        self.input_shape = input_shape
+        self.rejoin()
+
+    def rejoin(self):
+        half_n = self.n // 2
+        input_sqr = T.sqr(self.inputs)
+        b, ch, r, c = self.input_shape
+        extra_channels = T.alloc(0., b, ch + 2 * half_n, r, c)
+        input_sqr = T.set_subtensor(extra_channels[:, half_n:half_n+ch, :, :],
+                input_sqr)
+        scale = self.k
+        for i in range(self.n):
+            scale += self.alpha * input_sqr[:, i:i+ch, :, :]
+        scale = scale ** self.beta
+
+        self.y = self.inputs / scale
+        self.params = []
+        self.rebuild()
+
+    def rebuild(self):
+        self.output = self.y
+        self.p_y_given_x = self.output
+
+    def copy_weights(self,other):
+        pass
+
+    def set_weights(self,W,b):
+        pass
+
 class Elastic(Layer):
     def __init__(self,inputs,x,y,opts,channels,trainflag):
         self.inputs = inputs
@@ -365,6 +408,8 @@ class SoftMax(Layer):
             self.y = self.inputs
             self.params = []
         if self.batch_normalization:
+            if not self.has_weights:
+                raise "Can't do batch normalization on a softmax with no weights"
             self.y = T.nnet.bn.batch_normalization(inputs = self.y, gamma =
                     self.gamma, beta = self.beta,
                     mean = self.y.mean((0,), keepdims=True),
