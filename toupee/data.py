@@ -52,7 +52,7 @@ def sharedXscalar(value, name=None, borrow=True):
 
     return theano.shared(floatX(value), name=name, borrow=borrow)
 
-def shared_dataset(data_xy, borrow=True):
+def shared_dataset(data_xy, borrow=True, ytype='int32'):
     """ Function that loads the dataset into shared variables
 
     The reason we store our dataset in shared variables is to allow
@@ -63,7 +63,7 @@ def shared_dataset(data_xy, borrow=True):
     """
     data_x, data_y = data_xy
     shared_x = theano.shared(np.asarray(data_x, dtype=floatX), borrow=borrow)
-    shared_y = theano.shared(np.asarray(data_y, dtype=floatX), borrow=borrow)
+    shared_y = theano.shared(np.asarray(data_y, dtype=ytype), borrow=borrow)
     # When storing data on the GPU it has to be stored as floats
     # therefore we will store the labels as ``floatX`` as well
     # (``shared_y`` does exactly that). But during our computations
@@ -71,7 +71,7 @@ def shared_dataset(data_xy, borrow=True):
     # floats it doesn't make sense) therefore instead of returning
     # ``shared_y`` we will have to cast it to int. This little hack
     # lets ous get around this issue
-    return shared_x, T.cast(shared_y, 'int32')
+    return shared_x, shared_y
 
 def mask(p,shape,theano_rng,dtype=floatX):
     return theano_rng.binomial(p=p, size=shape, dtype=dtype)
@@ -141,18 +141,11 @@ def load_data(dataset, resize_to=None, shared=True, pickled=True, center_and_nor
         valid_set = std_norm(sub_mean(valid_set))
         test_set  = std_norm(sub_mean(test_set))
     if shared:
-        test_set_x, test_set_y = shared_dataset(test_set)
-        valid_set_x, valid_set_y = shared_dataset(valid_set)
-        train_set_x, train_set_y = shared_dataset(train_set)
+        return (shared_dataset(train_set),
+                shared_dataset(valid_set),
+                shared_dataset(test_set))
     else:
-        test_set_x, test_set_y = test_set
-        valid_set_x, valid_set_y = valid_set
-        train_set_x, train_set_y = train_set
-
-
-    rval = [(train_set_x, train_set_y), (valid_set_x, valid_set_y),
-            (test_set_x, test_set_y)]
-    return rval
+        return (test_set, valid_set, train_set)
 
 
 def make_pretraining_set(datasets,mode):
@@ -448,11 +441,9 @@ class GPUTransformer:
     def save_images(self):
         to_save = self.final_x.reshape([self.instances,self.x,self.y]).eval({})
         for i,x in enumerate(to_save[:100]):
-            print(i)
             imsave('trans{0}.png'.format(i),x)
         to_save = self.original_x.reshape([self.instances,self.x,self.y]).eval({})
         for i,x in enumerate(to_save[:100]):
-            print(i)
             imsave('orig{0}.png'.format(i),x)
 
     def clear(self):

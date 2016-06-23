@@ -40,6 +40,46 @@ import utils
 
 floatX = theano.config.floatX
 
+class DataHolder:
+    """
+    Encapsulate the train/valid/test data to achieve a few things:
+    - no leakage from multiple copies
+    - ensure it is always a SharedVariable
+    """
+
+    def __init__(self,dataset):
+        self.orig_train_set_x, self.orig_train_set_y = dataset[0]
+        self.orig_valid_set_x, self.orig_valid_set_y = dataset[1]
+        self.reset()
+        if len(dataset) > 2:
+            self.test_set_x, self.test_set_y = dataset[2]
+        else:
+            self.test_set_x, self.test_set_y = (None,None)
+    
+    def reset(self):
+        self.train_set_x, self.train_set_y = self.orig_train_set_x, self.orig_train_set_y
+        self.valid_set_x, self.valid_set_y = self.orig_valid_set_x, self.orig_valid_set_y
+
+    def set_train(self,set_x,set_y):
+        self.train_set_x.set_value(set_x)
+        self.train_set_y.set_value(set_y)
+
+    def set_valid(self,set_x,set_y):
+        self.valid_set_x.set_value(set_x)
+        self.valid_set_y.set_value(set_y)
+
+    def clear_train(self):
+        self.train_set_x.set_value([[]])
+
+    def clear_valid(self):
+        self.valid_set_x.set_value([[]])
+
+    def clear_test(self):
+        self.test_set_x.set_value([[]])
+
+    def has_test(self):
+        return self.test_set_x is not None
+
 class TrainingState:
     """
     Helps track the state of the current training.
@@ -69,6 +109,11 @@ class TrainingState:
         self.epoch = 0
 
     def set_models(self,models):
+        if 'train_error_f' in self.__dict__:
+            self.train_error_f.clean_gpu()
+            self.valid_error_f.clean_gpu()
+            self.test_error_f.clean_gpu()
+        gc.collect()
         self.train_f, self.train_error_f, self.valid_error_f, self.test_error_f = models
 
 
@@ -181,7 +226,7 @@ class MLP(object):
                 pretraining_set_x, y_pretraining, x_pretraining,
                 self.params.pretrain_update_rule,
                 self.params.pretrain_learning_rate)
-            ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
+            ptxlen = pretraining_set_x.shape[0].eval()
             n_batches = ptxlen / self.params.batch_size
             for p in range(self.params.pretraining_passes):
                 print ".... pass {0}".format(p)
@@ -236,7 +281,7 @@ class MLP(object):
         elif mode in ['unsupervised', 'unsupervised-together']:
             pretraining_set_x = pretraining_set[0]
             pretraining_set_y = pretraining_set[0]
-            ptylen = pretraining_set[0].get_value(borrow=True).shape[1]
+            ptylen = pretraining_set[0].shape[1].eval()
             x_pretraining = self.x
             y_pretraining = T.matrix('y_pretraining')
             self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, self.rng,
@@ -247,7 +292,7 @@ class MLP(object):
         if mode in ['supervised', 'unsupervised', 'unsupervised-together']:
             train_f = self.train_function(self.index, pretraining_set_x,
                 pretraining_set_y, x_pretraining, y_pretraining)
-            ptxlen = pretraining_set_x.get_value(borrow=True).shape[0]
+            ptxlen = pretraining_set_x.shape[0].eval()
             n_batches =  ptxlen / self.params.batch_size
             for p in range(self.params.pretraining_passes):
                 print "... {0} pretraining layer {1}, pass {2}".format(mode,layer_number,p)
@@ -517,19 +562,19 @@ class MLP(object):
             l.rejoin()
             rt_chain_in = l.output
 
-    def eval_function(self, index, eval_set_x, eval_set_y, x, y):
-        return theano.function(
-                inputs=[index],
-                outputs=self.errors(y),
-                on_unused_input='ignore',
-                givens={
-                    x: eval_set_x[index * self.params.batch_size:(index + 1) *
-                        self.params.batch_size],
-                    y: eval_set_y[index * self.params.batch_size:(index + 1) *
-                        self.params.batch_size],
-                    self.trainflag: numpy.float32(0.)
-                }
+    def eval_function(self, index, set_x, set_y, x, y):
+        set_x = sharedX(set_x.eval(), dtype=set_x.dtype)
+        set_y = sharedX(set_y.eval(), dtype=set_y.dtype)
+        f = utils.set_slicer_xy(
+                   x,
+                   y,
+                   index,
+                   set_x,
+                   set_y,
+                   self.errors(y),
+                   self.params.batch_size
                )
+        return utils.AppliedOnAllBatchesXY(f, set_x, set_y, self.params.batch_size)
 
     def compute_single_batch(self, eval_set_x):
         x = self.x
@@ -683,24 +728,33 @@ class MLP(object):
                 })
         return rf
 
-    def make_models(self, dataset):
-        train_set_x, train_set_y = dataset[0]
-        valid_set_x, valid_set_y = dataset[1]
-        test_set_x, test_set_y = (None,None)
-        valid_error_f = self.eval_function(self.index, valid_set_x, valid_set_y,
+    def make_models(self, data_holder):
+        valid_error_f = self.eval_function(
+                self.index,
+                data_holder.valid_set_x,
+                data_holder.valid_set_y,
                 self.x, self.y)
         if self.params.online_transform is not None:
             train_f = None
             train_error_f = None
         else:
-            train_f = self.train_function(self.index, train_set_x, train_set_y,
-                self.x, self.y, update_input = self.params.update_input)
-            train_error_f = self.eval_function(self.index, train_set_x,
-                    train_set_y, self.x, self.y)
-        if len(dataset) > 2:
-            test_set_x, test_set_y = dataset[2]
-            test_error_f = self.eval_function(self.index, test_set_x, test_set_y,
-                self.x, self.y)
+            train_f = self.train_function(
+                    self.index,
+                    data_holder.train_set_x,
+                    data_holder.train_set_y,
+                    self.x, self.y,
+                    update_input = self.params.update_input)
+            train_error_f = self.eval_function(
+                    self.index,
+                    data_holder.train_set_x,
+                    data_holder.train_set_y,
+                    self.x, self.y)
+        if data_holder.has_test():
+            test_error_f = self.eval_function(
+                    self.index,
+                    data_holder.test_set_x,
+                    data_holder.test_set_y,
+                    self.x, self.y)
         else:
             test_error_f = None
         return (train_f, train_error_f, valid_error_f, test_error_f)
@@ -762,26 +816,18 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         continuation=None,return_results=False):
     results = common.Results(params)
 
-    class processed_data:
-        orig_train_set_x, orig_train_set_y = dataset[0]
-        orig_valid_set_x, orig_valid_set_y = dataset[1]
-        train_set_x, train_set_y = dataset[0]
-        valid_set_x, valid_set_y = dataset[1]
-        test_set_x, test_set_y = (None,None)
-
+    data_holder = DataHolder(dataset)
     if params.join_train_and_valid:
-        processed_data.valid_set_x, processed_data.valid_set_y  = data.shared_dataset(
-                                        (numpy.concatenate([
-                                            processed_data.orig_train_set_x.eval({}),
-                                            processed_data.orig_valid_set_x.eval({})]),
-                                         numpy.concatenate([
-                                            processed_data.orig_train_set_y.eval({}),
-                                            processed_data.orig_valid_set_y.eval({})])
-                                        )
-                                    )
-        processed_data.train_set_x, processed_data.train_set_y = (processed_data.valid_set_x,processed_data.valid_set_y)
-        dataset[0] = (processed_data.train_set_x,processed_data.train_set_y)
-        dataset[1] = (processed_data.valid_set_x,processed_data.valid_set_y)
+        set_x = T.concatenate([
+                    data_holder.orig_train_set_x,
+                    data_holder.orig_valid_set_x
+                ]).eval()
+        set_y = T.concatenate([
+                    data_holder.orig_train_set_y,
+                    data_holder.orig_valid_set_y
+                ]).eval()
+        data_holder.set_train(set_x,set_y)
+        data_holder.set_valid(set_x,set_y)
     if params.online_transform is not None:
         if 'channels' not in params.__dict__:
             if params.RGB:
@@ -790,8 +836,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 channels = 1
         else:
             channels = params.channels
-        gpu_transformer = data.GPUTransformer( (processed_data.train_set_x,
-                                                processed_data.train_set_y),
+        gpu_transformer = data.GPUTransformer( (data_holder.train_set_x,
+                                                data_holder.train_set_y),
                         x=int(math.sqrt(params.n_in / channels)),
                         y=int(math.sqrt(params.n_in / channels)),
                         channels=channels,
@@ -799,8 +845,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                         save=False,
                         opts=params.online_transform,
                         seed=params.random_seed)
-
-    print "training samples: {0}".format( processed_data.train_set_x.get_value(borrow=True).shape[0])
 
     if index is None:
         index = T.lscalar()
@@ -821,11 +865,18 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 continuation=continuation)
 
     state = TrainingState(classifier)
-    state.n_batches['train'] = processed_data.train_set_x.get_value(borrow=True).shape[0] / params.batch_size
-    state.n_batches['valid'] = processed_data.valid_set_x.get_value(borrow=True).shape[0] / params.batch_size
-    if len(dataset) > 2:
-        processed_data.test_set_x, processed_data.test_set_y = dataset[2]
-        state.n_batches['test'] = processed_data.test_set_x.get_value(borrow=True).shape[0] / params.batch_size
+    state.train_examples = data_holder.train_set_x.shape[0].eval()
+    state.valid_examples = data_holder.valid_set_x.shape[0].eval()
+    state.n_batches['train'] = state.train_examples / params.batch_size
+    state.n_batches['valid'] = state.valid_examples / params.batch_size
+
+    print "training examples: {0}".format(state.train_examples)
+    print "validation examples: {0}".format(state.valid_examples)
+
+    if data_holder.has_test():
+        state.test_examples = data_holder.test_set_x.shape[0].eval()
+        state.n_batches['test'] = state.test_examples / params.batch_size
+        print "test examples: {0}".format(state.test_examples)
 
     print '... {0} training'.format(params.training_method)
 
@@ -849,34 +900,31 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         def make_train_functions():
             state.train_f = state.classifier.train_function(
                     state.classifier.index,
-                    processed_data.train_set_x,
-                    processed_data.train_set_y,
+                    data_holder.train_set_x,
+                    data_holder.train_set_y,
                     state.classifier.x,
                     state.classifier.y)
             state.train_error_f = state.classifier.eval_function(
                     state.classifier.index,
-                    processed_data.train_set_x,
-                    processed_data.train_set_y,
+                    data_holder.train_set_x,
+                    data_holder.train_set_y,
                     state.classifier.x,
                     state.classifier.y)
 
         if params.online_transform is not None:
             if params.update_input:
                 raise "Cannot have online_transform and update_input"
-            (processed_data.train_set_x, processed_data.train_set_y) = gpu_transformer.get_data()
-            make_train_functions()
+            data_holder.set_train(gpu_transformer.get_data())
 
         if params.shuffle_dataset:
-            tsx = processed_data.train_set_x.eval({})
-            tsy = processed_data.train_set_y.eval({})
+            tsx = data_holder.train_set_x.eval()
+            tsy = data_holder.train_set_y.eval()
             new_tsx = []
             new_tsy = []
             for i in numpy.random.permutation(len(tsx)):
                 new_tsx.append(numpy.asarray(tsx[i]))
                 new_tsy.append(numpy.asarray(tsy[i]))
-            processed_data.train_set_x, processed_data.train_set_y = data.shared_dataset((new_tsx,new_tsy))
-            make_train_functions()
-
+            data_holder.set_train(new_tsx,new_tsy)
 
         training_costs = []
         for minibatch_index in xrange(state.n_batches['train']):
@@ -888,14 +936,14 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     or (minibatch_index + 1) == state.n_batches['train']:
                 if params.save_images and params.update_input:
                         img_save_dir = 'images_out_cifar'
-                        eux = numpy.asarray(processed_data.train_set_x.eval())
+                        eux = numpy.asarray(data_holder.train_set_x.eval())
                         if params.RGB:
                             imx = math.sqrt(eux.shape[1] / 3)
                         else:
                             imx = math.sqrt(eux.shape[1])
                         g = state.classifier.layer_updates['x'].eval(
-                                { x: processed_data.train_set_x.eval()[0:params.batch_size],
-                                  y: processed_data.train_set_y.eval()[0:params.batch_size]}
+                                { x: data_holder.train_set_x.eval()[0:params.batch_size],
+                                  y: data_holder.train_set_y.eval()[0:params.batch_size]}
                             )
                         if params.RGB:
                             g = numpy.asarray(g).reshape([params.batch_size,3,imx,imx])
@@ -923,37 +971,43 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                             gi = g[i]
                             imsave('{0}/iter{1}.png'.format(d,state.epoch),
                                     gi * 255 / numpy.amax(gi))
-                train_losses = [state.train_error_f(i) for i
-                                     in xrange(state.n_batches['train'])]
-                this_train_loss = numpy.mean(train_losses)
-                valid_losses = [state.valid_error_f(i) for i
-                                     in xrange(state.n_batches['valid'])]
-                this_valid_loss = numpy.mean(valid_losses)
+                train_losses = state.train_error_f()
+                train_loss = float(
+                                float(T.sum(train_losses).eval()) /
+                                float(state.train_examples)
+                            )
+                valid_losses = state.valid_error_f()
+                valid_loss = float(
+                                float(T.sum(valid_losses).eval()) /
+                                float(state.valid_examples)
+                            )
                 print('epoch %i, minibatch %i/%i:' % 
                         (state.epoch, minibatch_index + 1,
                             state.n_batches['train'])
                      )
-                print('  train err: %f %%' % (this_train_loss * 100.))
-                print('  valid err: %f %%' % (this_valid_loss * 100.))
+                print('  train err: %f %%' % (train_loss * 100.))
+                print('  valid err: %f %%' % (valid_loss * 100.))
                 test_loss = None
                 if state.test_error_f is not None:
-                    test_losses = [state.test_error_f(i) for i
-                                   in xrange(state.n_batches['test'])]
-                    test_loss = numpy.mean(test_losses)
+                    test_losses = state.test_error_f()
+                    test_loss = float(
+                                    float(T.sum(test_losses).eval()) /
+                                    float(state.test_examples)
+                                )
                     print('  test  err: %f %%' % (test_loss * 100.))
-                if this_valid_loss < state.best_valid_loss:
+                if valid_loss < state.best_valid_loss:
                     print('  current best')
-                    if this_valid_loss < state.best_valid_loss *  \
+                    if valid_loss < state.best_valid_loss *  \
                            improvement_threshold:
                         state.patience = max(state.patience, iter * state.patience_increase)
-                    state.best_valid_loss = this_valid_loss
+                    state.best_valid_loss = valid_loss
                     state.best_iter = iter
                     state.best_epoch = state.epoch
                     state.best_weights = state.classifier.get_weights()
                     state.test_score = test_loss
                     gc.collect()
-                results.set_observation(this_train_loss,
-                                        this_valid_loss,
+                results.set_observation(train_loss,
+                                        valid_loss,
                                         test_loss,
                                         numpy.array(minibatch_avg_cost))
             state.previous_minibatch_avg_cost = minibatch_avg_cost
@@ -1005,7 +1059,10 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 #for l,m in state.classifier.layer_updates.iteritems():
                 #    print l
                 #    print m.eval({x: e_x, y: e_y})
-                computed = state.classifier.classify(dataset[0][0]).eval()
+                print state.classifier.outputLayer.y_pred.eval(
+                        {x: data_holder.train_set_x}
+                )
+                computed = state.classifier.classify(data_holder.train_set_x).eval()
                 print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
                 print "  learning rate: {0}".format(params.learning_rate.get().get_value())
 #                costs = []
@@ -1018,7 +1075,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 #                    print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         state.classifier.run_hooks()
         if params.online_transform is not None:
-            del processed_data.train_set_x
+            data_holder.clear_train()
             del state.train_f
             del state.train_error_f
             gc.collect()
@@ -1026,7 +1083,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     if params.training_method == 'normal':
         print ".... generating models"
         state.classifier.reset_hooks(state)
-        state.set_models(state.classifier.make_models(dataset))
+        state.set_models(state.classifier.make_models(data_holder))
         print ".... started"
         while (state.epoch < params.n_epochs) and (not state.done_looping):
             epoch_start = time.clock()
@@ -1053,8 +1110,9 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     rng,
                     options = params.output_layer_options
                     )
+            print state.classifier.output_layer.y.shape.eval()
             print ".... generating models"
-            state.set_models(state.classifier.make_models(dataset))
+            state.set_models(state.classifier.make_models(data_holder))
             print ".... started"
             while (state.epoch < params.n_epochs) and (not state.done_looping):
                 state.epoch += 1
@@ -1064,7 +1122,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 print "t: {0}".format(epoch_end - epoch_start)
             state.classifier.set_weights(state.best_weights)
     end_time = time.clock()
-    if processed_data.test_set_x is not None:
+    if data_holder.test_set_x is not None:
         print(('Optimization complete. Best valid score of %f %% '
                'obtained at iteration %i, epoch %i, with test performance %f %%') %
               (state.best_valid_loss * 100., state.best_iter + 1,
@@ -1079,11 +1137,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
               state.best_valid_loss * 100.))
     if params.online_transform is not None or params.join_train_and_valid:
         #restore original datasets that got messed about
-        dataset[0] = processed_data.orig_train_set_x, processed_data.orig_train_set_y
-        dataset[1] = processed_data.orig_valid_set_x, processed_data.orig_valid_set_y
-        del processed_data.test_set_x
-        processed_data.test_set_x = dataset[0][0]
-        processed_data.valid_set_x = dataset[1][0]
+        data_holder.reset()
     cl = state.classifier
     del state
     gc.collect()

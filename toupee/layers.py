@@ -430,9 +430,9 @@ class SoftMax(Layer):
             raise TypeError('y should have the same shape as self.y_pred',
                 ('y', target.type, 'y_pred', self.y_pred.type))
         if y.dtype.startswith('int'):
-            return T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
+            return T.neq(self.y_pred,y)
         else:
-            return T.mean(T.neq(self.y_pred, T.argmax(y)), dtype=floatX, acc_dtype=floatX)
+            raise NotImplementedException()
 
     def rejoin(self):
         self.y = T.dot(self.inputs, self.W) * (1. - self.dropout_rate)
@@ -479,7 +479,7 @@ class LogSoftMax(Layer):
             raise TypeError('y should have the same shape as self.y_pred',
                 ('y', target.type, 'y_pred', self.y_pred.type))
         if y.dtype.startswith('int'):
-            return T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
+            return T.neq(self.y_pred,y)
         else:
             return T.mean(T.neq(self.y_pred, T.argmax(y)), dtype=floatX, acc_dtype=floatX)
 
