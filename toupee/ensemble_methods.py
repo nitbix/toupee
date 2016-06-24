@@ -183,11 +183,14 @@ class Bagging(EnsembleMethod):
             return AveragingRunner(members,x,y,params)
 
     def create_member(self,x,y):
-        resampled_train = [self.resampler.make_new_train(self.params.resample_size),
-                self.resampler.get_valid(),self.resampler.get_test()]
-        pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        resampled = [
+                        self.resampler.make_new_train(self.params.resample_size),
+                        self.resampler.get_valid(),
+                        self.resampler.get_test()
+                    ]
+        pretraining_set = make_pretraining_set(resampled,self.params.pretraining)
         self.params.member_number = len(self.members) + 1
-        m = mlp.test_mlp(resampled_train, self.params,
+        m = mlp.test_mlp(resampled, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
         w = m.get_weights()
         self.members.append(w)
@@ -219,13 +222,13 @@ class DIB(EnsembleMethod):
 
     def create_member(self,x,y):
         self.set_defaults()
-        resampled_train = [self.resampler.make_new_train(self.params.resample_size),
+        resampled = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid()]
-        pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        pretraining_set = make_pretraining_set(resampled,self.params.pretraining)
         self.params.member_number = len(self.members) + 1
         if self.params.member_number > 1:
             self.params.n_epochs = self.n_epochs_after_first
-        m = mlp.test_mlp(resampled_train, self.params,
+        m = mlp.test_mlp(resampled, self.params,
                 pretraining_set = pretraining_set, x=x, y=y,
                 continuation=self.weights)
         self.weights = m.get_weights()
@@ -291,11 +294,11 @@ class AdaBoost_M1(EnsembleMethod):
             return WeightedAveragingRunner(members,x,y,self.alphas,params)
 
     def create_member(self,x,y):
-        resampled_train = [self.resampler.make_new_train(self.params.resample_size),
+        resampled = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid()]
-        pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        pretraining_set = make_pretraining_set(resampled,self.params.pretraining)
         self.params.member_number = len(self.members) + 1
-        m = mlp.test_mlp(resampled_train, self.params,
+        m = mlp.test_mlp(resampled, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
         orig_train = self.resampler.get_train()
         yhat = m.classify(orig_train[0])
@@ -351,11 +354,11 @@ class Stacking(EnsembleMethod):
                 Parameters(**self.__dict__))
 
     def create_member(self,x,y):
-        resampled_train = [self.resampler.make_new_train(self.params.resample_size),
+        resampled = [self.resampler.make_new_train(self.params.resample_size),
                 self.resampler.get_valid()]
-        pretraining_set = make_pretraining_set(resampled_train,self.params.pretraining)
+        pretraining_set = make_pretraining_set(resampled,self.params.pretraining)
         self.params.member_number = len(self.members) + 1
-        m = mlp.test_mlp(resampled_train, self.params,
+        m = mlp.test_mlp(resampled, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
         w = m.get_weights()
         self.members.append(w)

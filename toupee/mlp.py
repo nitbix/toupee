@@ -70,12 +70,20 @@ class DataHolder:
 
     def clear_train(self):
         self.train_set_x.set_value([[]])
+        self.train_set_y.set_value([])
 
     def clear_valid(self):
         self.valid_set_x.set_value([[]])
+        self.valid_set_y.set_value([])
 
     def clear_test(self):
         self.test_set_x.set_value([[]])
+        self.test_set_y.set_value([])
+
+    def clear(self):
+        self.clear_train()
+        self.clear_valid()
+        self.clear_test()
 
     def has_test(self):
         return self.test_set_x is not None
@@ -985,6 +993,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                         (state.epoch, minibatch_index + 1,
                             state.n_batches['train'])
                      )
+                print('  last cost: %f %%' % numpy.asarray(minibatch_avg_cost))
                 print('  train err: %f %%' % (train_loss * 100.))
                 print('  valid err: %f %%' % (valid_loss * 100.))
                 test_loss = None
@@ -1140,6 +1149,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         data_holder.reset()
     cl = state.classifier
     del state
+    data_holder.clear()
     gc.collect()
     if 'results_db' in params.__dict__ :
         if 'results_host' in params.__dict__:

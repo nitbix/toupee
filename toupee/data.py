@@ -145,11 +145,14 @@ def load_data(dataset, resize_to=None, shared=True, pickled=True, center_and_nor
                 shared_dataset(valid_set),
                 shared_dataset(test_set))
     else:
-        return (test_set, valid_set, train_set)
+        return (train_set, valid_set, test_set)
 
 
 def make_pretraining_set(datasets,mode):
-    return (datasets[0][0],datasets[0][1])
+    if mode is not None:
+        return (datasets[0][0],datasets[0][1])
+    else:
+        return None
 
 
 class Resampler:
@@ -165,6 +168,7 @@ class Resampler:
         self.test_x, self.test_y = self.test
         self.train_size = len(self.train_x)
         self.s_train = None
+        self.r_train = None
         self.s_valid = None
         self.s_test = None
         np.random.seed(seed)
@@ -183,7 +187,12 @@ class Resampler:
         for s in sample:
             sampled_x.append(self.train_x[s])
             sampled_y.append(self.train_y[s])
-        return shared_dataset((sampled_x,sampled_y))
+        if self.r_train is None:
+            self.r_train = shared_dataset((sampled_x,sampled_y))
+        else:
+            self.r_train[0].set_value(sampled_x)
+            self.r_train[1].set_value(sampled_y)
+        return self.r_train
 
     def get_train(self):
         if self.s_train is None:
