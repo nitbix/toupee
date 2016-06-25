@@ -155,6 +155,7 @@ class MLP(object):
         self.reset_hooks(TrainingState(self))
         self.trainflag = T.scalar('trainflag')
 
+        total_weights = 0
         for i,(layer_type,desc) in enumerate(self.params.n_hidden):
             if continuation is not None:
                 W = continuation['W'][i]
@@ -164,6 +165,9 @@ class MLP(object):
                 b = None
 
             l = self.make_layer(layer_type,desc,W,b,i)
+            total_weights += l.weight_count
+            if self.params.detailed_stats:
+                print "layer {0} weight count: {1}".format(l.layer_name,l.weight_count)
             self.hiddenLayers.append(l)
             modes = self.params.pretraining
             if pretraining_set is not None and modes is not None:
@@ -171,6 +175,7 @@ class MLP(object):
                     self.inline_pretrain(pretraining_set,mode)
             layer_number += 1
 
+        print "total weight count: {0}".format(total_weights)
         self.rejoin_layers(input)
 
         if pretraining_set is not None and modes is not None:

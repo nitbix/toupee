@@ -71,6 +71,7 @@ class Layer:
             self.beta = beta
 
         self.write_enable = 1.
+        self.weight_count = numpy.prod(self.W.shape.eval()) + numpy.prod(self.b.shape.eval())
         self.rejoin()
 
     def updates(self):
@@ -243,6 +244,7 @@ class GlobalPooling(Layer):
         self.b = sharedX(numpy.asarray([0.]))
         self.write_enable = 0.
         self.mode = mode
+        self.weight_count = 0
         self.rejoin()
 
     def rejoin(self):
@@ -278,6 +280,7 @@ class Linear(Layer):
         self.n_in = n_in
         self.n_out = n_in
         self.write_enable = 0.
+        self.weight_count = 0
         self.rejoin()
 
     def rejoin(self):
@@ -609,6 +612,7 @@ class Pool2D(Layer):
 
         self.W = sharedX(numpy.asarray([0.]))
         self.b = sharedX(numpy.asarray([0.]))
+        self.weight_count = 0
 
         self.output_shape = input_shape[:2]
         for i in range(len(input_shape) - 2):
