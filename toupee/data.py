@@ -187,27 +187,19 @@ class Resampler:
         for s in sample:
             sampled_x.append(self.train_x[s])
             sampled_y.append(self.train_y[s])
-        if self.r_train is None:
-            self.r_train = shared_dataset((sampled_x,sampled_y))
-        else:
-            self.r_train[0].set_value(sampled_x)
-            self.r_train[1].set_value(sampled_y)
+        sampled_x = numpy.asarray(sampled_x)
+        sampled_y = numpy.asarray(sampled_y)
+        self.r_train = (sampled_x,sampled_y)
         return self.r_train
 
     def get_train(self):
-        if self.s_train is None:
-            self.s_train = shared_dataset(self.train)
-        return self.s_train
+        return self.train
 
     def get_valid(self):
-        if self.s_valid is None:
-            self.s_valid = shared_dataset(self.valid)
-        return self.s_valid
+        return self.valid
 
     def get_test(self):
-        if self.s_test is None:
-            self.s_test = shared_dataset(self.test)
-        return self.s_test
+        return self.test
 
 
 class WeightedResampler(Resampler):

@@ -301,7 +301,7 @@ class AdaBoost_M1(EnsembleMethod):
         m = mlp.test_mlp(resampled, self.params,
                 pretraining_set = pretraining_set, x=x, y=y)
         orig_train = self.resampler.get_train()
-        yhat = m.classify(orig_train[0])
+        yhat = m.classify(sharedX(orig_train[0]))
         errors = T.neq(orig_train[1], yhat)
         e = T.sum((errors * self.D)).eval()
         alpha = .5 * math.log((1-e)/e)
