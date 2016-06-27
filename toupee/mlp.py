@@ -838,17 +838,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
     results = common.Results(params)
 
     data_holder = DataHolder(dataset)
-    if params.join_train_and_valid:
-        set_x = T.concatenate([
-                    data_holder.orig_train_set_x,
-                    data_holder.orig_valid_set_x
-                ]).eval()
-        set_y = T.concatenate([
-                    data_holder.orig_train_set_y,
-                    data_holder.orig_valid_set_y
-                ]).eval()
-        data_holder.set_train(set_x,set_y)
-        data_holder.set_valid(set_x,set_y)
     if params.online_transform is not None:
         if 'channels' not in params.__dict__:
             if params.RGB:
@@ -1157,7 +1146,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         results.set_final_observation(state.best_valid_loss * 100., None, state.best_epoch)
         print('Selection : Best valid score of {0} %'.format(
               state.best_valid_loss * 100.))
-    if params.online_transform is not None or params.join_train_and_valid:
+    if params.online_transform is not None: 
         #restore original datasets that got messed about
         data_holder.reset()
     cl = state.classifier

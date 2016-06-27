@@ -89,7 +89,8 @@ def std_norm(d):
     x = x / np.std(x,axis=0)
     return(x,y)
 
-def load_data(dataset, resize_to=None, shared=True, pickled=True, center_and_normalise=False):
+def load_data(dataset, resize_to=None, shared=True, pickled=True,
+        center_and_normalise=False, join_train_and_valid=False):
     ''' Loads the dataset
 
     :type dataset: string
@@ -140,6 +141,17 @@ def load_data(dataset, resize_to=None, shared=True, pickled=True, center_and_nor
         train_set = std_norm(sub_mean(train_set))
         valid_set = std_norm(sub_mean(valid_set))
         test_set  = std_norm(sub_mean(test_set))
+    if join_train_and_valid:
+        set_x = numpy.concatenate([
+                    train_set[0],
+                    valid_set[0]
+                ])
+        set_y = numpy.concatenate([
+                    train_set[1],
+                    valid_set[1]
+                ])
+        train_set = (set_x,set_y)
+        valid_set = train_set
     if shared:
         return (shared_dataset(train_set),
                 shared_dataset(valid_set),
