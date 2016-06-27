@@ -23,6 +23,8 @@ class AppliedOnAllBatchesXY():
         self.original_size = set_x.shape.eval()[0]
         self.n_batches = int(floor(float(self.original_size) / self.batch_size))
         self.residue = self.original_size % self.batch_size
+        self.set_x = set_x
+        self.set_y = set_y
         if self.residue != 0:
             one = sharedX(1.)
             padding = self.batch_size - self.residue
@@ -66,6 +68,8 @@ class AppliedOnAllBatchesXY():
             )
 
     def clean_gpu(self):
+        self.set_x.set_value([[]])
+        self.set_y.set_value([])
         del self.f
         del self.f_pad
         del self.f_unpad

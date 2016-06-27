@@ -77,8 +77,9 @@ class DataHolder:
         self.valid_set_y.set_value([])
 
     def clear_test(self):
-        self.test_set_x.set_value([[]])
-        self.test_set_y.set_value([])
+        if self.test_set_x is not None:
+            self.test_set_x.set_value([[]])
+            self.test_set_y.set_value([])
 
     def clear(self):
         self.clear_train()
@@ -1153,8 +1154,11 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         #restore original datasets that got messed about
         data_holder.reset()
     cl = state.classifier
+    state.train_error_f.clean_gpu()
+    state.valid_error_f.clean_gpu()
+    if state.test_error_f is not None:
+        state.test_error_f.clean_gpu()
     del state
-    data_holder.clear()
     gc.collect()
     if 'results_db' in params.__dict__ :
         if 'results_host' in params.__dict__:
