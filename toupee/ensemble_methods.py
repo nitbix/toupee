@@ -223,7 +223,7 @@ class DIB(EnsembleMethod):
     def create_member(self,x,y):
         self.set_defaults()
         resampled = [self.resampler.make_new_train(self.params.resample_size),
-                self.resampler.get_valid()]
+                self.resampler.get_valid(), self.resampler.get_test()]
         pretraining_set = make_pretraining_set(resampled,self.params.pretraining)
         self.params.member_number = len(self.members) + 1
         if self.params.member_number > 1:
