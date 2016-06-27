@@ -52,8 +52,8 @@ class DataHolder:
         self.orig_train_set_y = dataset[0][1]
         self.orig_valid_set_x = dataset[1][0]
         self.orig_valid_set_y = dataset[1][1]
-        self.orig_valid_set_x = dataset[2][0]
-        self.orig_valid_set_y = dataset[2][1]
+        self.orig_test_set_x = dataset[2][0]
+        self.orig_test_set_y = dataset[2][1]
         self.train_set_x = sharedX(self.orig_train_set_x, dtype=floatX)
         self.train_set_y = sharedX(self.orig_train_set_y, dtype='int32')
         self.valid_set_x = sharedX(self.orig_valid_set_x, dtype=floatX)
