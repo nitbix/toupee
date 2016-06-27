@@ -295,7 +295,7 @@ class AdaBoost_M1(EnsembleMethod):
 
     def create_member(self,x,y):
         resampled = [self.resampler.make_new_train(self.params.resample_size),
-                self.resampler.get_valid()]
+                self.resampler.get_valid(), self.resampler.get_test()]
         pretraining_set = make_pretraining_set(resampled,self.params.pretraining)
         self.params.member_number = len(self.members) + 1
         m = mlp.test_mlp(resampled, self.params,
