@@ -232,17 +232,18 @@ class DIB(EnsembleMethod):
                 pretraining_set = pretraining_set, x=x, y=y,
                 continuation=self.weights)
         self.weights = m.get_weights()
-        index = self.incremental_index
-        if self.grow_forward:
-            index += len(self.members)
-        if index == -1:
-            index = len(self.params.n_hidden)
-        self.params.n_hidden.insert(index,copy.deepcopy(self.incremental_layer))
-        #we have to force recalculation of the following layer
-        next_layer_type, next_layer_conf = self.params.n_hidden[index + 1]
-        filter_shape = next_layer_conf[1]
-        if next_layer_type == 'convfilter' and len(filter_shape) != 3:
-            self.params.n_hidden[index + 1][1][1] = [filter_shape[0],filter_shape[2],filter_shape[3]]
+        if self.incremental_layer is not None:
+            index = self.incremental_index
+            if self.grow_forward:
+                index += len(self.members)
+            if index == -1:
+                index = len(self.params.n_hidden)
+            self.params.n_hidden.insert(index,copy.deepcopy(self.incremental_layer))
+            #we have to force recalculation of the following layer
+            next_layer_type, next_layer_conf = self.params.n_hidden[index + 1]
+            filter_shape = next_layer_conf[1]
+            if next_layer_type == 'convfilter' and len(filter_shape) != 3:
+                self.params.n_hidden[index + 1][1][1] = [filter_shape[0],filter_shape[2],filter_shape[3]]
         self.weights['W'] = self.weights['W'][:index] + [ None for i in range(index,len(self.params.n_hidden))]
         self.weights['b'] = self.weights['b'][:index] + [ None for i in range(index,len(self.params.n_hidden))]
         self.weights['outb'] = None
