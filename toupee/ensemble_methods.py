@@ -232,8 +232,8 @@ class DIB(EnsembleMethod):
                 pretraining_set = pretraining_set, x=x, y=y,
                 continuation=self.weights)
         self.weights = m.get_weights()
+        index = self.incremental_index
         if self.incremental_layer is not None:
-            index = self.incremental_index
             if self.grow_forward:
                 index += len(self.members)
             if index == -1:
