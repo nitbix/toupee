@@ -243,7 +243,6 @@ class ARMSProp(UpdateRule):
                        )
         acceleration = T.clip(acceleration,0.1,10.0)
         acceleration_mean = 0.9 * self.acceleration_mean + 0.1 * acceleration
-#        acceleration = theano.printing.Print("ACC")(acceleration)
         ms = 0.9 * self.ms + 0.1 * (gparam ** 2)
         grad_scaled = gparam / T.sqrt(ms + 1.0e-11)
         if self.momentum:
@@ -325,7 +324,6 @@ class ARMSProp2(UpdateRule):
                        )
         acceleration = T.clip(acceleration,0.1,10.0)
         acceleration_mean = 0.9 * self.acceleration_mean + 0.1 * acceleration
-#        acceleration = theano.printing.Print("ACC")(acceleration)
 
         m = self.beta1 * self.m + (1 - self.beta1) * gparam
         v = self.beta2 * self.v + (1 - self.beta2) * (gparam ** 2)
