@@ -465,8 +465,9 @@ class GPUTransformer:
         gc.collect()
 
     def get_data(self):
-        return (sharedX(self.final_x.eval(), dtype=self.final_x.dtype),
-                sharedX(self.final_y.eval(), dtype=self.final_y.dtype))
+        return self.final_x, self.final_y
+        #return (sharedX(self.final_x.eval(), dtype=self.final_x.dtype),
+        #        sharedX(self.final_y.eval(), dtype=self.final_y.dtype))
 
 def one_hot(dataset):
     b = np.zeros((dataset.size, dataset.max()+1),dtype=floatX)

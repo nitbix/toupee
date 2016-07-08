@@ -70,6 +70,10 @@ class DataHolder:
         self.valid_set_x.set_value(self.orig_valid_set_x)
         self.valid_set_y.set_value(self.orig_valid_set_y)
 
+    def replace_shared_train(self,set_x,set_y):
+        self.train_set_x = set_x
+        self.train_set_y = set_y
+
     def set_train(self,set_x,set_y):
         self.train_set_x.set_value(set_x)
         self.train_set_y.set_value(set_y)
@@ -927,7 +931,9 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         if params.online_transform is not None:
             if params.update_input:
                 raise "Cannot have online_transform and update_input"
-            data_holder.set_train(gpu_transformer.get_data())
+            set_ = gpu_transformer.get_data()
+            data_holder.replace_shared_train(set_[0], set_[1])
+            make_train_functions()
 
         if params.shuffle_dataset:
             tsx = data_holder.train_set_x.eval()
@@ -1089,7 +1095,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 #                    print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         state.classifier.run_hooks()
         if params.online_transform is not None:
-            data_holder.clear_train()
             del state.train_f
             del state.train_error_f
             gc.collect()
