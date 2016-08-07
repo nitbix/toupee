@@ -66,9 +66,9 @@ class DataHolder:
     
     def reset(self):
         self.train_set_x.set_value(self.orig_train_set_x)
-        self.train_set_y.set_value(self.orig_train_set_y)
+        self.train_set_y.set_value(self.orig_train_set_y.astype('int32'))
         self.valid_set_x.set_value(self.orig_valid_set_x)
-        self.valid_set_y.set_value(self.orig_valid_set_y)
+        self.valid_set_y.set_value(self.orig_valid_set_y.astype('int32'))
 
     def replace_shared_train(self,set_x,set_y):
         self.train_set_x = set_x
@@ -853,6 +853,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 channels = 1
         else:
             channels = params.channels
+        #TODO: this should be based of the original dataset
         gpu_transformer = data.GPUTransformer( (data_holder.train_set_x,
                                                 data_holder.train_set_y),
                         x=int(math.sqrt(params.n_in / channels)),
@@ -931,8 +932,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         if params.online_transform is not None:
             if params.update_input:
                 raise "Cannot have online_transform and update_input"
-            set_ = gpu_transformer.get_data()
-            data_holder.replace_shared_train(set_[0], set_[1])
+            set_ = gpu_transformer.result()
+            data_holder.set_train(set_[0].eval(), set_[1].eval())
             make_train_functions()
 
         if params.shuffle_dataset:
@@ -1095,6 +1096,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 #                    print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         state.classifier.run_hooks()
         if params.online_transform is not None:
+            state.train_error_f.clean_gpu()
             del state.train_f
             del state.train_error_f
             gc.collect()
@@ -1158,7 +1160,9 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         #restore original datasets that got messed about
         data_holder.reset()
     cl = state.classifier
-    state.train_error_f.clean_gpu()
+    if params.online_transform is None:
+        #if we have online transforms, this has already been deleted
+        state.train_error_f.clean_gpu()
     state.valid_error_f.clean_gpu()
     if state.test_error_f is not None:
         state.test_error_f.clean_gpu()
