@@ -361,7 +361,7 @@ class GPUTransformer:
         self.x = int(x)
         self.y = int(y)
         self.channels = channels
-        (self.original_x, self.original_y) = original_set
+        (self.original_x, self.original_y) = shared_dataset(original_set)
         self.instances = self.original_x.shape[0]
         inpt = self.original_x.reshape([self.instances,self.channels,self.x,self.y])
 

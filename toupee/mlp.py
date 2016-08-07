@@ -762,21 +762,17 @@ class MLP(object):
                 data_holder.valid_set_x,
                 data_holder.valid_set_y,
                 self.x, self.y)
-        if self.params.online_transform is not None:
-            train_f = None
-            train_error_f = None
-        else:
-            train_f = self.train_function(
-                    self.index,
-                    data_holder.train_set_x,
-                    data_holder.train_set_y,
-                    self.x, self.y,
-                    update_input = self.params.update_input)
-            train_error_f = self.eval_function(
-                    self.index,
-                    data_holder.train_set_x,
-                    data_holder.train_set_y,
-                    self.x, self.y)
+        train_f = self.train_function(
+                self.index,
+                data_holder.train_set_x,
+                data_holder.train_set_y,
+                self.x, self.y,
+                update_input = self.params.update_input)
+        train_error_f = self.eval_function(
+                self.index,
+                data_holder.train_set_x,
+                data_holder.train_set_y,
+                self.x, self.y)
         if data_holder.has_test():
             test_error_f = self.eval_function(
                     self.index,
@@ -846,6 +842,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 
     data_holder = DataHolder(dataset)
     if params.online_transform is not None:
+        if params.update_input:
+            raise "Cannot have online_transform and update_input"
         if 'channels' not in params.__dict__:
             if params.RGB:
                 channels = 3
@@ -853,9 +851,8 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                 channels = 1
         else:
             channels = params.channels
-        #TODO: this should be based of the original dataset
-        gpu_transformer = data.GPUTransformer( (data_holder.train_set_x,
-                                                data_holder.train_set_y),
+        gpu_transformer = data.GPUTransformer( (data_holder.orig_train_set_x,
+                                                data_holder.orig_train_set_y),
                         x=int(math.sqrt(params.n_in / channels)),
                         y=int(math.sqrt(params.n_in / channels)),
                         channels=channels,
@@ -863,6 +860,9 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                         save=False,
                         opts=params.online_transform,
                         seed=params.random_seed)
+        transformed = gpu_transformer.result()
+        data_holder.replace_shared_train(transformed[0], transformed[1])
+
 
     if index is None:
         index = T.lscalar()
@@ -928,13 +928,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
                     data_holder.train_set_y,
                     state.classifier.x,
                     state.classifier.y)
-
-        if params.online_transform is not None:
-            if params.update_input:
-                raise "Cannot have online_transform and update_input"
-            set_ = gpu_transformer.result()
-            data_holder.set_train(set_[0].eval(), set_[1].eval())
-            make_train_functions()
 
         if params.shuffle_dataset:
             tsx = data_holder.train_set_x.eval()
@@ -1095,11 +1088,7 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
 #                if len(cost) > 0:
 #                    print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
         state.classifier.run_hooks()
-        if params.online_transform is not None:
-            state.train_error_f.clean_gpu()
-            del state.train_f
-            del state.train_error_f
-            gc.collect()
+        gc.collect()
 
     if params.training_method == 'normal':
         print ".... generating models"
@@ -1156,9 +1145,6 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         results.set_final_observation(state.best_valid_loss * 100., None, state.best_epoch)
         print('Selection : Best valid score of {0} %'.format(
               state.best_valid_loss * 100.))
-    if params.online_transform is not None: 
-        #restore original datasets that got messed about
-        data_holder.reset()
     cl = state.classifier
     if params.online_transform is None:
         #if we have online transforms, this has already been deleted
