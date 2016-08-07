@@ -249,7 +249,7 @@ class DIB(EnsembleMethod):
         self.weights['outb'] = None
         self.weights['outW'] = None
         orig_train = self.resampler.get_train()
-        yhat = m.classify(orig_train[0])
+        yhat = m.classify(sharedX(orig_train[0]))
         errors = T.neq(orig_train[1], yhat)
         e = T.sum((errors * self.D)).eval()
         alpha = .5 * math.log((1-e)/e)
