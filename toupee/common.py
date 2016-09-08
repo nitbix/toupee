@@ -10,9 +10,6 @@ __docformat__ = 'restructedtext en'
 
 import numpy
 import yaml
-import theano
-import theano.tensor as T
-from data import sharedX
 
 class Toupee:
     
