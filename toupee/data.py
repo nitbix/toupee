@@ -17,64 +17,12 @@ import numpy as np
 import scipy.ndimage as ni
 import scipy.stats
 import numpy.random
-import theano
-import theano.tensor as T
 import gzip
 import cPickle
 import math
 from skimage import transform as tf
 import multiprocessing
-import theano.tensor.signal.conv as sigconv
 from scipy.misc import imsave
-
-from theano.sandbox.cuda.basic_ops import gpu_from_host
-
-floatX = theano.config.floatX
-
-#import matplotlib.pyplot as plt
-
-def sharedX(value, name=None, borrow=True, dtype=None):
-    """
-    Transform value into a shared variable of type floatX
-    borrowed from pylearn2
-    """
-
-    if dtype is None:
-        dtype = floatX
-    return theano.shared(theano._asarray(value, dtype=dtype),
-                         name=name,
-                         borrow=borrow)
-
-def sharedXscalar(value, name=None, borrow=True):
-    """
-    Transform value into a shared variable scalar
-    """
-
-    return theano.shared(floatX(value), name=name, borrow=borrow)
-
-def shared_dataset(data_xy, borrow=True, ytype='int32'):
-    """ Function that loads the dataset into shared variables
-
-    The reason we store our dataset in shared variables is to allow
-    Theano to copy it into the GPU memory (when code is run on GPU).
-    Since copying data into the GPU is slow, copying a minibatch everytime
-    is needed (the default behaviour if the data is not in a shared
-    variable) would lead to a large decrease in performance.
-    """
-    data_x, data_y = data_xy
-    shared_x = theano.shared(np.asarray(data_x, dtype=floatX), borrow=borrow)
-    shared_y = theano.shared(np.asarray(data_y, dtype=ytype), borrow=borrow)
-    # When storing data on the GPU it has to be stored as floats
-    # therefore we will store the labels as ``floatX`` as well
-    # (``shared_y`` does exactly that). But during our computations
-    # we need them as ints (we use labels as index, and if they are
-    # floats it doesn't make sense) therefore instead of returning
-    # ``shared_y`` we will have to cast it to int. This little hack
-    # lets ous get around this issue
-    return shared_x, shared_y
-
-def mask(p,shape,theano_rng,dtype=floatX):
-    return theano_rng.binomial(p=p, size=shape, dtype=dtype)
 
 def corrupt(data,p):
     return mask(1-p,data.shape,dtype=floatX) * data
@@ -91,80 +39,74 @@ def std_norm(d):
 
 def load_data(dataset, resize_to=None, shared=True, pickled=True,
         center_and_normalise=False, join_train_and_valid=False):
-    ''' Loads the dataset
+  ''' Loads the dataset
 
-    :type dataset: string
-    :param dataset: the path to the dataset (here MNIST)
-    '''
+  :type dataset: string
+  :param dataset: the path to the dataset (here MNIST)
+  '''
 
-    data_dir, data_file = os.path.split(dataset)
-    if pickled:
-        if data_dir == "" and not os.path.isfile(dataset):
-            new_path = os.path.join(os.path.split(__file__)[0], "..", "data", dataset)
-            if os.path.isfile(new_path) or data_file == 'mnist.pkl.gz':
-                dataset = new_path
-        print('... loading data')
-        f = gzip.open(dataset, 'rb')
-        train_set, valid_set, test_set = cPickle.load(f)
-        f.close()
-    else:
-        tr = np.load(dataset + 'train.npz')
-        v = np.load(dataset + 'valid.npz')
-        te = np.load(dataset + 'test.npz')
-        train_set = (tr['x'],tr['y'])
-        valid_set = (v['x'],v['y'])
-        test_set = (te['x'],te['y'])
-    if resize_to is not None:
-        orig_size = math.sqrt(train_set[0].shape[1])
-        train_set = (
-                        pad_dataset(
-                            train_set[0].reshape((train_set[0].shape[0],
-                                                    orig_size,orig_size)
-                            ),
-                            resize_to),
-                        train_set[1])
-        valid_set = (
-                        pad_dataset(
-                            valid_set[0].reshape((valid_set[0].shape[0],
-                                                    orig_size,orig_size)
-                            ),
-                            resize_to),
-                        valid_set[1])
-        test_set  = (
-                        pad_dataset(
-                            test_set[0].reshape((test_set[0].shape[0],
-                                                    orig_size,orig_size)
-                            ),
-                            resize_to),
-                        test_set[1])
-    if center_and_normalise:
-        train_set = std_norm(sub_mean(train_set))
-        valid_set = std_norm(sub_mean(valid_set))
-        test_set  = std_norm(sub_mean(test_set))
-    if join_train_and_valid:
-        set_x = numpy.concatenate([
-                    train_set[0],
-                    valid_set[0]
-                ])
-        set_y = numpy.concatenate([
-                    train_set[1],
-                    valid_set[1]
-                ])
-        train_set = (set_x,set_y)
-        valid_set = train_set
-    if shared:
-        return (shared_dataset(train_set),
-                shared_dataset(valid_set),
-                shared_dataset(test_set))
-    else:
-        return (train_set, valid_set, test_set)
-
+  data_dir, data_file = os.path.split(dataset)
+  if pickled:
+    if data_dir == "" and not os.path.isfile(dataset):
+      new_path = os.path.join(os.path.split(__file__)[0], "..", "data", dataset)
+      if os.path.isfile(new_path) or data_file == 'mnist.pkl.gz':
+        dataset = new_path
+    print('... loading data')
+    f = gzip.open(dataset, 'rb')
+    train_set, valid_set, test_set = cPickle.load(f)
+    f.close()
+  else:
+    tr = np.load(dataset + 'train.npz')
+    v = np.load(dataset + 'valid.npz')
+    te = np.load(dataset + 'test.npz')
+    train_set = (tr['x'],tr['y'])
+    valid_set = (v['x'],v['y'])
+    test_set = (te['x'],te['y'])
+  if resize_to is not None:
+    orig_size = math.sqrt(train_set[0].shape[1])
+    train_set = (
+                  pad_dataset(
+                      train_set[0].reshape((train_set[0].shape[0],
+                                              orig_size,orig_size)
+                      ),
+                      resize_to),
+                  train_set[1])
+    valid_set = (
+                  pad_dataset(
+                      valid_set[0].reshape((valid_set[0].shape[0],
+                                              orig_size,orig_size)
+                      ),
+                      resize_to),
+                  valid_set[1])
+    test_set  = (
+                  pad_dataset(
+                      test_set[0].reshape((test_set[0].shape[0],
+                                              orig_size,orig_size)
+                      ),
+                      resize_to),
+                  test_set[1])
+  if center_and_normalise:
+    train_set = std_norm(sub_mean(train_set))
+    valid_set = std_norm(sub_mean(valid_set))
+    test_set  = std_norm(sub_mean(test_set))
+  if join_train_and_valid:
+    set_x = numpy.concatenate([
+                train_set[0],
+                valid_set[0]
+            ])
+    set_y = numpy.concatenate([
+                train_set[1],
+                valid_set[1]
+            ])
+    train_set = (set_x,set_y)
+    valid_set = train_set
+  return (train_set, valid_set, test_set)
 
 def make_pretraining_set(datasets,mode):
-    if mode is not None:
-        return (datasets[0][0],datasets[0][1])
-    else:
-        return None
+  if mode is not None:
+    return (datasets[0][0],datasets[0][1])
+  else:
+    return None
 
 
 class Resampler:
@@ -336,136 +278,6 @@ class Transformer:
 
     def get_data(self):
         return np.array(self.final_x)
-
-class GPUTransformer:
-    """
-    Apply translation, scaling, rotation and other transformations to a 
-    training set to produce a larger, noisy training set, using Theano on the
-    GPU
-    Credit for this function to theanet https://github.com/rakeshvar/theanet/
-    """
-
-    def __init__(self, original_set, x, y, opts, channels = 1, progress=False,
-            save=False, seed=None):
-        print("..transforming dataset")
-        self.alpha = opts['alpha']
-        self.beta  = opts['beta']
-        self.gamma = opts['gamma']
-        self.sigma = opts['sigma']
-        self.pflip = opts['pflip']
-        self.translation = opts['translation']
-        self.bilinear = opts['bilinear']
-        self.invert = opts['invert'] if 'invert' in opts else False
-        self.flip = opts['flip'] if 'flip' in opts else False
-        self.center_uncertainty = opts['center_uncertainty'] if 'center_uncertainty' in opts else 0.
-        self.x = int(x)
-        self.y = int(y)
-        self.channels = channels
-        (self.original_x, self.original_y) = shared_dataset(original_set)
-        self.instances = self.original_x.shape[0]
-        inpt = self.original_x.reshape([self.instances,self.channels,self.x,self.y])
-
-        self.srs = T.shared_randomstreams.RandomStreams(seed)
-        target = T.as_tensor_variable(np.indices((self.y, self.x)).astype('float32'))
-
-        # Translate
-        if self.translation:
-            transln = self.translation * self.srs.uniform((2, 1, 1), -1,dtype=floatX)
-            target += transln
-
-        # Build a gaussian filter
-        if self.sigma - 1:
-            var = self.sigma ** 2
-            filt = np.array([[np.exp(-.5 * (i * i + j * j) / var)
-                             for i in range(-self.sigma, self.sigma + 1)]
-                             for j in range(-self.sigma, self.sigma + 1)], dtype=floatX)
-            filt /= 2 * np.pi * var
-
-            # Elastic
-            elast = self.alpha * self.srs.normal((2, self.y, self.x),dtype=floatX)
-            elast = sigconv.conv2d(elast, filt, (2, self.y, self.x), filt.shape, 'full')
-            elast = elast[:, self.sigma:self.y + self.sigma, self.sigma:self.x + self.sigma]
-            target += elast
-
-        if self.gamma or self.beta:
-            # Center at 'about' half way
-            origin = self.srs.uniform((2, 1, 1), 0.5 - self.center_uncertainty,
-                     0.5 + self.center_uncertainty,dtype=floatX) * \
-                     np.array((self.y, self.x)).reshape((2, 1, 1)).astype('float32')
-            target -= origin
-
-            # Zoom
-            if self.gamma:
-                zoomer = T.exp(np.log(1. + (self.gamma/100.)).astype('float32') * self.srs.uniform((2, 1, 1), -1,dtype=floatX))
-                target *= zoomer
-
-            # Rotate
-            if self.beta:
-                theta = (self.beta * np.pi / 180) * self.srs.uniform(low=-1,dtype=floatX)
-                c, s = T.cos(theta), T.sin(theta)
-                rotate = T.stack(c, -s, s, c).reshape((2,2))
-                target = T.tensordot(rotate, target, axes=((0, 0)))
-
-            # Uncenter
-            target += origin
-
-        # Clip the mapping to valid range and linearly interpolate
-        transy = T.clip(target[0], 0, self.y - 1 - .001)
-        transx = T.clip(target[1], 0, self.x - 1 - .001)
-
-        if self.bilinear:
-            topp = T.cast(transy, 'int32')
-            left = T.cast(transx, 'int32')
-            fraction_y = T.cast(transy - T.cast(topp, floatX), floatX)
-            fraction_x = T.cast(transx - T.cast(left, floatX), floatX)
-
-            output = inpt[:, :, topp, left] * (1 - fraction_y) * (1 - fraction_x) + \
-                     inpt[:, :, topp, left + 1] * (1 - fraction_y) * fraction_x + \
-                     inpt[:, :, topp + 1, left] * fraction_y * (1 - fraction_x) + \
-                     inpt[:, :, topp + 1, left + 1] * fraction_y * fraction_x
-        else:
-            vert = T.iround(transy)
-            horz = T.iround(transx)
-            output = inpt[:, :, vert, horz]
-
-        # Now add some noise
-        if self.pflip:
-            mask = srs.binomial(n=1, p=self.pflip, size=inpt.shape, dtype=floatX)
-            output = (1 - output) * mask + output * (1 - mask)
-
-        if self.invert:
-            output = 1. - output
-
-        if self.flip:
-            flip_x = output[:,:,::-1,:]
-            output = T.concatenate([output, flip_x], axis=0)
-            self.output_instances = self.instances * 2
-            self.output_y = T.concatenate([self.original_y, self.original_y],axis=0)
-        else:
-            self.output_instances = self.instances
-            self.output_y = self.original_y
-
-        self.final_x = output.reshape([self.output_instances,self.channels * self.x * self.y])
-        self.final_y = self.output_y
-
-        if save:
-            self.save_images()
-
-    def save_images(self):
-        to_save = self.final_x.reshape([self.instances,self.x,self.y]).eval({})
-        for i,x in enumerate(to_save[:100]):
-            imsave('trans{0}.png'.format(i),x)
-        to_save = self.original_x.reshape([self.instances,self.x,self.y]).eval({})
-        for i,x in enumerate(to_save[:100]):
-            imsave('orig{0}.png'.format(i),x)
-
-    def clear(self):
-        del self.original_x
-        del self.final_x
-        gc.collect()
-
-    def result(self):
-        return self.final_x, self.final_y
 
 def one_hot(dataset):
     b = np.zeros((dataset.size, dataset.max()+1),dtype=floatX)
