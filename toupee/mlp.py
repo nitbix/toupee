@@ -770,8 +770,8 @@ class MLP(object):
                 update_input = self.params.update_input)
         train_error_f = self.eval_function(
                 self.index,
-                data_holder.train_set_x,
-                data_holder.train_set_y,
+                sharedX(data_holder.orig_train_set_x),
+                sharedX(data_holder.orig_train_set_y,dtype='int32'),
                 self.x, self.y)
         if data_holder.has_test():
             test_error_f = self.eval_function(
