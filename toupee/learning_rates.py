@@ -9,11 +9,7 @@ All code released under Apachev2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import numpy
-import theano
-import theano.tensor as T
-import theano.printing
 import yaml
-from data import sharedX
 import common
 
 class LearningRate(yaml.YAMLObject):

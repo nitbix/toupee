@@ -27,4 +27,3 @@ class Parameters(object):
         import pprint
         pp = pprint.PrettyPrinter(indent=4)
         return serialized.__dict__
-                

@@ -37,6 +37,7 @@ defaults = { 'random_seed': None,
              'training_method' : 'normal',
              'pretraining_passes' : 0,
            }
+
 def load_parameters(filename):
     with open(filename) as f:
         r = yaml.load(f)
