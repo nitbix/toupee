@@ -2,62 +2,14 @@
 ## MLP Parameters ##
 dataset: /local/mnist.pkl.gz
 pickled: true
-L1_reg: 0.0
-L2_reg: 0.0
+model_file: mnist.model
+update_rule: rmsprop
 n_epochs: 300 #max number of training epochs
-pretraining: !!null #can be !!null, unsupervised, supervised or reverse
-pretraining_passes: 5
 training_method: normal #normal or greedy
-
-learning_rate: !FixedLearningRate { rate: 0.01 }
-#learning_rate: !LinearDecayLearningRate { start: 0.1, stop: 0.01, steps: 500 }
-
-#update_rule: !RProp {eta_minus: 0.1, eta_plus: 1.01, max_delta: 5, min_delta: 0.001}
-update_rule: !SGD { momentum: 0.5 }
-
 batch_size: 100
-
-cost_function: !CrossEntropy {} # these are defined in cost_funtions.py
-
-#each layer can either be 'flat' or 'conv'
-#flat layers have the following params:
-# n_units, droput rate, name, activation
-#for example:
-# ['flat',[2500,0.5,'h0',!!python/name:toupee.activations.rectifier ]],
-#conv layers have the following params:
-# input shape, filter shape, pool size, dropout rate ,name, activation, pooling
-#for example:
-# ['conv', [ [300,3,32,32], [32,3,5,5], [3,3], 0.0, 'c1', !!python/name:toupee.activations.tanh , 'max' ]],
-#
-#for more information on how layers are created, look at mlp.py:create_layer()
-#and layers.py
-n_hidden: [
-              ['flat',[2500,0.5,'h0',!!python/name:toupee.activations.rectifier ]],
-              ['flat',[2000,0.5,'h1',!!python/name:toupee.activations.rectifier ]],
-              ['flat',[1500,0.5,'h2',!!python/name:toupee.activations.rectifier ]],
-              ['flat',[1000,0.5,'h2',!!python/name:toupee.activations.rectifier ]],
-              ['flat',[ 500,0.5,'h3',!!python/name:toupee.activations.rectifier ]]
-          ]
-n_in: 784
-n_out: 10
+cost_function: categorical_crossentropy
 
 ## Ensemble Parameters ##
 resample_size: 60000
-    
-#method: !Bagging {}
-method: !Stacking {
-    dropstack_prob: 0.5,
-    n_hidden: [
-                  ['flat',[100,0.,'s1',!!python/name:toupee.activations.tanh ]],
-              ],
-    update_rule: !RProp {eta_minus: 0.1, eta_plus: 1.01, max_delta: 5, min_delta: 0.001},
-    n_epochs: 300,
-    batch_size: 300,
-    learning_rate: 0.01,
-    pretraining: !!null ,
-    pretraining_passes: 1,
-    training_method: greedy,
-    L1_reg: 0.0,
-    L2_reg: 0.0
-}
+method: !Bagging {}
 ensemble_size: 1

@@ -37,8 +37,9 @@ def std_norm(d):
     x = x / np.std(x,axis=0)
     return(x,y)
 
-def load_data(dataset, resize_to=None, shared=True, pickled=True,
-        center_and_normalise=False, join_train_and_valid=False):
+def load_data(dataset, resize_to = None, pickled = True,
+              center_and_normalise = False, join_train_and_valid = False,
+              one_hot_y = True):
   ''' Loads the dataset
 
   :type dataset: string
@@ -51,7 +52,7 @@ def load_data(dataset, resize_to=None, shared=True, pickled=True,
       new_path = os.path.join(os.path.split(__file__)[0], "..", "data", dataset)
       if os.path.isfile(new_path) or data_file == 'mnist.pkl.gz':
         dataset = new_path
-    print('... loading data')
+    print('loading data...')
     f = gzip.open(dataset, 'rb')
     train_set, valid_set, test_set = cPickle.load(f)
     f.close()
@@ -100,6 +101,10 @@ def load_data(dataset, resize_to=None, shared=True, pickled=True,
             ])
     train_set = (set_x,set_y)
     valid_set = train_set
+  if one_hot_y:
+      train_set = (train_set[0], one_hot(train_set[1]))
+      valid_set = (valid_set[0], one_hot(valid_set[1]))
+      test_set = (test_set[0], one_hot(test_set[1]))
   return (train_set, valid_set, test_set)
 
 def make_pretraining_set(datasets,mode):
@@ -280,6 +285,6 @@ class Transformer:
         return np.array(self.final_x)
 
 def one_hot(dataset):
-    b = np.zeros((dataset.size, dataset.max()+1),dtype=floatX)
+    b = np.zeros((dataset.size, dataset.max()+1),dtype='float32')
     b[np.arange(dataset.size), dataset] = 1.
     return b

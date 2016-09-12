@@ -9,33 +9,23 @@ All code released under Apachev2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import yaml 
-import activations
-import update_rules
 import ensemble_methods
 import parameters
-import cost_functions
-import activations
-import weight_inits
-import learning_rates
 
 defaults = { 'random_seed': None,
              'save_images': False,
              'pretraining_noise': None,
              'detailed_stats': False,
-             'output_layer': 'softmax',
-             'output_layer_options': {},
-             'pretrain_update_rule': None,
-             'pretrain_learning_rate': None,
              'online_transform': None,
              'resize_data_to': None,
              'join_train_and_valid': False,
              'center_and_normalise': False,
-             'RGB': False,
              'shuffle_dataset': False,
-             'update_input': False,
-             'pretraining': None,
+             #TODO:'update_input': False,
+             #TODO:'pretraining': None,
              'training_method' : 'normal',
              'pretraining_passes' : 0,
+             'one_hot' : True,
            }
 
 def load_parameters(filename):
