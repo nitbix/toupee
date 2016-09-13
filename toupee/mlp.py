@@ -156,18 +156,23 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     def run_epoch(state,results):
         print "epoch {0}".format(state.epoch)
         training_costs = []
-        for minibatch_index in xrange(state.n_batches['train']):
-            batch_start = minibatch_index * params.batch_size
-            batch_end = max((minibatch_index + 1) * params.batch_size, state.train_examples )
-            batch_metrics = model.train_on_batch(
-                        data_holder.train_set_x[batch_start:batch_end],
-                        data_holder.train_set_y[batch_start:batch_end]
-                    )
-            sys.stdout.write("\r  batch {0}, cost: {1}".format(minibatch_index,
-                batch_metrics[0]))
-            sys.stdout.flush()
-            #TODO: append to training_costs
-        sys.stdout.write("\n")
+        if params.all_in_memory:
+            model.train_on_batch(data_holder.train_set_x,
+                    data_holder.train_set_y,
+                    batch_size = params.batch_size)
+        else:
+            for minibatch_index in xrange(state.n_batches['train']):
+                batch_start = minibatch_index * params.batch_size
+                batch_end = max((minibatch_index + 1) * params.batch_size, state.train_examples )
+                batch_metrics = model.train_on_batch(
+                            data_holder.train_set_x[batch_start:batch_end],
+                            data_holder.train_set_y[batch_start:batch_end]
+                        )
+                sys.stdout.write("\r  batch {0}, cost: {1}".format(minibatch_index,
+                    batch_metrics[0]))
+                sys.stdout.flush()
+                #TODO: append to training_costs
+            sys.stdout.write("\n")
         train_metrics = model.test_on_batch(data_holder.train_set_x,data_holder.train_set_y)
         valid_metrics = model.test_on_batch(data_holder.valid_set_x,data_holder.valid_set_y)
         if data_holder.has_test():

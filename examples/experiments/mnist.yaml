@@ -8,6 +8,7 @@ n_epochs: 300 #max number of training epochs
 training_method: normal #normal or greedy
 batch_size: 100
 cost_function: categorical_crossentropy
+all_in_memory: true
 
 ## Ensemble Parameters ##
 resample_size: 60000

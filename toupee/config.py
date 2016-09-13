@@ -26,6 +26,7 @@ defaults = { 'random_seed': None,
              'training_method' : 'normal',
              'pretraining_passes' : 0,
              'one_hot' : True,
+             'all_in_memory' : False,
            }
 
 def load_parameters(filename):
