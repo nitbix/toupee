@@ -13,13 +13,25 @@ config:
     input_dim: 784
     input_dtype: float32
     name: dense_1
-    output_dim: 1000
+    output_dim: 2500
     trainable: true
 - class_name: Dense
   config: {W_constraint: null, W_regularizer: null, activation: relu, activity_regularizer: null,
     b_constraint: null, b_regularizer: null, init: uniform, input_dim: null, name: dense_2,
+    output_dim: 2000, trainable: true}
+- class_name: Dense
+  config: {W_constraint: null, W_regularizer: null, activation: relu, activity_regularizer: null,
+    b_constraint: null, b_regularizer: null, init: uniform, input_dim: null, name: dense_3,
+    output_dim: 1500, trainable: true}
+- class_name: Dense
+  config: {W_constraint: null, W_regularizer: null, activation: relu, activity_regularizer: null,
+    b_constraint: null, b_regularizer: null, init: uniform, input_dim: null, name: dense_4,
+    output_dim: 1000, trainable: true}
+- class_name: Dense
+  config: {W_constraint: null, W_regularizer: null, activation: relu, activity_regularizer: null,
+    b_constraint: null, b_regularizer: null, init: uniform, input_dim: null, name: dense_5,
     output_dim: 500, trainable: true}
 - class_name: Dense
   config: {W_constraint: null, W_regularizer: null, activation: softmax, activity_regularizer: null,
-    b_constraint: null, b_regularizer: null, init: uniform, input_dim: null, name: dense_3,
+    b_constraint: null, b_regularizer: null, init: uniform, input_dim: null, name: dense_6,
     output_dim: 10, trainable: true}

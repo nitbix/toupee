@@ -153,54 +153,51 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   metrics = metrics
     )
 
-    def run_epoch(state,results):
-        print "epoch {0}".format(state.epoch)
-        training_costs = []
-        if params.all_in_memory:
-            model.train_on_batch(data_holder.train_set_x,
-                    data_holder.train_set_y,
-                    batch_size = params.batch_size)
-        else:
-            for minibatch_index in xrange(state.n_batches['train']):
-                batch_start = minibatch_index * params.batch_size
-                batch_end = max((minibatch_index + 1) * params.batch_size, state.train_examples )
-                batch_metrics = model.train_on_batch(
-                            data_holder.train_set_x[batch_start:batch_end],
-                            data_holder.train_set_y[batch_start:batch_end]
-                        )
-                sys.stdout.write("\r  batch {0}, cost: {1}".format(minibatch_index,
-                    batch_metrics[0]))
-                sys.stdout.flush()
-                #TODO: append to training_costs
-            sys.stdout.write("\n")
-        train_metrics = model.test_on_batch(data_holder.train_set_x,data_holder.train_set_y)
-        valid_metrics = model.test_on_batch(data_holder.valid_set_x,data_holder.valid_set_y)
-        if data_holder.has_test():
-            test_metrics = model.test_on_batch(data_holder.test_set_x,data_holder.test_set_y)
-        for metrics_name,metrics in (
-                ('train', train_metrics),
-                ('valid', valid_metrics),
-                ('test', test_metrics)
-            ):
-            print "{0}:".format(metrics_name)
-            for i in range(len(metrics)):
-                print "  {0} = {1}".format(model.metrics_names[i], metrics[i])
+#TODO: this only works with images now!
+    
+
+    if params.online_transform is not None:
+        datagen = keras.processing.image.ImageDataGenerator(
+            featurewise_center=False,
+            samplewise_center=False,
+            featurewise_std_normalization=False,
+            samplewise_std_normalization=False,
+            zca_whitening=False,
+            rotation_range=0,
+            width_shift_range=0.1,
+            height_shift_range=0.1,
+            horizontal_flip=True,
+            vertical_flip=False)
+
+        datagen.fit(data_holder.tran_set_x)
+        model.fit_generator(datagen.flow(data_holder.train_set_x, data_holder.train_set_y,
+                            batch_size=params.batch_size),
+                            samples_per_epoch=data_holder.train_set_x.shape[0],
+                            nb_epoch=params.n_epoch,
+                            validation_data=(data_holder.valid_set_x, data_holder.valid_set_y))
+    else:
+        model.fit(data_holder.train_set_x, data_holder.train_set_y,
+                  batch_size=params.batch_size,
+                  nb_epoch=params.n_epochs,
+                  validation_data=(data_holder.valid_set_x, data_holder.valid_set_y),
+                  shuffle=True)
+    train_metrics = model.test_on_batch(data_holder.train_set_x,data_holder.train_set_y)
+    valid_metrics = model.test_on_batch(data_holder.valid_set_x,data_holder.valid_set_y)
+    if data_holder.has_test():
+        test_metrics = model.test_on_batch(data_holder.test_set_x,data_holder.test_set_y)
+    for metrics_name,metrics in (
+            ('train', train_metrics),
+            ('valid', valid_metrics),
+            ('test', test_metrics)
+        ):
+        print "{0}:".format(metrics_name)
+        for i in range(len(metrics)):
+            print "  {0} = {1}".format(model.metrics_names[i], metrics[i])
 #TODO HERE:
 # - add the best values to state
 # - save best weights
 # - check early stopping 
 
-
-    if params.training_method == 'normal':
-        print "started training"
-        while (state.epoch < params.n_epochs) and (not state.done_looping):
-            epoch_start = time.clock()
-            state.epoch += 1
-            run_epoch(state,results)
-            epoch_end = time.clock()
-            print "t: {0}".format(epoch_end - epoch_start)
-        if state.best_weights is not None:
-            state.model.set_weights(state.best_weights)
 
     end_time = time.clock()
     if data_holder.test_set_x is not None:
