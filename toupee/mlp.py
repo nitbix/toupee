@@ -127,20 +127,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         state.n_batches['test'] = state.test_examples / params.batch_size
         print "test examples: {0}".format(state.test_examples)
 
-    print '... {0} training'.format(params.training_method)
-
-    #TODO: Make these part of the YAML experiment description, after they get their own class
-    # early-stopping parameters
-    state.patience = 10000  # look as this many examples regardless
-    state.patience_increase = 20  # wait this much longer when a new best is
-                           # found
-    improvement_threshold = 0.99   # a relative improvement of this much is
-                                   # considered significant
-    valid_frequency = min(state.n_batches['train'], state.patience / 2)
-                                  # go through this many
-                                  # minibatches before checking the network
-                                  # on the valid set; in this case we
-                                  # check every epoch
+    print '{0} training...'.format(params.training_method)
 
     start_time = time.clock()
 
@@ -156,6 +143,14 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 #TODO: this only works with images now!
     
 
+    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
+            monitor = 'val_loss',
+            mode = 'min')
+    callbacks = [checkpointer]
+    if params.early_stopping is not None:
+        earlyStopping=keras.callbacks.EarlyStopping(monitor='val_loss',
+            patience=params.early_stopping['patience'], verbose=0, mode='auto')
+        callbacks.append(earlyStopping)
     if params.online_transform is not None:
         datagen = keras.processing.image.ImageDataGenerator(
             featurewise_center=False,
@@ -170,17 +165,26 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             vertical_flip=False)
 
         datagen.fit(data_holder.tran_set_x)
-        model.fit_generator(datagen.flow(data_holder.train_set_x, data_holder.train_set_y,
-                            batch_size=params.batch_size),
-                            samples_per_epoch=data_holder.train_set_x.shape[0],
-                            nb_epoch=params.n_epoch,
-                            validation_data=(data_holder.valid_set_x, data_holder.valid_set_y))
+        hist = model.fit_generator(datagen.flow(data_holder.train_set_x, data_holder.train_set_y,
+                            batch_size = params.batch_size),
+                            samples_per_epoch = data_holder.train_set_x.shape[0],
+                            nb_epoch = params.n_epoch,
+                            callbacks = callbacks,
+                            validation_data = (data_holder.valid_set_x,
+                                data_holder.valid_set_y),
+                            test_data = (data_holder.test_set_x,
+                                data_holder.test_set_y),
+                            shuffle = params.shuffle_dataset
+                           )
     else:
-        model.fit(data_holder.train_set_x, data_holder.train_set_y,
-                  batch_size=params.batch_size,
-                  nb_epoch=params.n_epochs,
-                  validation_data=(data_holder.valid_set_x, data_holder.valid_set_y),
-                  shuffle=True)
+        hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
+                  batch_size = params.batch_size,
+                  nb_epoch = params.n_epochs,
+                  validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
+                  test_data = (data_holder.test_set_x, data_holder.test_set_y),
+                  callbacks = callbacks,
+                  shuffle = params.shuffle_dataset)
+    model.set_weights(checkpointer.best_model)
     train_metrics = model.test_on_batch(data_holder.train_set_x,data_holder.train_set_y)
     valid_metrics = model.test_on_batch(data_holder.valid_set_x,data_holder.valid_set_y)
     if data_holder.has_test():
@@ -198,21 +202,24 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 # - save best weights
 # - check early stopping 
 
-
+    results.set_history(hist)
     end_time = time.clock()
     if data_holder.test_set_x is not None:
-        print(('Optimization complete. Best valid score of %f %% '
-               'obtained at iteration %i, epoch %i, with test performance %f %%') %
-              (state.best_valid_loss * 100., state.best_iter + 1,
-                  state.best_epoch, state.test_score * 100.))
+        print(('Optimization complete.\nBest valid accuracy: %f %%\n'
+            'Obtained at epoch: %i\nTest accuracy: %f %%') %
+              (valid_metrics[1] * 100.,
+                  checkpointer.best_epoch, test_metrics[1] * 100.))
         print >> sys.stderr, ('The code for file ' +
                               os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
-        results.set_final_observation(state.best_valid_loss * 100., state.test_score * 100., state.best_epoch)
+        results.set_final_observation(valid_metrics[1] * 100.,
+                test_metrics[1] * 100.,
+                checkpointer.best_epoch)
     else:
-        results.set_final_observation(state.best_valid_loss * 100., None, state.best_epoch)
+        results.set_final_observation(valid_metrics[1]* 100., None,
+                checkpointer.best_epoch)
         print('Selection : Best valid score of {0} %'.format(
-              state.best_valid_loss * 100.))
+              valid_metrics[1] * 100.))
 
     if 'results_db' in params.__dict__ :
         if 'results_host' in params.__dict__:
