@@ -29,6 +29,7 @@ import common
 import utils
 
 import keras
+import keras.preprocessing.image
 
 class DataHolder:
     """
@@ -62,7 +63,6 @@ class DataHolder:
         self.valid_set_x = self.orig_valid_set_x.reshape([self.valid_set_x.shape[0]] + shape)
         if self.has_test():
             self.test_set_x = self.orig_test_set_x.reshape([self.test_set_x.shape[0]] + shape)
-
 
 
 class TrainingState:
@@ -153,8 +153,9 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         earlyStopping=keras.callbacks.EarlyStopping(monitor='val_loss',
             patience=params.early_stopping['patience'], verbose=0, mode='auto')
         callbacks.append(earlyStopping)
+
     if params.online_transform is not None:
-        datagen = keras.processing.image.ImageDataGenerator(
+        datagen = keras.preprocessing.image.ImageDataGenerator(
             featurewise_center=False,
             samplewise_center=False,
             featurewise_std_normalization=False,
@@ -165,18 +166,21 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             height_shift_range=0.1,
             horizontal_flip=True,
             vertical_flip=False)
-
-        datagen.fit(data_holder.tran_set_x)
-        hist = model.fit_generator(datagen.flow(data_holder.train_set_x, data_holder.train_set_y,
-                            batch_size = params.batch_size),
+        datagen.fit(data_holder.train_set_x)
+        hist = model.fit_generator(
+                            datagen.flow(
+                                data_holder.train_set_x,
+                                data_holder.train_set_y,
+                                shuffle = params.shuffle_dataset,
+                                batch_size = params.batch_size
+                            ),
                             samples_per_epoch = data_holder.train_set_x.shape[0],
-                            nb_epoch = params.n_epoch,
+                            nb_epoch = params.n_epochs,
                             callbacks = callbacks,
                             validation_data = (data_holder.valid_set_x,
                                 data_holder.valid_set_y),
                             test_data = (data_holder.test_set_x,
                                 data_holder.test_set_y),
-                            shuffle = params.shuffle_dataset
                            )
     else:
         hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
@@ -187,10 +191,10 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   callbacks = callbacks,
                   shuffle = params.shuffle_dataset)
     model.set_weights(checkpointer.best_model)
-    train_metrics = model.test_on_batch(data_holder.train_set_x,data_holder.train_set_y)
-    valid_metrics = model.test_on_batch(data_holder.valid_set_x,data_holder.valid_set_y)
+    train_metrics = model.evaluate(data_holder.train_set_x,data_holder.train_set_y)
+    valid_metrics = model.evaluate(data_holder.valid_set_x,data_holder.valid_set_y)
     if data_holder.has_test():
-        test_metrics = model.test_on_batch(data_holder.test_set_x,data_holder.test_set_y)
+        test_metrics = model.evaluate(data_holder.test_set_x,data_holder.test_set_y)
     for metrics_name,metrics in (
             ('train', train_metrics),
             ('valid', valid_metrics),
