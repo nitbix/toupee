@@ -57,6 +57,13 @@ class DataHolder:
     def has_test(self):
         return self.test_set_x is not None
 
+    def reshape_inputs(self,shape):
+        self.train_set_x = self.orig_train_set_x.reshape([self.train_set_x.shape[0]] + shape)
+        self.valid_set_x = self.orig_valid_set_x.reshape([self.valid_set_x.shape[0]] + shape)
+        if self.has_test():
+            self.test_set_x = self.orig_test_set_x.reshape([self.test_set_x.shape[0]] + shape)
+
+
 
 class TrainingState:
     """
@@ -75,7 +82,6 @@ class TrainingState:
         self.best_epoch = 0
         self.test_score = None
         self.epoch = 0
-        self.n_batches = {}
         self.previous_minibatch_avg_cost = 1.
 
     def pre_iter(self):
@@ -93,7 +99,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     Initialize the parameters and create the network.
     """
 #TODO:
-# - online transform using model.fit_generator
+# - online transform parameters
+# - train one batch at a time on large datasets
 # - greedy training mode
 
 
@@ -110,21 +117,19 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 
     results = common.Results(params)
     data_holder = DataHolder(dataset)
+    data_holder.reshape_inputs(list(model.inputs[0]._keras_shape[1:]))
 
     rng = numpy.random.RandomState(params.random_seed)
 
     state = TrainingState(model)
     state.train_examples = data_holder.train_set_x.shape[0]
     state.valid_examples = data_holder.valid_set_x.shape[0]
-    state.n_batches['train'] = state.train_examples / params.batch_size
-    state.n_batches['valid'] = state.valid_examples / params.batch_size
 
     print "training examples: {0}".format(state.train_examples)
     print "validation examples: {0}".format(state.valid_examples)
 
     if data_holder.has_test():
         state.test_examples = data_holder.test_set_x.shape[0]
-        state.n_batches['test'] = state.test_examples / params.batch_size
         print "test examples: {0}".format(state.test_examples)
 
     print '{0} training...'.format(params.training_method)
@@ -139,9 +144,6 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   loss = params.cost_function,
                   metrics = metrics
     )
-
-#TODO: this only works with images now!
-    
 
     checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
             monitor = 'val_loss',
@@ -199,7 +201,6 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             print "  {0} = {1}".format(model.metrics_names[i], metrics[i])
 #TODO HERE:
 # - add the best values to state
-# - save best weights
 # - check early stopping 
 
     results.set_history(hist)
