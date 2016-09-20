@@ -10,7 +10,7 @@ from keras.layers import Convolution2D, MaxPooling2D
 from keras.optimizers import SGD
 from keras.utils import np_utils
 
-input_shape = [3,32,32]
+input_shape = [32,32,3]
 output_classes = 10
 
 model = Sequential()

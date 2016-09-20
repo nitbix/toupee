@@ -34,7 +34,6 @@ class Results:
         self.params = params
 
     def set_history(self,hist):
-        print hist.__dict__
         self.history = hist
 
     def set_final_observation(self,valid,test,epoch):

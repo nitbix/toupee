@@ -109,6 +109,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         model_yaml = model_file.read()
     model = keras.models.model_from_yaml(model_yaml)
     total_weights = 0
+    for w in model.get_weights():
+        total_weights += numpy.prod(w.shape)
     if model_weights is not None:
         model.set_weights(model_weights)
 
@@ -117,7 +119,6 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 
     results = common.Results(params)
     data_holder = DataHolder(dataset)
-    data_holder.reshape_inputs(list(model.inputs[0]._keras_shape[1:]))
 
     rng = numpy.random.RandomState(params.random_seed)
 

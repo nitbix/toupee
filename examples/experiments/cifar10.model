@@ -8,10 +8,10 @@ config:
     activity_regularizer: null
     b_constraint: null
     b_regularizer: null
-    batch_input_shape: !!python/tuple [null, 3, 32, 32]
+    batch_input_shape: !!python/tuple [null, 32, 32, 3]
     bias: true
     border_mode: same
-    dim_ordering: th
+    dim_ordering: tf
     init: glorot_uniform
     input_dtype: float32
     name: convolution2d_1
@@ -32,7 +32,7 @@ config:
     b_regularizer: null
     bias: true
     border_mode: valid
-    dim_ordering: th
+    dim_ordering: tf
     init: glorot_uniform
     name: convolution2d_2
     nb_col: 3
@@ -45,7 +45,7 @@ config:
 - class_name: MaxPooling2D
   config:
     border_mode: valid
-    dim_ordering: th
+    dim_ordering: tf
     name: maxpooling2d_1
     pool_size: &id002 !!python/tuple [2, 2]
     strides: *id002
@@ -62,7 +62,7 @@ config:
     b_regularizer: null
     bias: true
     border_mode: same
-    dim_ordering: th
+    dim_ordering: tf
     init: glorot_uniform
     name: convolution2d_3
     nb_col: 3
@@ -82,7 +82,7 @@ config:
     b_regularizer: null
     bias: true
     border_mode: valid
-    dim_ordering: th
+    dim_ordering: tf
     init: glorot_uniform
     name: convolution2d_4
     nb_col: 3
@@ -95,7 +95,7 @@ config:
 - class_name: MaxPooling2D
   config:
     border_mode: valid
-    dim_ordering: th
+    dim_ordering: tf
     name: maxpooling2d_2
     pool_size: &id003 !!python/tuple [2, 2]
     strides: *id003
@@ -118,5 +118,5 @@ config:
     name: dense_2, output_dim: 10, trainable: true}
 - class_name: Activation
   config: {activation: softmax, name: activation_6, trainable: true}
-keras_version: 1.0.8
+keras_version: 1.1.0
 

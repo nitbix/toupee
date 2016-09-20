@@ -39,7 +39,7 @@ def std_norm(d):
 
 def load_data(dataset, resize_to = None, pickled = True,
               center_and_normalise = False, join_train_and_valid = False,
-              one_hot_y = True):
+              one_hot_y = False):
   ''' Loads the dataset
 
   :type dataset: string

@@ -4,7 +4,7 @@ dataset: /local/cifar10/
 pickled: false
 model_file: experiments/cifar10.model
 update_rule: rmsprop
-n_epochs: 1 #max number of training epochs
+n_epochs: 50 #max number of training epochs
 training_method: normal #normal or greedy
 batch_size: 100
 cost_function: categorical_crossentropy
