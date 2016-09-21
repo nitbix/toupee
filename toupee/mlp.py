@@ -65,34 +65,6 @@ class DataHolder:
             self.test_set_x = self.orig_test_set_x.reshape([self.test_set_x.shape[0]] + shape)
 
 
-class TrainingState:
-    """
-    Helps track the state of the current training.
-    """
-    
-    def __init__(self,classifier):
-        self.reset()
-        self.classifier = classifier
-        self.best_valid_loss = numpy.inf
-
-    def reset(self):
-        self.done_looping = False
-        self.best_weights = None
-        self.best_iter = 0
-        self.best_epoch = 0
-        self.test_score = None
-        self.epoch = 0
-        self.previous_minibatch_avg_cost = 1.
-
-    def pre_iter(self):
-        self.best_weights = None
-        self.best_valid_loss = numpy.inf
-        self.best_iter = 0
-        self.best_epoch = 0
-        self.test_score = 0.
-        self.epoch = 0
-
-
 def sequential_model(dataset, params, pretraining_set = None, model_weights = None,
         return_results = False):
     """
@@ -109,29 +81,26 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         model_yaml = model_file.read()
     model = keras.models.model_from_yaml(model_yaml)
     total_weights = 0
+
     for w in model.get_weights():
         total_weights += numpy.prod(w.shape)
     if model_weights is not None:
         model.set_weights(model_weights)
 
-    #TODO: weight count
     print "total weight count: {0}".format(total_weights)
 
     results = common.Results(params)
     data_holder = DataHolder(dataset)
 
-    rng = numpy.random.RandomState(params.random_seed)
+    train_examples = data_holder.train_set_x.shape[0]
+    valid_examples = data_holder.valid_set_x.shape[0]
 
-    state = TrainingState(model)
-    state.train_examples = data_holder.train_set_x.shape[0]
-    state.valid_examples = data_holder.valid_set_x.shape[0]
-
-    print "training examples: {0}".format(state.train_examples)
-    print "validation examples: {0}".format(state.valid_examples)
+    print "training examples: {0}".format(train_examples)
+    print "validation examples: {0}".format(valid_examples)
 
     if data_holder.has_test():
-        state.test_examples = data_holder.test_set_x.shape[0]
-        print "test examples: {0}".format(state.test_examples)
+        test_examples = data_holder.test_set_x.shape[0]
+        print "test examples: {0}".format(test_examples)
 
     print '{0} training...'.format(params.training_method)
 
@@ -204,9 +173,6 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         print "{0}:".format(metrics_name)
         for i in range(len(metrics)):
             print "  {0} = {1}".format(model.metrics_names[i], metrics[i])
-#TODO HERE:
-# - add the best values to state
-# - check early stopping 
 
     results.set_history(hist)
     end_time = time.clock()
