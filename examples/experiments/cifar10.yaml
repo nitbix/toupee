@@ -1,9 +1,9 @@
 ---
 ## MLP Parameters ##
-dataset: /local/cifar10/
+dataset: /local/cifar10-th/
 pickled: false
 model_file: experiments/cifar10.model
-update_rule: rmsprop
+update_rule: sgd
 n_epochs: 50 #max number of training epochs
 training_method: normal #normal or greedy
 batch_size: 100
