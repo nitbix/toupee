@@ -17,9 +17,6 @@ from toupee import data
 from toupee import config 
 from toupee.mlp import sequential_model
 
-from keras.datasets import cifar10
-
-
 if __name__ == '__main__':
     params = config.load_parameters(sys.argv[1])
     dataset = data.load_data(params.dataset,
