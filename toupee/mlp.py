@@ -133,6 +133,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             height_shift_range=default_online_transform_param('height_shift',0.1),
             horizontal_flip=default_online_transform_param('horizontal_flip',True),
             vertical_flip=default_online_transform_param('vertical_flip',False)
+        )
         datagen.fit(data_holder.train_set_x)
         hist = model.fit_generator(
                             datagen.flow(
