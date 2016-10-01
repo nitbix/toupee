@@ -92,16 +92,6 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     results = common.Results(params)
     data_holder = DataHolder(dataset)
 
-    train_examples = data_holder.train_set_x.shape[0]
-    valid_examples = data_holder.valid_set_x.shape[0]
-
-    print "training examples: {0}".format(train_examples)
-    print "validation examples: {0}".format(valid_examples)
-
-    if data_holder.has_test():
-        test_examples = data_holder.test_set_x.shape[0]
-        print "test examples: {0}".format(test_examples)
-
     print '{0} training...'.format(params.training_method)
 
     start_time = time.clock()
@@ -110,12 +100,13 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     if 'additional_metrics' in params.__dict__:
         metrics = metrics + additional_metrics
 
-    model.compile(optimizer = params.update_rule,
+    optimizer = keras.optimizers.optimizer_from_config(params.optimizer)
+    model.compile(optimizer = optimizer,
                   loss = params.cost_function,
                   metrics = metrics
     )
 
-    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
+    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=0,
             monitor = 'val_loss',
             mode = 'min')
     callbacks = [checkpointer]
@@ -125,17 +116,23 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         callbacks.append(earlyStopping)
 
     if params.online_transform is not None:
+        def default_online_transform_param(name,default):
+            if name in params.online_transform:
+                return params.online_transform[name]
+            else:
+                return default
+
         datagen = keras.preprocessing.image.ImageDataGenerator(
-            featurewise_center=False,
-            samplewise_center=False,
-            featurewise_std_normalization=False,
-            samplewise_std_normalization=False,
-            zca_whitening=False,
-            rotation_range=0,
-            width_shift_range=0.1,
-            height_shift_range=0.1,
-            horizontal_flip=True,
-            vertical_flip=False)
+            featurewise_center=default_online_transform_param('featurewise_center',False),
+            samplewise_center=default_online_transform_param('samplewise_center',False),
+            featurewise_std_normalization=default_online_transform_param('featurewise_std_normalization',False),
+            samplewise_std_normalization=default_online_transform_param('samplewise_std_normalization',False),
+            zca_whitening=default_online_transform_param('zca_whitening',False),
+            rotation_range=default_online_transform_param('rotation_range',0),
+            width_shift_range=default_online_transform_param('width_shift',0.1),
+            height_shift_range=default_online_transform_param('height_shift',0.1),
+            horizontal_flip=default_online_transform_param('horizontal_flip',True),
+            vertical_flip=default_online_transform_param('vertical_flip',False)
         datagen.fit(data_holder.train_set_x)
         hist = model.fit_generator(
                             datagen.flow(
