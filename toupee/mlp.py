@@ -159,10 +159,13 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   callbacks = callbacks,
                   shuffle = params.shuffle_dataset)
     model.set_weights(checkpointer.best_model)
-    train_metrics = model.evaluate(data_holder.train_set_x,data_holder.train_set_y)
-    valid_metrics = model.evaluate(data_holder.valid_set_x,data_holder.valid_set_y)
+    train_metrics = model.evaluate(data_holder.train_set_x,
+            data_holder.train_set_y, batch_size = params.batch_size)
+    valid_metrics = model.evaluate(data_holder.valid_set_x,
+            data_holder.valid_set_y, batch_size = params.batch_size)
     if data_holder.has_test():
-        test_metrics = model.evaluate(data_holder.test_set_x,data_holder.test_set_y)
+        test_metrics = model.evaluate(data_holder.test_set_x,
+                data_holder.test_set_y, batch_size = params.batch_size)
     for metrics_name,metrics in (
             ('train', train_metrics),
             ('valid', valid_metrics),
@@ -179,8 +182,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             'Obtained at epoch: %i\nTest accuracy: %f %%') %
               (valid_metrics[1] * 100.,
                   checkpointer.best_epoch, test_metrics[1] * 100.))
-        print >> sys.stderr, ('The code for file ' +
-                              os.path.split(__file__)[1] +
+        print('The code for ' + os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
         results.set_final_observation(valid_metrics[1] * 100.,
                 test_metrics[1] * 100.,
