@@ -107,8 +107,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     )
 
     checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=0,
-            monitor = 'val_loss',
-            mode = 'min')
+            monitor = 'val_acc',
+            mode = 'max')
     callbacks = [checkpointer]
     if params.early_stopping is not None:
         earlyStopping=keras.callbacks.EarlyStopping(monitor='val_loss',
