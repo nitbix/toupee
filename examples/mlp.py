@@ -13,13 +13,15 @@ __docformat__ = 'restructedtext en'
 
 import numpy
 import argparse
+import os
+import re
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a single MLP')
     parser.add_argument('params_file', help='the parameters file')
     parser.add_argument('save_file', nargs='?',
                         help='the file where the trained MLP is to be saved')
-    parser.add_argument('--seed', type=int, nargs='?',
+    parser.add_argument('--seed', type=int, nargs='?', default=42,
                         help='random seed to use for this sim')
     parser.add_argument('--epochs', type=int, nargs='?',
                         help='number of epochs to run')
