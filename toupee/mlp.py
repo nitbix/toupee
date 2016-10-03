@@ -66,7 +66,7 @@ class DataHolder:
 
 
 def sequential_model(dataset, params, pretraining_set = None, model_weights = None,
-        return_results = False):
+        return_results = False, member_number = None):
     """
     Initialize the parameters and create the network.
     """
@@ -193,6 +193,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         print('Selection : Best valid score of {0} %'.format(
               valid_metrics[1] * 100.))
 
+    if member_number is not None:
+        results.member_number = member_number
     if 'results_db' in params.__dict__ :
         if 'results_host' in params.__dict__:
             host = params.results_host
