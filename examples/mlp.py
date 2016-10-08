@@ -59,6 +59,8 @@ if __name__ == '__main__':
     from toupee import config 
     from toupee.mlp import sequential_model
 
+    import toupee
+    print "using toupee version {0}".format(toupee.version)
     params = config.load_parameters(args.params_file)
 
     def arg_params(arg_value,param):

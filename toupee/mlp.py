@@ -71,8 +71,6 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     Initialize the parameters and create the network.
     """
 #TODO:
-# - online transform parameters
-# - train one batch at a time on large datasets
 # - greedy training mode
 
 
@@ -144,11 +142,11 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                             ),
                             samples_per_epoch = data_holder.train_set_x.shape[0],
                             nb_epoch = params.n_epochs,
-                            callbacks = callbacks,
                             validation_data = (data_holder.valid_set_x,
                                 data_holder.valid_set_y),
                             test_data = (data_holder.test_set_x,
                                 data_holder.test_set_y),
+                            callbacks = callbacks
                            )
     else:
         hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,

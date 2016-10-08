@@ -8,18 +8,12 @@ All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
-#import sys
 import numpy as np
-#import numpy.random
-#import yaml
-#import math
-#import copy
-#
 import mlp
 from data import Resampler, WeightedResampler
-#from parameters import Parameters
 import common
-#import utils
+import math
+
 
 class Aggregator:
     """
@@ -31,8 +25,12 @@ class Aggregator:
     def compute(self, set_x):
         raise NotImplementedException()
 
-    def classify(self, set_x):
+    def predict(self, set_x):
         raise NotImplementedException()
+
+    def predict_classes(self, set_x):
+        return np.argmax(self.predict(set_x), axis = 1)
+
 
 class AveragingRunner(Aggregator):
     """
@@ -43,7 +41,7 @@ class AveragingRunner(Aggregator):
         self.params = params
         self.members = members
 
-    def classify(self,data):
+    def predict(self,data):
         prob = []
         for m in self.members:
             p = m.predict_proba(data, batch_size = self.params.batch_size)
@@ -64,7 +62,7 @@ class MajorityVotingRunner(Aggregator):
         self.params = params
         self.members = members
 
-    def classify(self,data):
+    def predict(self,data):
         classifs = []
         for m in self.members:
             c = m.predict(data, batch_size = self.params.batch_size)
@@ -75,22 +73,30 @@ class MajorityVotingRunner(Aggregator):
         out_shape = self.members[0].layers[-1].output_shape
         return np.eye(out_shape[1])[m]
 
-#class WeightedAveragingRunner(Aggregator):
-#    """
-#    Take an Ensemble and produce a weighted average, usually done in AdaBoost
-#    """
-#
-#    def __init__(self,members,x,y,weights,params):
-#        self.params = params
-#        self.members = members
-#        self.x = x
-#        self.y = y
-#        self.p_y_given_x = sum([self.members[i].p_y_given_x * weights[i]
-#            for i in range(len(self.members))])
-#        self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-#        self.errors = T.mean(T.neq(self.y_pred, y), dtype=floatX, acc_dtype=floatX)
-#
-#
+
+class WeightedAveragingRunner(Aggregator):
+    """
+    Take an Ensemble and produce a weighted average, usually done in AdaBoost
+    """
+
+
+    def __init__(self,members,weights,params):
+        self.params = params
+        self.members = members
+        self.weights = weights
+
+    def predict(self,data):
+        prob = []
+        for i in range(len(self.members)):
+            p = self.members[i].predict_proba(data, batch_size = self.params.batch_size)
+            prob.append(p * self.weights[i])
+        prob_arr = np.array(prob) / np.sum(self.weights[i])
+        a = np.sum(prob_arr,axis=0) / float(len(self.members))
+        m = np.argmax(a,axis=1)
+        out_shape = self.members[0].layers[-1].output_shape
+        return np.eye(out_shape[1])[m]
+
+
 #class StackingRunner(Aggregator):
 #    """
 #    Take an ensemble and produce the stacked output on a dataset
@@ -285,47 +291,49 @@ class Bagging(EnsembleMethod):
 #                   self.incremental_layer)
 #
 #
-#class AdaBoost_M1(EnsembleMethod):
-#    """
-#    Create an AdaBoost Ensemble from parameters
-#    """
-#
-#    yaml_tag = u'!AdaBoostM1'
-#
-#    def create_aggregator(self,params,members,x,y,train_set,valid_set):
-#            return WeightedAveragingRunner(members,x,y,self.alphas,params)
-#
-#    def create_member(self,x,y):
-#        resampled = [self.resampler.make_new_train(self.params.resample_size),
-#                self.resampler.get_valid(), self.resampler.get_test()]
-#        pretraining_set = make_pretraining_set(resampled,self.params.pretraining)
-#        self.params.member_number = len(self.members) + 1
-#        m = mlp.test_mlp(resampled, self.params,
-#                pretraining_set = pretraining_set, x=x, y=y)
-#        orig_train = self.resampler.get_train()
-#        yhat = m.classify(sharedX(orig_train[0]))
-#        errors = T.neq(orig_train[1], yhat)
-#        e = T.sum((errors * self.D)).eval()
-#        alpha = .5 * math.log((1-e)/e)
-#        w = T.switch(T.eq(errors,1),self.D * T.exp(alpha), self.D * T.exp(-alpha))
-#        self.D = w / w.sum()
-#        self.resampler.update_weights(self.D.eval())
-#        self.alphas.append(alpha)
-#        self.members.append(m)
-#        return m
-#
-#    def prepare(self, params, dataset):
-#        self.params = params
-#        self.dataset = dataset
-#        self.resampler = WeightedResampler(dataset)
-#        self.D = sharedX(self.resampler.weights)
-#        self.members = []
-#        self.alphas = []
-#
-#    def serialize(self):
-#        return 'AdaBoostM1'
-#
-#
+class AdaBoost_M1(EnsembleMethod):
+    """
+    Create an AdaBoost Ensemble from parameters
+    """
+
+    yaml_tag = u'!AdaBoostM1'
+
+    def create_aggregator(self,params,members,train_set,valid_set):
+            return WeightedAveragingRunner(members,self.alphas,params)
+
+    def create_member(self):
+        resampled = [
+                        self.resampler.make_new_train(self.params.resample_size),
+                        self.resampler.get_valid(),
+                        self.resampler.get_test()
+                    ]
+        member_number = len(self.members) + 1
+        m = mlp.sequential_model(resampled, self.params,
+                member_number = member_number)
+        orig_train = self.resampler.get_train()
+        errors = common.errors(m, orig_train[0], orig_train[1])
+        e = np.sum((errors * self.D))
+        alpha = .5 * math.log((1-e)/e)
+        w = np.where(errors == 1,
+            self.D * math.exp(alpha),
+            self.D * math.exp(-alpha))
+        self.D = w / w.sum()
+        self.resampler.update_weights(self.D)
+        self.alphas.append(alpha)
+        return m
+
+    def prepare(self, params, dataset):
+        self.params = params
+        self.dataset = dataset
+        self.resampler = WeightedResampler(dataset)
+        self.D = self.resampler.weights
+        self.members = []
+        self.alphas = []
+
+    def serialize(self):
+        return 'AdaBoostM1'
+
+
 #class Stacking(EnsembleMethod):
 #    """
 #    Create a Stacking Runner from parameters

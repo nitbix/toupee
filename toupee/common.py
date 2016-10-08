@@ -11,6 +11,8 @@ __docformat__ = 'restructedtext en'
 import numpy
 import yaml
 
+numpy.set_printoptions(threshold=numpy.inf)
+
 class Toupee:
     
     def __init__(self):
@@ -67,6 +69,15 @@ def serialize(o):
                     return str(o)
             else:
                 raise Exception("don't know how to save {0}".format(type(o)))
+
+def errors(classifier, test_set_x, test_set_y):
+    classification = classifier.predict_classes(test_set_x)
+    c = numpy.argmax(test_set_y, axis=1)
+    return numpy.where(classification != c, 1.0, 0.0)
+
+def accuracy(classifier, test_set_x, test_set_y):
+    e = errors(classifier, test_set_x, test_set_y)
+    return 1.0 - (float(e.sum()) / float(test_set_y.shape[0]))
 
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()

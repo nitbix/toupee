@@ -15,6 +15,7 @@ import numpy
 import argparse
 import os
 import re
+from toupee.common import accuracy
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a single MLP')
@@ -82,10 +83,7 @@ if __name__ == '__main__':
         members.append(method.create_member())
         ensemble = method.create_aggregator(params,members,train_set,valid_set)
         test_set_x, test_set_y = method.resampler.get_test()
-        classification = ensemble.classify(test_set_x)
-        test_score = 1 - (
-                float(numpy.sum(numpy.abs(test_set_y - classification))) / 
-                (2.0 * test_set_y.shape[0]))
+        test_score = accuracy(ensemble,test_set_x,test_set_y)
         print 'Intermediate test accuracy: {0} %'.format(test_score * 100.)
         intermediate_scores.append(test_score)
         final_score = test_score
