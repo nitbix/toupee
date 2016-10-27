@@ -36,7 +36,7 @@ class Results:
         self.params = params
 
     def set_history(self,hist):
-        self.history = hist
+        self.history = hist.__dict__
 
     def set_final_observation(self,valid,test,epoch):
         self.best_valid = valid
