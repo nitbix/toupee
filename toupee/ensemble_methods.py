@@ -213,84 +213,86 @@ class Bagging(EnsembleMethod):
         return 'Bagging'
 
 
-#class DIB(EnsembleMethod):
-#    """
-#    Create an AdaBoost Ensemble from parameters
-#    """
-#
-#    yaml_tag = u'!DIB'
-#
-#    def set_defaults(self):
-#        self._default_value('incremental_index', -1)
-#        self._default_value('grow_forward', False)
-#
-#    def create_aggregator(self,params,members,x,y,train_set,valid_set):
-#        return WeightedAveragingRunner(members,x,y,self.alphas,params)
-#
-#    def create_member(self,x,y):
-#        self.set_defaults()
-#        resampled = [self.resampler.make_new_train(self.params.resample_size),
-#                self.resampler.get_valid(), self.resampler.get_test()]
-#        pretraining_set = make_pretraining_set(resampled,self.params.pretraining)
-#        self.params.member_number = len(self.members) + 1
-#        if self.params.member_number > 1:
-#            self.params.n_epochs = self.n_epochs_after_first
-#        m = mlp.test_mlp(resampled, self.params,
-#                pretraining_set = pretraining_set, x=x, y=y,
-#                continuation=self.weights)
-#        self.weights = m.get_weights()
-#        index = self.incremental_index
-#        if self.incremental_layer is not None:
-#            if self.grow_forward:
-#                index += len(self.members)
-#            if index == -1:
-#                index = len(self.params.n_hidden)
-#            self.params.n_hidden.insert(index,copy.deepcopy(self.incremental_layer))
-#            #we have to force recalculation of the following layer
-#            next_layer_type, next_layer_conf = self.params.n_hidden[index + 1]
-#            filter_shape = next_layer_conf[1]
-#            if next_layer_type == 'convfilter' and len(filter_shape) != 3:
-#                self.params.n_hidden[index + 1][1][1] = [filter_shape[0],filter_shape[2],filter_shape[3]]
-#        self.weights['W'] = self.weights['W'][:index] + [ None for i in range(index,len(self.params.n_hidden))]
-#        self.weights['b'] = self.weights['b'][:index] + [ None for i in range(index,len(self.params.n_hidden))]
-#        self.weights['outb'] = None
-#        self.weights['outW'] = None
-#        orig_train = self.resampler.get_train()
-#        yhat = m.classify(sharedX(orig_train[0]))
-#        errors = T.neq(orig_train[1], yhat)
-#        e = T.sum((errors * self.D)).eval()
-#        alpha = .5 * math.log((1-e)/e)
-#        w = T.switch(T.eq(errors,1),self.D * T.exp(alpha), self.D * T.exp(-alpha))
-#        self.D = w / w.sum()
-#        self.resampler.update_weights(self.D.eval())
-#        self.members.append(m)
-#        self.alphas.append(alpha)
-#        return m
-#
-#    def prepare(self, params, dataset):
-#        self.params = copy.deepcopy(params)
-#        self.dataset = dataset
-#        self.resampler = WeightedResampler(dataset, seed = params.random_seed)
-#        self.D = sharedX(self.resampler.weights)
-#        self.weights = None
-#        self.members = []
-#        self.alphas = []
-#
-#    def serialize(self):
-#        self.set_defaults()
-#        return """
-#DIB {{
-#    n_epochs_after_first: {0},
-#    grow_forward: {1},
-#    incremental_index: {2},
-#    incremental_layer: {3}
-#}}
-#        """.format(self.n_epochs_after_first,
-#                   self.grow_forward,
-#                   self.incremental_index,
-#                   self.incremental_layer)
-#
-#
+class DIB(EnsembleMethod):
+    """
+    Create Deep Incremental Boosting Ensemble from parameters
+    """
+
+    yaml_tag = u'!DIB'
+
+    def set_defaults(self):
+        self._default_value('incremental_index', -1)
+        self._default_value('grow_forward', False)
+
+    def create_aggregator(self,params,members,train_set,valid_set):
+            return WeightedAveragingRunner(members,self.alphas,params)
+
+    def create_member(self):
+        self.set_defaults()
+        resampled = [
+                        self.resampler.make_new_train(self.params.resample_size),
+                        self.resampler.get_valid(),
+                        self.resampler.get_test()
+                    ]
+        member_number = len(self.members) + 1
+        if self.params.member_number > 1:
+            self.params.n_epochs = self.n_epochs_after_first
+        m = mlp.sequential_model(resampled, self.params,
+            member_number = member_number, model_weights = self.weights,
+            model_config = self.model_config)
+        self.weights = m.get_weights()
+        injection_index = self.incremental_index
+        if self.incremental_layer is not None:
+            if self.grow_forward:
+                injection_index += len(self.members)
+            if injection_index == -1:
+                injection_index = len(self.model_config)
+            new_config = self.model_config[:injection_index]
+            new_config.append(self.incremental_layer)
+            new_config.append(self.model_config[injection_index:]
+            self.model_config = new_config
+            self.weights = self.weights[:injection_index]
+        orig_train = self.resampler.get_train()
+        errors = common.errors(m, orig_train[0], orig_train[1])
+        e = np.sum((errors * self.D))
+        alpha = .5 * math.log((1-e)/e)
+        w = np.where(errors == 1,
+            self.D * math.exp(alpha),
+            self.D * math.exp(-alpha))
+        self.D = w / w.sum()
+        self.resampler.update_weights(self.D)
+        self.alphas.append(alpha)
+        return m
+
+    def prepare(self, params, dataset):
+        self.params = params
+        self.dataset = dataset
+        self.resampler = WeightedResampler(dataset)
+        self.D = self.resampler.weights
+        self.weights = None
+        self.members = []
+        self.alphas = []
+        self.model_config = keras.models.model_from_yaml(params.model_file).get_config()
+
+    def serialize(self):
+        return 'AdaBoostM1'
+
+
+    def serialize(self):
+        self.set_defaults()
+        return """
+DIB {{
+    n_epochs_after_first: {0},
+    grow_forward: {1},
+    incremental_index: {2},
+    incremental_layer: {3}
+}}
+        """.format(self.n_epochs_after_first,
+                   self.grow_forward,
+                   self.incremental_index,
+                   self.incremental_layer)
+
+
 class AdaBoost_M1(EnsembleMethod):
     """
     Create an AdaBoost Ensemble from parameters
