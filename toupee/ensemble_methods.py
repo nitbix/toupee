@@ -13,6 +13,9 @@ import mlp
 from data import Resampler, WeightedResampler
 import common
 import math
+import keras
+from pprint import pprint
+import copy
 
 
 class Aggregator:
@@ -235,22 +238,27 @@ class DIB(EnsembleMethod):
                         self.resampler.get_test()
                     ]
         member_number = len(self.members) + 1
-        if self.params.member_number > 1:
+        if member_number > 1:
             self.params.n_epochs = self.n_epochs_after_first
+        pprint(self.model_config)
         m = mlp.sequential_model(resampled, self.params,
             member_number = member_number, model_weights = self.weights,
-            model_config = self.model_config)
+            #the copy is because there is a bug in Keras that deletes names
+            model_config = copy.deepcopy(self.model_config))
         self.weights = m.get_weights()
         injection_index = self.incremental_index
-        if self.incremental_layer is not None:
+        if self.incremental_layers is not None:
             if self.grow_forward:
                 injection_index += len(self.members)
             if injection_index == -1:
                 injection_index = len(self.model_config)
-            new_config = self.model_config[:injection_index]
-            new_config.append(self.incremental_layer)
-            new_config.append(self.model_config[injection_index:]
-            self.model_config = new_config
+            new_layers = []
+            for i,l in enumerate(self.incremental_layers):
+                l['config']['name'] = "DIB-incremental-{0}-{1}".format(
+                    member_number, i)
+                new_layers.append(l)
+            self.model_config = self.model_config[:injection_index] + new_layers + self.model_config[injection_index:]
+#TODO: this doesn't work
             self.weights = self.weights[:injection_index]
         orig_train = self.resampler.get_train()
         errors = common.errors(m, orig_train[0], orig_train[1])
@@ -272,7 +280,9 @@ class DIB(EnsembleMethod):
         self.weights = None
         self.members = []
         self.alphas = []
-        self.model_config = keras.models.model_from_yaml(params.model_file).get_config()
+        with open(params.model_file, 'r') as model_file:
+            model_yaml = model_file.read()
+        self.model_config = keras.models.model_from_yaml(model_yaml).get_config()
 
     def serialize(self):
         return 'AdaBoostM1'
@@ -285,12 +295,12 @@ DIB {{
     n_epochs_after_first: {0},
     grow_forward: {1},
     incremental_index: {2},
-    incremental_layer: {3}
+    incremental_layers: {3}
 }}
         """.format(self.n_epochs_after_first,
                    self.grow_forward,
                    self.incremental_index,
-                   self.incremental_layer)
+                   self.incremental_layers)
 
 
 class AdaBoost_M1(EnsembleMethod):

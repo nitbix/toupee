@@ -77,7 +77,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 
     print "loading model..."
     if model_config is not None:
-        model = keras.models.model_from_config(model_config)
+        model = keras.models.Sequential.from_config(model_config)
     else:
         if model_yaml is None:
             with open(params.model_file, 'r') as model_file:
