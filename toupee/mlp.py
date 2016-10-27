@@ -66,7 +66,8 @@ class DataHolder:
 
 
 def sequential_model(dataset, params, pretraining_set = None, model_weights = None,
-        return_results = False, member_number = None):
+        return_results = False, member_number = None, model_yaml = None,
+        model_config = None):
     """
     Initialize the parameters and create the network.
     """
@@ -75,9 +76,13 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 
 
     print "loading model..."
-    with open(params.model_file, 'r') as model_file:
-        model_yaml = model_file.read()
-    model = keras.models.model_from_yaml(model_yaml)
+    if model_config is not None:
+        model = keras.models.model_from_config(model_config)
+    else:
+        if model_yaml is None:
+            with open(params.model_file, 'r') as model_file:
+                model_yaml = model_file.read()
+        model = keras.models.model_from_yaml(model_yaml)
     total_weights = 0
 
     for w in model.get_weights():
