@@ -240,12 +240,11 @@ class DIB(EnsembleMethod):
         member_number = len(self.members) + 1
         if member_number > 1:
             self.params.n_epochs = self.n_epochs_after_first
-        pprint(self.model_config)
         m = mlp.sequential_model(resampled, self.params,
             member_number = member_number, model_weights = self.weights,
             #the copy is because there is a bug in Keras that deletes names
             model_config = copy.deepcopy(self.model_config))
-        self.weights = m.get_weights()
+        self.weights = [l.get_weights() for l in m.layers]
         injection_index = self.incremental_index
         if self.incremental_layers is not None:
             if self.grow_forward:

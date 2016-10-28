@@ -88,7 +88,9 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     for w in model.get_weights():
         total_weights += numpy.prod(w.shape)
     if model_weights is not None:
-        model.set_weights(model_weights)
+        for i in range(len(model_weights)):
+            print i
+            model.layers[i].set_weights(model_weights[i])
 
     print "total weight count: {0}".format(total_weights)
 
