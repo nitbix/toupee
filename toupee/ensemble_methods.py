@@ -302,7 +302,7 @@ class RIB(EnsembleMethod):
     Create Residual Incremental Boosting Ensemble from parameters
     """
 
-    yaml_tag = u'!MIB'
+    yaml_tag = u'!RIB'
 
     def set_defaults(self):
         self._default_value('incremental_index', -1)
