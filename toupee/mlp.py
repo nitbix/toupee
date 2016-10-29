@@ -96,8 +96,6 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     results = common.Results(params)
     data_holder = DataHolder(dataset)
 
-    print '{0} training...'.format(params.training_method)
-
     start_time = time.clock()
 
     metrics = ['accuracy']
