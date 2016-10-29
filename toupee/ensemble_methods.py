@@ -254,6 +254,87 @@ class DIB(EnsembleMethod):
                 new_layers.append(l)
             new_model_config = self.model_config[:injection_index] + new_layers + self.model_config[injection_index:]
             self.model_config = copy.deepcopy(new_model_config)
+            self.weights = self.weights[:injection_index]
+        orig_train = self.resampler.get_train()
+        errors = common.errors(m, orig_train[0], orig_train[1])
+        e = np.sum((errors * self.D))
+        alpha = .5 * math.log((1-e)/e)
+        w = np.where(errors == 1,
+            self.D * math.exp(alpha),
+            self.D * math.exp(-alpha))
+        self.D = w / w.sum()
+        self.resampler.update_weights(self.D)
+        self.alphas.append(alpha)
+        self.member_number += 1
+        return m
+
+    def prepare(self, params, dataset):
+        self.params = params
+        self.dataset = dataset
+        self.resampler = WeightedResampler(dataset)
+        self.D = self.resampler.weights
+        self.weights = None
+        self.member_number = 0
+        self.alphas = []
+        with open(params.model_file, 'r') as model_file:
+            model_yaml = model_file.read()
+        self.model_config = keras.models.model_from_yaml(model_yaml).get_config()
+
+    def serialize(self):
+        return 'AdaBoostM1'
+
+
+    def serialize(self):
+        self.set_defaults()
+        return """
+DIB {{
+    n_epochs_after_first: {0},
+    incremental_index: {1},
+    incremental_layers: {2}
+}}
+        """.format(self.n_epochs_after_first,
+                   self.incremental_index,
+                   self.incremental_layers)
+
+
+class RIB(EnsembleMethod):
+    """
+    Create Residual Incremental Boosting Ensemble from parameters
+    """
+
+    yaml_tag = u'!MIB'
+
+    def set_defaults(self):
+        self._default_value('incremental_index', -1)
+
+    def create_aggregator(self,params,members,train_set,valid_set):
+            return WeightedAveragingRunner(members,self.alphas,params)
+
+    def create_member(self):
+        self.set_defaults()
+        resampled = [
+                        self.resampler.make_new_train(self.params.resample_size),
+                        self.resampler.get_valid(),
+                        self.resampler.get_test()
+                    ]
+        if self.member_number > 0:
+            self.params.n_epochs = self.n_epochs_after_first
+        m = mlp.sequential_model(resampled, self.params,
+            member_number = self.member_number, model_weights = self.weights,
+            #the copy is because there is a bug in Keras that deletes names
+            model_config = copy.deepcopy(self.model_config))
+        self.weights = [l.get_weights() for l in m.layers]
+        injection_index = self.incremental_index + self.member_number * len(self.incremental_layers)
+        if self.incremental_layers is not None:
+            if injection_index == -1:
+                injection_index = len(self.model_config)
+            new_layers = []
+            for i,l in enumerate(self.incremental_layers):
+                l['config']['name'] = "DIB-incremental-{0}-{1}".format(
+                    self.member_number, i)
+                new_layers.append(l)
+            new_model_config = self.model_config[:injection_index] + new_layers + self.model_config[injection_index:]
+            self.model_config = copy.deepcopy(new_model_config)
 #TODO: this doesn't work
             self.weights = self.weights[:injection_index]
         orig_train = self.resampler.get_train()
