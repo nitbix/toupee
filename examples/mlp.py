@@ -71,5 +71,6 @@ if __name__ == '__main__':
         arg_params(arg,param)
     dataset = data.load_data(params.dataset,
                              pickled = params.pickled,
-                             one_hot_y = params.one_hot)
+                             one_hot_y = params.one_hot,
+                             join_train_and_valid = params.join_train_and_valid)
     mlp = sequential_model(dataset, params)

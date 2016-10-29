@@ -100,7 +100,7 @@ def load_data(dataset, resize_to = None, pickled = True,
                 valid_set[1]
             ])
     train_set = (set_x,set_y)
-    valid_set = train_set
+    valid_set = test_set
   if one_hot_y:
       train_set = (train_set[0], one_hot(train_set[1]))
       valid_set = (valid_set[0], one_hot(valid_set[1]))
