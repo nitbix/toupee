@@ -14,6 +14,9 @@ from data import Resampler, WeightedResampler
 import common
 import math
 import keras
+from keras.layers import Input, Convolution2D, merge
+from keras.utils.layer_utils import layer_from_config
+from keras.models import Model
 from pprint import pprint
 import copy
 
@@ -311,17 +314,19 @@ class RIB(EnsembleMethod):
     def create_aggregator(self,params,members,train_set,valid_set):
             return WeightedAveragingRunner(members,self.alphas,params)
 
-    def _residual_block(self, injection_index, new_layers, m):
+    def _residual_block(self, injection_index, new_layers, m, member_number):
         #get output shape of last layer before injection from m
         if injection_index > 0:
-            input_shape = m.layers[injection_index - 1]
+            input_shape = m.layers[injection_index - 1].output_shape
         else:
             input_shape = m.input_shape
         #make input
-        input_layer = Input(shape=input_shape)
+        input_layer = Input(shape = input_shape[1:], name = "Input_RIB_{0}".format(member_number))
         #make real layers
         real_layers = input_layer
-        for l in new_layers:
+        for i,l in enumerate(new_layers):
+            l['config']['name'] = "RIB-incremental-{0}-{1}".format(
+                member_number, i)
             real_layers = layer_from_config(l)(real_layers)
         #make skip layer
         stride_width = input_shape[2] / real_layers._keras_shape[2]
@@ -329,17 +334,20 @@ class RIB(EnsembleMethod):
         equal_channels = real_layers._keras_shape[1] == input_shape[1]
         shortcut = input_layer
         # 1 X 1 conv if shape is different. Else identity.
-        if stride_width > 1 or stride_height > 1 or not equal_channels:
-            shortcut = Convolution2D(nb_filter=residual._keras_shape[1], nb_row=1, nb_col=1,
+        if (stride_width > 1 or stride_height > 1 or not equal_channels) and stride_width > 0 and stride_height > 0:
+            shortcut = Convolution2D(nb_filter=real_layers._keras_shape[1], nb_row=1, nb_col=1,
                                      subsample=(stride_width, stride_height),
-                                     init="he_normal", border_mode="valid")(input)
+                                     init="he_normal",
+                                     border_mode="same",
+                                     name="shortcut_RIB_{0}".format(member_number))(input_layer)
 
         #make merge
-        merge_layer = merge([real_layers,shortcut])
+        merge_layer = merge([real_layers,shortcut], mode="sum", name = "merge_RIB_{0}".format(member_number))
         #make model
-        model = Model(input=input_layer,output=merge_layer)
+        model = Model(input=input_layer,output=merge_layer,
+                name="Model_RIB_{0}".format(member_number))
         #make config
-        return model.get_config()
+        return {"class_name": "Model", "config": model.get_config()}
 
     def create_member(self):
         self.set_defaults()
@@ -361,12 +369,12 @@ class RIB(EnsembleMethod):
                 injection_index = len(self.model_config)
             new_layers = []
             for i,l in enumerate(self.incremental_layers):
-                l['config']['name'] = "DIB-incremental-{0}-{1}".format(
-                    self.member_number, i)
-                new_layers.append(l)
+                new_layers.append(copy.deepcopy(l))
             #make residual block
-            new_block = self._residual_block(injection_index, new_layers, m)
-            self.model_config = self.model_config[:injection_index] + new_block + self.model_config[injection_index:]
+            new_block = self._residual_block(injection_index, new_layers, m,
+                    self.member_number)
+            new_model_config = self.model_config[:injection_index] + [new_block] + self.model_config[injection_index:]
+            self.model_config = copy.deepcopy(new_model_config)
             self.weights = self.weights[:injection_index]
         orig_train = self.resampler.get_train()
         errors = common.errors(m, orig_train[0], orig_train[1])
