@@ -12,7 +12,6 @@ import theano
 import theano.tensor as T
 import yaml
 import theano.tensor.extra_ops as TE
-from data import sharedX
 from math import floor
 
 class AppliedOnAllBatchesXY():

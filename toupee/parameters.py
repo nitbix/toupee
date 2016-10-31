@@ -10,7 +10,7 @@ __docformat__ = 'restructedtext en'
 
 import copy
 
-to_string = ['cost_function', 'learning_rate', 'update_rule', 'method']
+to_string = []
 class Parameters(object):
 
     def __init__(self, **entries): 
@@ -18,13 +18,10 @@ class Parameters(object):
 
     def serialize(self):
         serialized = copy.deepcopy(self)
-        for layer in serialized.n_hidden:
-            s_layer = [str(param) for param in layer[1]]
-            layer[1] = s_layer
+
         for x in to_string:
             if x in serialized.__dict__:
                 serialized.__dict__[x] = serialized.__dict__[x].serialize()
         import pprint
         pp = pprint.PrettyPrinter(indent=4)
         return serialized.__dict__
-                

@@ -16,10 +16,9 @@ import theano.tensor as T
 import yaml
 import math
 import copy
-from theano.sandbox.rng_mrg import MRG_RandomStreams
 
 import mlp
-from data import Resampler, Transformer, sharedX, load_data, \
+from data import Resampler, Transformer, load_data, \
         make_pretraining_set, WeightedResampler
 from parameters import Parameters
 import common

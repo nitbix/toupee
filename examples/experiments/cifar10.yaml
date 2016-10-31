@@ -1,8 +1,8 @@
 ---
 ## MLP Parameters ##
-dataset: /local/mnist.pkl.gz
-pickled: true
-model_file: experiments/mnist.model
+dataset: /local/cifar10/
+pickled: false
+model_file: experiments/cifar10.model
 update_rule: rmsprop
 n_epochs: 1 #max number of training epochs
 training_method: normal #normal or greedy

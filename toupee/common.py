@@ -10,9 +10,6 @@ __docformat__ = 'restructedtext en'
 
 import numpy
 import yaml
-import theano
-import theano.tensor as T
-from data import sharedX
 
 class Toupee:
     
@@ -34,18 +31,11 @@ class Toupee:
 class Results:
 
     def __init__(self,params):
-        self.train_history = []
-        self.validation_history = []
-        self.test_history = []
-        self.training_costs = []
         self.params = params
 
-    def set_observation(self,train,validation,test,cost):
-        self.train_history.append(train)
-        self.validation_history.append(validation)
-        if test is not None:
-            self.test_history.append(test)
-        self.training_costs.append(cost)
+    def set_history(self,hist):
+        print hist.__dict__
+        self.history = hist
 
     def set_final_observation(self,valid,test,epoch):
         self.best_valid = valid

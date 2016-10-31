@@ -22,23 +22,14 @@ import math
 from pymongo import MongoClient
 import json
 
-import theano
-import theano.tensor as T
-from theano.sandbox.cuda.basic_ops import gpu_from_host
-from theano.sandbox.rng_mrg import MRG_RandomStreams
-from scipy.misc import imsave
-
 import data
-from data import Resampler, Transformer, sharedX
-import update_rules
-import layers
+from data import Resampler, Transformer
 import config 
-import cost_functions
-import activations
 import common
 import utils
 
-floatX = theano.config.floatX
+import keras
+import keras.preprocessing.image
 
 class DataHolder:
     """
@@ -54,54 +45,25 @@ class DataHolder:
         self.orig_valid_set_y = dataset[1][1]
         self.orig_test_set_x = dataset[2][0]
         self.orig_test_set_y = dataset[2][1]
-        self.train_set_x = sharedX(self.orig_train_set_x, dtype=floatX)
-        self.train_set_y = sharedX(self.orig_train_set_y, dtype='int32')
-        self.valid_set_x = sharedX(self.orig_valid_set_x, dtype=floatX)
-        self.valid_set_y = sharedX(self.orig_valid_set_y, dtype='int32')
+        self.train_set_x = self.orig_train_set_x
+        self.train_set_y = self.orig_train_set_y
+        self.valid_set_x = self.orig_valid_set_x
+        self.valid_set_y = self.orig_valid_set_y
         if len(dataset) > 2:
-            self.test_set_x = sharedX(self.orig_test_set_x, dtype=floatX)
-            self.test_set_y = sharedX(self.orig_test_set_y, dtype='int32')
+            self.test_set_x = self.orig_test_set_x
+            self.test_set_y = self.orig_test_set_y
         else:
             self.test_set_x, self.test_set_y = (None,None)
     
-    def reset(self):
-        self.train_set_x.set_value(self.orig_train_set_x)
-        self.train_set_y.set_value(self.orig_train_set_y.astype('int32'))
-        self.valid_set_x.set_value(self.orig_valid_set_x)
-        self.valid_set_y.set_value(self.orig_valid_set_y.astype('int32'))
-
-    def replace_shared_train(self,set_x,set_y):
-        self.train_set_x = set_x
-        self.train_set_y = set_y
-
-    def set_train(self,set_x,set_y):
-        self.train_set_x.set_value(set_x)
-        self.train_set_y.set_value(set_y)
-
-    def set_valid(self,set_x,set_y):
-        self.valid_set_x.set_value(set_x)
-        self.valid_set_y.set_value(set_y)
-
-    def clear_train(self):
-        self.train_set_x.set_value([[]])
-        self.train_set_y.set_value([])
-
-    def clear_valid(self):
-        self.valid_set_x.set_value([[]])
-        self.valid_set_y.set_value([])
-
-    def clear_test(self):
-        if self.test_set_x is not None:
-            self.test_set_x.set_value([[]])
-            self.test_set_y.set_value([])
-
-    def clear(self):
-        self.clear_train()
-        self.clear_valid()
-        self.clear_test()
-
     def has_test(self):
         return self.test_set_x is not None
+
+    def reshape_inputs(self,shape):
+        self.train_set_x = self.orig_train_set_x.reshape([self.train_set_x.shape[0]] + shape)
+        self.valid_set_x = self.orig_valid_set_x.reshape([self.valid_set_x.shape[0]] + shape)
+        if self.has_test():
+            self.test_set_x = self.orig_test_set_x.reshape([self.test_set_x.shape[0]] + shape)
+
 
 class TrainingState:
     """
@@ -120,7 +82,6 @@ class TrainingState:
         self.best_epoch = 0
         self.test_score = None
         self.epoch = 0
-        self.n_batches = {}
         self.previous_minibatch_avg_cost = 1.
 
     def pre_iter(self):
@@ -131,1029 +92,132 @@ class TrainingState:
         self.test_score = 0.
         self.epoch = 0
 
-    def set_models(self,models):
-        if 'train_error_f' in self.__dict__:
-            self.train_error_f.clean_gpu()
-            self.valid_error_f.clean_gpu()
-            self.test_error_f.clean_gpu()
-        gc.collect()
-        self.train_f, self.train_error_f, self.valid_error_f, self.test_error_f = models
 
-
-class MLP(object):
+def sequential_model(dataset, params, pretraining_set = None, model_weights = None,
+        return_results = False):
     """
-    Multi-Layer Perceptron (or any other kind of ANN if the layers exist)
+    Initialize the parameters and create the network.
     """
 
-    def __init__(self, params, rng, theano_rng, input, index, x, y, pretraining_set = None,
-            continuation = None):
-        """
-        Initialize the parameters for the multilayer perceptron and create the
-        network.
-        """
+    print "loading model..."
+    with open(params.model_file, 'r') as model_file:
+        model_yaml = model_file.read()
+    model = keras.models.model_from_yaml(model_yaml)
+    total_weights = 0
+    if model_weights is not None:
+        model.set_weights(model_weights)
 
-        self.hiddenLayers = []
-        self.layer_masks = {}
-        self.layer_updates = {}
-        self.chain_n_in = params.n_in
-        self.chain_input_shape = None
-        self.chain_in = input
-        self.input = input
-        self.prev_dim = None
-        self.params = params
-        self.rng = rng
-        self.theano_rng = theano_rng
-        layer_number = 0
-        self.x = x
-        self.y = y
-        self.index = index
-        self.reset_hooks(TrainingState(self))
-        self.trainflag = T.scalar('trainflag')
+    #TODO: weight count
+    print "total weight count: {0}".format(total_weights)
 
-        total_weights = 0
-        for i,(layer_type,desc) in enumerate(self.params.n_hidden):
-            if continuation is not None:
-                W = continuation['W'][i]
-                b = continuation['b'][i]
-            else:
-                W = None
-                b = None
-
-            l = self.make_layer(layer_type,desc,W,b,i)
-            total_weights += l.weight_count
-            if self.params.detailed_stats:
-                print "layer {0} weight count: {1}".format(l.layer_name,l.weight_count)
-            self.hiddenLayers.append(l)
-            modes = self.params.pretraining
-            if pretraining_set is not None and modes is not None:
-                for mode in modes.split(','):
-                    self.inline_pretrain(pretraining_set,mode)
-            layer_number += 1
-
-        print "total weight count: {0}".format(total_weights)
-        self.rejoin_layers(input)
-
-        if pretraining_set is not None and modes is not None:
-            for mode in modes.split(','):
-                self.pretrain(pretraining_set,mode)
-        if continuation is not None:
-            W = continuation['outW']
-            b = continuation['outb']
-        else:
-            W = None
-            b = None
-        self.make_top_layer(
-                self.params.n_out,
-                self.chain_in,
-                self.chain_n_in,
-                rng,
-                layer_type = self.params.output_layer,
-                W = W,
-                b = b,
-                options = self.params.output_layer_options)
-
-
-    def pretrain(self,pretraining_set,mode='unsupervised'):
-        self.reset_hooks(TrainingState(self))
-        if self.params.pretraining_noise is not None:
-            pretraining_set[0] = data.corrupt(
-                    self.params.pretraining_noise,pretraining_set[0])
-        self.backup_first = None
-
-        def reverse_epoch(pinned_layer=None):
-            pretraining_set_x, pretraining_set_y = pretraining_set
-            pretraining_set_y = sharedX(data.one_hot(pretraining_set_y.eval()))
-            x_pretraining = self.x
-            y_pretraining = T.matrix('y_pretraining')
-            reversedLayers = []
-            rev_chain_in = y_pretraining
-            rev_chain_n_in = self.params.n_out
-            backup = copy.copy(self.hiddenLayers)
-            i = len(backup) - 1
-            for layer_type,desc in reversed(self.params.n_hidden[:len(backup)]):
-                if layer_type in ['conv', 'convonly']:
-                    print "Warning: reverse pretraining a convolutional layer has no effect"
-                    reversedLayers.append(None)
-                else:
-                    l = self.make_layer(layer_type,desc,i)
-                    l.W = backup[i].W
-                    reversedLayers.append(l)
-                    rev_chain_in = l.output
-                    rev_chain_n_in = desc[0]
-                    i -= 1
-            if pinned_layer is not None and reversedLayers[pinned_layer] is not None:
-                for i in range(0,len(reversedLayers) -1):
-                    if reversedLayers[i] is not None:
-                        reversedLayers[i].write_enable = 0
-                reversedLayers[pinned_layer].write_enable = 1
-            self.hiddenLayers = [x for x in reversedLayers if x is not None]
-            self.make_top_layer(self.params.n_in, rev_chain_in,
-                    rev_chain_n_in, self.rng, 'flat', activations.TanH(),
-                    options = self.params.output_layer_options)
-            train_f = self.train_function(self.index, pretraining_set_y,
-                pretraining_set_x, y_pretraining, x_pretraining,
-                self.params.pretrain_update_rule,
-                self.params.pretrain_learning_rate)
-            ptxlen = pretraining_set_x.shape[0].eval()
-            n_batches = ptxlen / self.params.batch_size
-            for p in range(self.params.pretraining_passes):
-                print ".... pass {0}".format(p)
-                for minibatch_index in xrange(n_batches):
-                    minibatch_avg_cost = train_f(minibatch_index,1)
-            self.hiddenLayers = backup
-            for i,l in enumerate(reversed(self.hiddenLayers)):
-                if reversedLayers[i] is not None:
-                    l.W = reversedLayers[i].W
-            del backup
-
-        if mode == 'reverse':
-            #greedy, one layer at a time
-            for current_layer in xrange(0,len(self.hiddenLayers)):
-                print "... reverse pretraining layer {0}".format(current_layer)
-                reverse_epoch(current_layer)
-            for i in range(0,len(self.hiddenLayers) -1):
-                self.hiddenLayers[i].write_enable = 1
-        elif mode == 'reverse-together':
-            print "... reverse pretraining all layers"
-            reverse_epoch()
-        elif mode in ['supervised', 'supervised-together',
-                'unsupervised', 'unsupervised-together']:
-            #these happen inline
-            return
-        else:
-            raise Exception("Unknown pretraining mode: %s" % mode)
-        for l in self.hiddenLayers:
-            l.write_enable = 1
-        self.rejoin_layers(self.input)
-
-    def inline_pretrain(self,pretraining_set,mode='unsupervised'):
-        self.reset_hooks(TrainingState(self))
-        if self.params.pretraining_noise is not None:
-            pretraining_set[0] = data.corrupt(
-                    self.params.pretraining_noise,pretraining_set[0])
-        self.backup_first = None
-        #these all lock the previous layers
-        if mode in ['supervised', 'unsupervised']:
-            for i in range(0,len(self.hiddenLayers) -1):
-                self.hiddenLayers[i].write_enable = 0
-            self.rejoin_layers(self.input)
-        if mode in ['reverse', 'reverse-together']:
-            #these happen at then end
-            return
-        elif mode in ['supervised', 'supervised-together']:
-            pretraining_set_x, pretraining_set_y = pretraining_set
-            x_pretraining = self.x
-            y_pretraining = self.y
-            self.make_top_layer(self.params.n_out,self.chain_in,self.chain_n_in,self.rng,
-                    options = self.params.output_layer_options)
-        elif mode in ['unsupervised', 'unsupervised-together']:
-            pretraining_set_x = pretraining_set[0]
-            pretraining_set_y = pretraining_set[0]
-            ptylen = pretraining_set[0].shape[1].eval()
-            x_pretraining = self.x
-            y_pretraining = T.matrix('y_pretraining')
-            self.make_top_layer(ptylen, self.chain_in, self.chain_n_in, self.rng,
-                    'flat', activations.TanH(),
-                    options = self.params.output_layer_options)
-        else:
-            raise Exception("Unknown pretraining mode: %s" % mode)
-        if mode in ['supervised', 'unsupervised', 'unsupervised-together']:
-            train_f = self.train_function(self.index, pretraining_set_x,
-                pretraining_set_y, x_pretraining, y_pretraining)
-            ptxlen = pretraining_set_x.shape[0].eval()
-            n_batches =  ptxlen / self.params.batch_size
-            for p in range(self.params.pretraining_passes):
-                print "... {0} pretraining layer {1}, pass {2}".format(mode,layer_number,p)
-                for minibatch_index in xrange(n_batches):
-                    minibatch_avg_cost = train_f(minibatch_index,1)
-        for l in self.hiddenLayers:
-            l.write_enable = 1
-        self.rejoin_layers(self.input)
-
-    def get_channels(self,i):
-        """Try to guess the number of channels in the input from information
-        in params or the input shape itself if it is not flat"""
-        if i == 0:
-            if 'channels' in self.params.__dict__:
-                return self.params.channels
-            elif self.params.RGB:
-                return 3
-        else:
-            if len(self.chain_n_in) > 1:
-                return self.chain_n_in[0]
-        return 1
-
-    def get_n_pixels(self,i):
-        """Try to guess the square side of the input image from information
-        in params or the input shape itself if it is not flat"""
-        if i == 0:
-            n_pixels_x = math.sqrt(numpy.prod(self.chain_n_in) / self.get_channels(i))
-            n_pixels_y = n_pixels_x
-        else:
-            if len(self.chain_n_in) == 3:
-                n_pixels_y = self.chain_n_in[1]
-                n_pixels_x = self.chain_n_in[2]
-            else:
-                n_pixels_x = self.chain_n_in
-                n_pixels_y = n_pixels_x
-        return (n_pixels_y,n_pixels_x)
-
-    def make_layer(self,layer_type,desc,W=None,b=None,i=0):
-
-        if(layer_type == 'flat'):
-            if len(desc) == 5:
-                #default no-options
-                desc.append({})
-            (n_this, drop_this, name_this, activation_this, weight_init, 
-                    options) = desc
-            l = layers.FlatLayer(rng = self.rng,
-                                 inputs = self.chain_in.flatten(ndim=2),
-                                 n_in = numpy.prod(self.chain_n_in),
-                                 n_out = numpy.prod(n_this),
-                                 activation = activation_this,
-                                 dropout_rate = drop_this,
-                                 layer_name = name_this,
-                                 weight_init = weight_init,
-                                 W = W, b = b, options = options)
-            self.chain_n_in = n_this
-            l.output_shape = self.chain_n_in
-
-        elif(layer_type == 'LCN'):
-            n_pixels_y,n_pixels_x = self.get_n_pixels(i)
-            kernel_size,use_divisor = desc
-            l = layers.LCN(
-                        self.chain_in.flatten(ndim=2),
-                        kernel_size,
-                        n_pixels_x,
-                        n_pixels_y,
-                        self.get_channels(i),
-                        use_divisor
-                    )
-            l.output_shape = self.chain_n_in
-
-        elif(layer_type == 'LRN'):
-            alpha, k, beta, n = desc
-            l = layers.LRN(
-                        inputs = self.chain_in,
-                        input_shape = self.chain_input_shape,
-                        alpha = alpha,
-                        k = k,
-                        beta = beta,
-                        n = n
-                    )
-            l.output_shape = self.chain_input_shape
-
-        elif(layer_type == 'elastic_transform'):
-            n_pixels_y,n_pixels_x = self.get_n_pixels(i)
-            l = layers.Elastic(
-                        self.chain_in.flatten(ndim=2),
-                        n_pixels_x,
-                        n_pixels_y,
-                        desc,
-                        self.get_channels(i),
-                        self.trainflag
-                    )
-            l.output_shape = self.chain_n_in
-
-        elif(layer_type == 'global_pooling'):
-            (mode,) = desc
-            l = layers.GlobalPooling(rng = self.rng,
-                                      inputs = self.chain_in,
-                                      layer_name = 'average_pooling',
-                                      mode = mode
-                                 )
-            self.chain_n_in = self.chain_n_in[0]
-            l.output_shape = self.chain_n_in
-
-        elif(layer_type == 'linear'):
-            drop_this, name_this = desc
-            l = layers.Linear(rng=self.rng,
-                              inputs=self.chain_in.flatten(ndim=2),
-                              n_in=numpy.prod(self.chain_n_in),
-                              dropout_rate=drop_this,
-                              layer_name=name_this,
-                             )
-
-        elif(layer_type == 'pool2d'):
-            if len(desc) == 3:
-                #default no-options
-                desc.append({})
-            pooling , pool_size, name_this, options = desc
-            if self.chain_input_shape is None:
-                raise Exception("must specify first input shape")
-            input_shape = self.chain_input_shape
-            l = layers.Pool2D(rng = self.rng,
-                              inputs = self.chain_in,
-                              input_shape = self.chain_input_shape,
-                              pool_size = pool_size,
-                              layer_name = name_this,
-                              pooling = pooling,
-                              options = options
-                             )
-            self.chain_input_shape = l.output_shape
-            self.chain_n_in = self.chain_input_shape[1:]
-
-        elif layer_type in ['nin', 'mlpconv']:
-            if len(desc) == 3:
-                #default no-options
-                desc.append({})
-            n_this, drop_this, name_this, options = desc
-            l = layers.NiN(rng=self.rng,
-                                 inputs = self.chain_in,
-                                 input_shape = self.chain_input_shape,
-                                 n_out = numpy.prod(n_this),
-                                 dropout_rate = drop_this,
-                                 layer_name = name_this,
-                                 options = options
-                                 )
-            chain_input_shape = [ self.chain_input_shape[0], n_this ]
-            chain_input_shape.extend(self.chain_input_shape[2:])
-            self.chain_input_shape = chain_input_shape
-            self.chain_n_in = self.chain_input_shape[1:]
-
-        elif layer_type in ['convfilter', 'conv2d']:
-            if len(desc) == 6:
-                #default border mode
-                desc.append('valid')
-            if len(desc) == 7:
-                #default no-options
-                desc.append({})
-            (input_shape,filter_shape,drop_this,name_this,
-                    activation_this,weight_init,border_mode,options) = desc
-            if input_shape is None:
-                if self.chain_input_shape is None:
-                    raise Exception("must specify first input shape")
-                input_shape = self.chain_input_shape
-            else:
-                if len(input_shape) == 3:
-                    input_shape.insert(0,self.params.batch_size)
-                self.chain_input_shape = input_shape
-            if len(filter_shape) == 3:
-                filter_shape.insert(1,input_shape[1])
-            l = layers.Conv2D(rng = self.rng,
-                                  inputs = self.chain_in, 
-                                  input_shape = input_shape, 
-                                  filter_shape = filter_shape,
-                                  activation = activation_this,
-                                  dropout_rate = drop_this,
-                                  layer_name = name_this,
-                                  border_mode = border_mode,
-                                  weight_init = weight_init,
-                                  W = W, b = b, options = options)
-            dim_x,dim_y = input_shape[2],input_shape[3]
-            curr_map_number = filter_shape[0]
-            if border_mode == 'same':
-                output_dim_x = dim_x
-                output_dim_y = dim_y
-            elif border_mode == 'valid':
-                output_dim_x = dim_x - filter_shape[2] + 1
-                output_dim_y = dim_y - filter_shape[3] + 1
-            else:
-                raise Exception('Invalid border mode: {0}'.format(border_mode))
-            output_dim_x = output_dim_x / l.strides[0]
-            output_dim_y = output_dim_y / l.strides[1]
-            self.chain_n_in = (curr_map_number, output_dim_x, output_dim_y)
-            l.output_shape = self.chain_n_in
-            self.prev_dim = (curr_map_number, output_dim_x, output_dim_y)
-            self.chain_input_shape = [self.chain_input_shape[0],
-                    curr_map_number,
-                    output_dim_x,
-                    output_dim_y]
-
-        self.chain_in = l.output
-        return l
-
-    def make_top_layer(self, n_out, chain_in, chain_n_in, rng,
-            layer_type='softmax', activation=None, name_this='temp_top',
-            W = None, b = None, options = {}):
-        """
-        Finalize the construction by making a top layer (either to use in
-        pretraining or to use in the final version)
-        """
-        if layer_type == 'softmax':
-            self.outputLayer = layers.SoftMax(
-                rng=rng,
-                inputs=chain_in.flatten(ndim=2),
-                n_in=numpy.prod(chain_n_in),
-                n_out=n_out,
-                activation=activation,
-                dropout_rate=0,
-                layer_name='softmax',
-                W=W, b=b, options = options)
-            self.cost_function = self.params.cost_function
-            self.p_y_given_x = self.outputLayer.p_y_given_x
-            self.errors = self.outputLayer.errors
-            self.y_pred = self.outputLayer.y_pred
-        if layer_type == 'logsoftmax':
-            self.outputLayer = layers.LogSoftMax(
-                rng=rng,
-                inputs=chain_in.flatten(ndim=2),
-                n_in=numpy.prod(chain_n_in),
-                n_out=n_out,
-                activation=activation,
-                dropout_rate=0,
-                layer_name='softmax',
-                W=W, b=b, options = options)
-            self.cost_function = self.params.cost_function
-            self.p_y_given_x = self.outputLayer.p_y_given_x
-            self.errors = self.outputLayer.errors
-            self.y_pred = self.outputLayer.y_pred
-        elif layer_type == 'flat':
-            self.outputLayer = layers.FlatLayer(rng=rng,
-                inputs=chain_in.flatten(ndim=2),
-                n_in=numpy.prod(chain_n_in), n_out=n_out,
-                activation=activation,dropout_rate=0,
-                layer_name=name_this,
-                W=W,b=b, options = options)
-            self.cost_function = cost_functions.MSE()
-
-        self.L1 = sum([abs(hiddenLayer.W).sum()
-                    for hiddenLayer in self.hiddenLayers]) \
-                + abs(self.outputLayer.W).sum()
-        self.L2_sqr = sum([(hiddenLayer.W ** 2).sum() for hiddenLayer in
-                        self.hiddenLayers]) \
-                    + (self.outputLayer.W ** 2).sum()
-        p = self.outputLayer.params
-        for hiddenLayer in self.hiddenLayers:
-            p += hiddenLayer.params
-        self.opt_params = p
-
-    def clear(self):
-        del self.cost
-        del self.hiddenLayers
-        del self.outputLayer
-
-    def rejoin_layers(self,input):
-        rt_chain_in = input
-        for l in self.hiddenLayers:
-            l.set_input(rt_chain_in)
-            l.rejoin()
-            rt_chain_in = l.output
-
-    def eval_function(self, index, set_x, set_y, x, y):
-        set_x = sharedX(set_x.eval(), dtype=set_x.dtype)
-        set_y = sharedX(set_y.eval(), dtype=set_y.dtype)
-        f = utils.set_slicer_xy(
-                   x,
-                   y,
-                   index,
-                   set_x,
-                   set_y,
-                   self.errors(y),
-                   self.params.batch_size
-               )
-        return utils.AppliedOnAllBatchesXY(f, set_x, set_y, self.params.batch_size)
-
-    def compute_single_batch(self, eval_set_x):
-        x = self.x
-        return theano.function(inputs=[],
-            outputs=self.outputLayer.p_y_given_x,
-            givens={ x: eval_set_x })
-
-    def classify_single_batch(self, eval_set_x):
-        x = self.x
-        return theano.function(inputs=[],
-            outputs=self.outputLayer.y_pred,
-            givens={ x: eval_set_x })
-
-    def apply_all_batches(self, f, eval_set_x):
-        x = self.x
-        ys = []
-        original_size = eval_set_x.shape.eval()[0]
-        batches = int(math.floor(float(original_size) / self.params.batch_size))
-        for i in range(batches):
-            ys.append(f(i))
-        residue = original_size % self.params.batch_size
-        padding = self.params.batch_size - residue
-        if residue != 0:
-            one = sharedX(1.)
-#the in-place padding and unpadding is ugly but makes life easier in other
-#places, so that we don't need to alias/copy or do other inefficient things
-            f_pad = theano.function(
-                                inputs=[],
-                                outputs=one,
-                                updates={
-                                    eval_set_x : 
-                                        T.concatenate(
-                                            [eval_set_x,eval_set_x[:padding]]
-                                        )
-                                }
-                            )
-            f_unpad = theano.function(
-                                inputs=[],
-                                outputs=one,
-                                updates={
-                                    eval_set_x : 
-                                            eval_set_x[:original_size]
-                                }
-                            )
-            f_pad()
-            ys.append(f(batches))
-            f_unpad()
-        y = T.concatenate(ys)[:original_size]
-        return y
-
-    def compute(self, eval_set_x):
-        index = T.lscalar()
-        x = self.x
-        f = theano.function(
-                inputs=[index],
-                outputs=self.outputLayer.p_y_given_x,
-                givens={
-                    x: eval_set_x[index * self.params.batch_size:(index + 1) *
-                        self.params.batch_size]
-                })
-        return self.apply_all_batches(f, eval_set_x)
-
-    def classify(self, eval_set_x):
-        index = T.lscalar()
-        x = self.x
-        f = theano.function(
-                inputs=[index],
-                outputs=self.outputLayer.y_pred,
-                givens={
-                    x: eval_set_x[index * self.params.batch_size:(index + 1) *
-                        self.params.batch_size]
-                })
-        return self.apply_all_batches(f, eval_set_x)
-
-    def train_function(self, index, train_set_x, train_set_y, x, y,
-            update_rule = None, learning_rate = None, update_input=False):
-        if update_rule is None:
-            update_rule = self.params.update_rule
-        if learning_rate is None:
-            learning_rate = self.params.learning_rate
-        self.cost = self.cost_function(self.outputLayer,y)
-        if self.params.L1_reg:
-            self.cost += self.params.L1_reg * self.L1
-        if self.params.L2_reg:
-            self.cost += self.params.L2_reg * self.L2_sqr
-        self.gparams = []
-        for param in self.opt_params:
-            gparam = T.grad(self.cost, param)
-            self.gparams.append(gparam)
-        updates = []
-
-        dropout_rates = {}
-        write_enables = {}
-        def unpack(layer):
-            dropout_rates[layer.layer_name + '_W'] = layer.dropout_rate
-            dropout_rates[layer.layer_name + '_b'] = 0.
-            dropout_rates[layer.layer_name + '_beta'] = 0.
-            dropout_rates[layer.layer_name + '_gamma'] = 0.
-            write_enables[layer.layer_name + '_W'] = layer.write_enable
-            write_enables[layer.layer_name + '_b'] = layer.write_enable
-            write_enables[layer.layer_name + '_beta'] = layer.write_enable
-            write_enables[layer.layer_name + '_gamma'] = layer.write_enable
-
-        for layer in self.hiddenLayers:
-            unpack(layer)
-        unpack(self.outputLayer)
-
-        self.previous_cost = T.scalar()
-        for param, gparam in zip(self.opt_params, self.gparams):
-            if str(param) in dropout_rates.keys():
-                include_prob = 1. - dropout_rates[str(param)]
-            else:
-                include_prob = 1.
-            if str(param) in write_enables.keys():
-                we = write_enables[str(param)]
-            else:
-                raise Exception("missing write_enable for layer %s" % str(param))
-
-            mask = data.mask(p=include_prob,shape=param.shape,dtype=param.dtype,
-                    theano_rng=self.theano_rng)
-            self.layer_masks[str(param)] = mask
-            new_update = update_rule(param,
-                    learning_rate, gparam, mask * we, updates,
-                    self.cost,self.previous_cost)
-            self.layer_updates[str(param)] = new_update
-            for l in self.hiddenLayers:
-                u = l.updates()
-                if u is not None:
-                    updates += u
-            updates.append((param, new_update))
-        if update_input:
-            train_slice = train_set_x[
-                    index * self.params.batch_size:
-                    (index + 1) * self.params.batch_size
-            ]
-            input_grad = T.grad(self.cost, x)
-            input_update = T.inc_subtensor(train_slice, input_grad)
-            self.layer_updates[str(x)] = input_grad
-            updates.append((train_set_x, input_update))
-        rf = theano.function(
-                inputs=[index,self.previous_cost],
-                outputs=gpu_from_host(self.cost),
-                on_unused_input='ignore',
-                updates=updates,
-                givens={
-                    x: train_set_x[index * self.params.batch_size:(index + 1) *
-                        self.params.batch_size],
-                    y: train_set_y[index * self.params.batch_size:(index + 1) *
-                        self.params.batch_size],
-                    self.trainflag: sharedX(1.)
-                })
-        return rf
-
-    def make_models(self, data_holder):
-        valid_error_f = self.eval_function(
-                self.index,
-                data_holder.valid_set_x,
-                data_holder.valid_set_y,
-                self.x, self.y)
-        train_f = self.train_function(
-                self.index,
-                data_holder.train_set_x,
-                data_holder.train_set_y,
-                self.x, self.y,
-                update_input = self.params.update_input)
-        train_error_f = self.eval_function(
-                self.index,
-                sharedX(data_holder.orig_train_set_x),
-                sharedX(data_holder.orig_train_set_y,dtype='int32'),
-                self.x, self.y)
-        if data_holder.has_test():
-            test_error_f = self.eval_function(
-                    self.index,
-                    data_holder.test_set_x,
-                    data_holder.test_set_y,
-                    self.x, self.y)
-        else:
-            test_error_f = None
-        return (train_f, train_error_f, valid_error_f, test_error_f)
-
-    def copy(self):
-        """ Very expensive way of copying a network """
-        newinstance = copy.copy(self)
-        for i,l in enumerate(newinstance.hiddenLayers):
-            l.copy_weights(self.hiddenLayers[i])
-            l.rebuild()
-        newinstance.outputLayer.copy_weights(self.outputLayer)
-        newinstance.outputLayer.rebuild()
-        return newinstance
-
-    def get_weights(self):
-        W = []
-        b = []
-        for l in self.hiddenLayers:
-            W.append(l.W.get_value())
-            b.append(l.b.get_value())
-        outW = self.outputLayer.W.get_value()
-        outb = self.outputLayer.b.get_value()
-        return {'W': W, 'b': b, 'outW' : outW, 'outb': outb}
-
-    def set_weights(self,weights):
-        W = weights['W']
-        b = weights['b']
-        for i,l in enumerate(self.hiddenLayers):
-            l.set_weights(W[i],b[i])
-        self.outputLayer.set_weights(weights['outW'],weights['outb'])
-        self.rejoin_layers(self.input)
-        self.outputLayer.rejoin()
-
-    def run_hooks(self):
-        updates = []
-        for hook in common.toupee_global_instance.epoch_hooks:
-            hook(updates)
-        one = sharedX(1.)
-        f = theano.function(inputs=[],
-                outputs=one,
-                on_unused_input='warn',
-                updates=updates,)
-        f()
-
-    def reset_hooks(self,state):
-        state.done_looping = False
-        state.pre_iter()
-        updates = []
-        for hook in common.toupee_global_instance.reset_hooks:
-            hook(updates)
-        one = sharedX(1.)
-        f = theano.function(inputs=[],
-                outputs=one,
-                on_unused_input='warn',
-                updates=updates)
-        f()
-
-def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
-        continuation=None,return_results=False):
     results = common.Results(params)
-
     data_holder = DataHolder(dataset)
-    if params.online_transform is not None:
-        if params.update_input:
-            raise "Cannot have online_transform and update_input"
-        if 'channels' not in params.__dict__:
-            if params.RGB:
-                channels = 3
-            else:
-                channels = 1
-        else:
-            channels = params.channels
-        gpu_transformer = data.GPUTransformer( (data_holder.orig_train_set_x,
-                                                data_holder.orig_train_set_y),
-                        x=int(math.sqrt(params.n_in / channels)),
-                        y=int(math.sqrt(params.n_in / channels)),
-                        channels=channels,
-                        progress=False,
-                        save=False,
-                        opts=params.online_transform,
-                        seed=params.random_seed)
-        transformed = gpu_transformer.result()
-        data_holder.replace_shared_train(transformed[0], transformed[1])
-
-
-    if index is None:
-        index = T.lscalar()
-    if x is None:
-        x = T.matrix('x')
-    if y is None:
-        y = T.ivector('y')
+    data_holder.reshape_inputs(list(model.inputs[0]._keras_shape[1:]))
 
     rng = numpy.random.RandomState(params.random_seed)
-    theano_rng = MRG_RandomStreams(params.random_seed)
 
-    if continuation is None:
-        classifier = MLP(params=params, rng=rng, theano_rng=theano_rng, input=x,
-                index=index, x=x, y=y, pretraining_set=pretraining_set)
-    else:
-        classifier = MLP(params=params, rng=rng, theano_rng=theano_rng, input=x,
-                index=index, x=x, y=y, pretraining_set=pretraining_set,
-                continuation=continuation)
-
-    state = TrainingState(classifier)
-    state.train_examples = data_holder.train_set_x.shape[0].eval()
-    state.valid_examples = data_holder.valid_set_x.shape[0].eval()
-    state.n_batches['train'] = state.train_examples / params.batch_size
-    state.n_batches['valid'] = state.valid_examples / params.batch_size
+    state = TrainingState(model)
+    state.train_examples = data_holder.train_set_x.shape[0]
+    state.valid_examples = data_holder.valid_set_x.shape[0]
 
     print "training examples: {0}".format(state.train_examples)
     print "validation examples: {0}".format(state.valid_examples)
 
     if data_holder.has_test():
-        state.test_examples = data_holder.test_set_x.shape[0].eval()
-        state.n_batches['test'] = state.test_examples / params.batch_size
+        state.test_examples = data_holder.test_set_x.shape[0]
         print "test examples: {0}".format(state.test_examples)
 
-    print '... {0} training'.format(params.training_method)
-
-    #TODO: Make these part of the YAML experiment description, after they get their own class
-    # early-stopping parameters
-    state.patience = 10000  # look as this many examples regardless
-    state.patience_increase = 20  # wait this much longer when a new best is
-                           # found
-    improvement_threshold = 0.99   # a relative improvement of this much is
-                                   # considered significant
-    valid_frequency = min(state.n_batches['train'], state.patience / 2)
-                                  # go through this many
-                                  # minibatches before checking the network
-                                  # on the valid set; in this case we
-                                  # check every epoch
+    print '{0} training...'.format(params.training_method)
 
     start_time = time.clock()
 
-    def run_epoch(state,results):
+    metrics = ['accuracy']
+    if 'additional_metrics' in params.__dict__:
+        metrics = metrics + additional_metrics
 
-        def make_train_functions():
-            state.train_f = state.classifier.train_function(
-                    state.classifier.index,
-                    data_holder.train_set_x,
-                    data_holder.train_set_y,
-                    state.classifier.x,
-                    state.classifier.y)
-            state.train_error_f = state.classifier.eval_function(
-                    state.classifier.index,
-                    data_holder.train_set_x,
-                    data_holder.train_set_y,
-                    state.classifier.x,
-                    state.classifier.y)
+    model.compile(optimizer = params.update_rule,
+                  loss = params.cost_function,
+                  metrics = metrics
+    )
 
-        if params.shuffle_dataset:
-            tsx = data_holder.train_set_x.eval()
-            tsy = data_holder.train_set_y.eval()
-            new_tsx = []
-            new_tsy = []
-            for i in numpy.random.permutation(len(tsx)):
-                new_tsx.append(numpy.asarray(tsx[i]))
-                new_tsy.append(numpy.asarray(tsy[i]))
-            data_holder.set_train(new_tsx,new_tsy)
+    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
+            monitor = 'val_loss',
+            mode = 'min')
+    callbacks = [checkpointer]
+    if params.early_stopping is not None:
+        earlyStopping=keras.callbacks.EarlyStopping(monitor='val_loss',
+            patience=params.early_stopping['patience'], verbose=0, mode='auto')
+        callbacks.append(earlyStopping)
 
-        training_costs = []
-        for minibatch_index in xrange(state.n_batches['train']):
-            minibatch_avg_cost = state.train_f(minibatch_index,
-                    state.previous_minibatch_avg_cost)
-            training_costs.append(minibatch_avg_cost)
-            iter = (state.epoch - 1) * state.n_batches['train'] + minibatch_index
-            if (iter + 1) % valid_frequency == 0 \
-                    or (minibatch_index + 1) == state.n_batches['train']:
-                if params.save_images and params.update_input:
-                        img_save_dir = 'images_out_cifar'
-                        eux = numpy.asarray(data_holder.train_set_x.eval())
-                        if params.RGB:
-                            imx = math.sqrt(eux.shape[1] / 3)
-                        else:
-                            imx = math.sqrt(eux.shape[1])
-                        g = state.classifier.layer_updates['x'].eval(
-                                { x: data_holder.train_set_x.eval()[0:params.batch_size],
-                                  y: data_holder.train_set_y.eval()[0:params.batch_size]}
-                            )
-                        if params.RGB:
-                            g = numpy.asarray(g).reshape([params.batch_size,3,imx,imx])
-                        else:
-                            g = numpy.asarray(g).reshape([params.batch_size,imx,imx])
-                        for i in range(10):
-                            d = img_save_dir + '/input_change-{0}'.format(i)
-                            if not os.path.exists(d):
-                                os.makedirs(d)
-                            gi = g[i]
-                            imsave('{0}/iter{1}.png'.format(d,state.epoch),
-                                    gi * 255)
-                            d = img_save_dir + '/updated_input-{0}'.format(i)
-                            if not os.path.exists(d):
-                                os.makedirs(d)
-                            if params.RGB:
-                                img = eux[i].reshape([3,imx,imx])
-                            else:
-                                img = eux[i].reshape([imx,imx])
-                            imsave('{0}/iter{1}.png'.format(d,state.epoch),
-                                    img + g[0])
-                            d = img_save_dir + '/input_change-{0}-normalised'.format(i)
-                            if not os.path.exists(d):
-                                os.makedirs(d)
-                            gi = g[i]
-                            imsave('{0}/iter{1}.png'.format(d,state.epoch),
-                                    gi * 255 / numpy.amax(gi))
-                train_losses = state.train_error_f()
-                train_loss = float(
-                                float(T.sum(train_losses).eval()) /
-                                float(state.train_examples)
-                            )
-                valid_losses = state.valid_error_f()
-                valid_loss = float(
-                                float(T.sum(valid_losses).eval()) /
-                                float(state.valid_examples)
-                            )
-                print('epoch %i, minibatch %i/%i:' % 
-                        (state.epoch, minibatch_index + 1,
-                            state.n_batches['train'])
-                     )
-                print('  last cost: %f %%' % numpy.asarray(minibatch_avg_cost))
-                print('  train err: %f %%' % (train_loss * 100.))
-                print('  valid err: %f %%' % (valid_loss * 100.))
-                test_loss = None
-                if state.test_error_f is not None:
-                    test_losses = state.test_error_f()
-                    test_loss = float(
-                                    float(T.sum(test_losses).eval()) /
-                                    float(state.test_examples)
-                                )
-                    print('  test  err: %f %%' % (test_loss * 100.))
-                if valid_loss < state.best_valid_loss:
-                    print('  current best')
-                    if valid_loss < state.best_valid_loss *  \
-                           improvement_threshold:
-                        state.patience = max(state.patience, iter * state.patience_increase)
-                    state.best_valid_loss = valid_loss
-                    state.best_iter = iter
-                    state.best_epoch = state.epoch
-                    state.best_weights = state.classifier.get_weights()
-                    state.test_score = test_loss
-                    gc.collect()
-                results.set_observation(train_loss,
-                                        valid_loss,
-                                        test_loss,
-                                        numpy.array(minibatch_avg_cost))
-            state.previous_minibatch_avg_cost = minibatch_avg_cost
-            if state.patience <= iter:
-                    print('finished patience')
-                    state.done_looping = True
-                    break
-        if params.save_images or params.detailed_stats:
-            #e_x = numpy.asarray(dataset[0][0].eval())
-            #e_y = numpy.asarray(dataset[0][1].eval())
-            #padding_needed = params.batch_size - (len(e_x) % params.batch_size)
-            #padded_e_x = numpy.concatenate([
-            #        e_x,
-            #        e_x[:padding_needed]
-            #    ])
-            #padded_e_y = numpy.concatenate([
-            #        e_y,
-            #        e_y[:padding_needed]
-            #    ])
-            #e_xs = numpy.split(padded_e_x,len(padded_e_x) / params.batch_size)
-            #e_ys = numpy.split(padded_e_y,len(padded_e_y) / params.batch_size)
-            #assert len(e_xs) == len(e_ys)
-            #if params.save_images:
-                #for i in xrange(len(state.classifier.hiddenLayers)):
-                #    imsave('weights-layer{0}-iter{1}.png'.format(i,state.epoch),
-                #            state.classifier.hiddenLayers[i].W.get_value()
-                #          )
-                #imsave('weights-outputlayer-iter{0}.png'.format(state.epoch),
-                #        state.classifier.outputLayer.W.get_value()
-                #      )
-            #for param, gparam in zip(state.classifier.opt_params, state.classifier.gparams):
-            #    gradients = []
-            #    for i in xrange(0,len(e_xs)):
-            #        gradients.append(
-            #            numpy.asarray(gparam.eval({x: e_xs[i], y: e_ys[i]}))
-            #        )
-            #    gradient = numpy.concatenate(gradients)
-            #    p = numpy.asarray(param.eval())
-            #    if params.save_images:
-            #        if len(gradient.shape) == 2:
-            #          imsave('gradient-{0}-iter{1}.png'.format(str(param),state.epoch),gradient * 255)
-            #    if params.detailed_stats:
-            #        print "  {0} grad max: {1}".format(str(param),gradient.max())
-            #        print "  {0} max: {1}, min: {2}".format(str(param),p.max(),p.min())
-            #    del gradient
-            #    gc.collect()
+    if params.online_transform is not None:
+        datagen = keras.preprocessing.image.ImageDataGenerator(
+            featurewise_center=False,
+            samplewise_center=False,
+            featurewise_std_normalization=False,
+            samplewise_std_normalization=False,
+            zca_whitening=False,
+            rotation_range=0,
+            width_shift_range=0.1,
+            height_shift_range=0.1,
+            horizontal_flip=True,
+            vertical_flip=False)
+        datagen.fit(data_holder.train_set_x)
+        hist = model.fit_generator(
+                            datagen.flow(
+                                data_holder.train_set_x,
+                                data_holder.train_set_y,
+                                shuffle = params.shuffle_dataset,
+                                batch_size = params.batch_size
+                            ),
+                            samples_per_epoch = data_holder.train_set_x.shape[0],
+                            nb_epoch = params.n_epochs,
+                            callbacks = callbacks,
+                            validation_data = (data_holder.valid_set_x,
+                                data_holder.valid_set_y),
+                            test_data = (data_holder.test_set_x,
+                                data_holder.test_set_y),
+                           )
+    else:
+        hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
+                  batch_size = params.batch_size,
+                  nb_epoch = params.n_epochs,
+                  validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
+                  test_data = (data_holder.test_set_x, data_holder.test_set_y),
+                  callbacks = callbacks,
+                  shuffle = params.shuffle_dataset)
+    model.set_weights(checkpointer.best_model)
+    train_metrics = model.evaluate(data_holder.train_set_x,data_holder.train_set_y)
+    valid_metrics = model.evaluate(data_holder.valid_set_x,data_holder.valid_set_y)
+    if data_holder.has_test():
+        test_metrics = model.evaluate(data_holder.test_set_x,data_holder.test_set_y)
+    for metrics_name,metrics in (
+            ('train', train_metrics),
+            ('valid', valid_metrics),
+            ('test', test_metrics)
+        ):
+        print "{0}:".format(metrics_name)
+        for i in range(len(metrics)):
+            print "  {0} = {1}".format(model.metrics_names[i], metrics[i])
 
-            if params.detailed_stats:
-                #for l,m in state.classifier.layer_updates.iteritems():
-                #    print l
-                #    print m.eval({x: e_x, y: e_y})
-                print state.classifier.outputLayer.y_pred.eval(
-                        {x: data_holder.train_set_x}
-                )
-                computed = state.classifier.classify(data_holder.train_set_x).eval()
-                print "  output max: {0}, min: {1}, mean: {2}".format(computed.max(), computed.min(), computed.mean())
-                print "  learning rate: {0}".format(params.learning_rate.get().get_value())
-#                costs = []
-#                for i in xrange(0,len(e_xs)):
-#                    c = numpy.asarray(state.classifier.cost.eval({x: e_xs[i], y: e_ys[i]}))
-#                    if len(c) > 0:
-#                        costs.append(c)
-#                cost = numpy.concatenate(costs)
-#                if len(cost) > 0:
-#                    print "  cost max: {0}, min: {1}, mean: {2}".format(cost.max(),cost.min(),cost.mean())
-        state.classifier.run_hooks()
-        gc.collect()
-
-    if params.training_method == 'normal':
-        print ".... generating models"
-        state.classifier.reset_hooks(state)
-        state.set_models(state.classifier.make_models(data_holder))
-        print ".... started"
-        while (state.epoch < params.n_epochs) and (not state.done_looping):
-            epoch_start = time.clock()
-            state.epoch += 1
-            run_epoch(state,results)
-            epoch_end = time.clock()
-            print "t: {0}".format(epoch_end - epoch_start)
-        if state.best_weights is not None:
-            state.classifier.set_weights(state.best_weights)
-
-    
-    elif params.training_method == 'greedy':
-        all_layers = state.classifier.hiddenLayers
-        state.classifier.hiddenLayers = []
-        for l in xrange(len(all_layers)):
-            state.classifier.reset_hooks(state)
-            print "\n\ntraining {0} layers".format(l + 1)
-            state.classifier.hiddenLayers.append(all_layers[l])
-            state.classifier.rejoin_layers(x)
-            state.classifier.make_top_layer(
-                    params.n_out,
-                    state.classifier.hiddenLayers[l].output,
-                    state.classifier.hiddenLayers[l].output_shape,
-                    rng,
-                    options = params.output_layer_options
-                    )
-            print state.classifier.output_layer.y.shape.eval()
-            print ".... generating models"
-            state.set_models(state.classifier.make_models(data_holder))
-            print ".... started"
-            while (state.epoch < params.n_epochs) and (not state.done_looping):
-                state.epoch += 1
-                epoch_start = time.clock()
-                run_epoch(state,results)
-                epoch_end = time.clock()
-                print "t: {0}".format(epoch_end - epoch_start)
-            state.classifier.set_weights(state.best_weights)
+    results.set_history(hist)
     end_time = time.clock()
     if data_holder.test_set_x is not None:
-        print(('Optimization complete. Best valid score of %f %% '
-               'obtained at iteration %i, epoch %i, with test performance %f %%') %
-              (state.best_valid_loss * 100., state.best_iter + 1,
-                  state.best_epoch, state.test_score * 100.))
+        print(('Optimization complete.\nBest valid accuracy: %f %%\n'
+            'Obtained at epoch: %i\nTest accuracy: %f %%') %
+              (valid_metrics[1] * 100.,
+                  checkpointer.best_epoch, test_metrics[1] * 100.))
         print >> sys.stderr, ('The code for file ' +
                               os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
-        results.set_final_observation(state.best_valid_loss * 100., state.test_score * 100., state.best_epoch)
+        results.set_final_observation(valid_metrics[1] * 100.,
+                test_metrics[1] * 100.,
+                checkpointer.best_epoch)
     else:
-        results.set_final_observation(state.best_valid_loss * 100., None, state.best_epoch)
+        results.set_final_observation(valid_metrics[1]* 100., None,
+                checkpointer.best_epoch)
         print('Selection : Best valid score of {0} %'.format(
-              state.best_valid_loss * 100.))
-    cl = state.classifier
-    if params.online_transform is None:
-        #if we have online transforms, this has already been deleted
-        state.train_error_f.clean_gpu()
-    state.valid_error_f.clean_gpu()
-    if state.test_error_f is not None:
-        state.test_error_f.clean_gpu()
-    del state
-    gc.collect()
+              valid_metrics[1] * 100.))
+
     if 'results_db' in params.__dict__ :
         if 'results_host' in params.__dict__:
             host = params.results_host
@@ -1166,9 +230,9 @@ def test_mlp(dataset, params, pretraining_set=None, x=None, y=None, index=None,
         else:
             table_name = 'results'
         table = db[table_name]
-        print "saving MLP results to {0}@{1}:{2}".format(params.results_db,host,table)
+        print "saving results to {0}@{1}:{2}".format(params.results_db,host,table)
         table.insert(json.loads(json.dumps(results.__dict__,default=common.serialize)))
     if return_results:
-        return cl,results
+        return model, results
     else:
-        return cl
+        return model
