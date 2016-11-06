@@ -67,13 +67,10 @@ class DataHolder:
 
 def sequential_model(dataset, params, pretraining_set = None, model_weights = None,
         return_results = False, member_number = None, model_yaml = None,
-        model_config = None):
+        model_config = None, frozen_layers = []):
     """
     Initialize the parameters and create the network.
     """
-#TODO:
-# - greedy training mode
-
 
     print "loading model..."
     if model_config is not None:
@@ -85,8 +82,10 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         model = keras.models.model_from_yaml(model_yaml)
     total_weights = 0
 
+    #TODO: this count is broken for Model layers
     for w in model.get_weights():
         total_weights += numpy.prod(w.shape)
+
     if model_weights is not None:
         for i in range(len(model_weights)):
             model.layers[i].set_weights(model_weights[i])
@@ -102,20 +101,32 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     if 'additional_metrics' in params.__dict__:
         metrics = metrics + additional_metrics
 
-    optimizer = keras.optimizers.optimizer_from_config(params.optimizer)
-    model.compile(optimizer = optimizer,
-                  loss = params.cost_function,
-                  metrics = metrics
-    )
+    for l in frozen_layers:
+        model.layers[l].trainable = False
 
     checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=0,
             monitor = 'val_acc',
             mode = 'max')
     callbacks = [checkpointer]
+
     if params.early_stopping is not None:
         earlyStopping=keras.callbacks.EarlyStopping(monitor='val_loss',
             patience=params.early_stopping['patience'], verbose=0, mode='auto')
         callbacks.append(earlyStopping)
+
+    if isinstance(params.optimizer['config']['lr'], dict):
+        lr_schedule = params.optimizer['config']['lr']
+        params.optimizer['config']['lr'] = lr_schedule[0]
+        def lr_scheduler(epoch):
+            if epoch in params.lr:
+                model.lr.set_value(lr_schedule[epoch])
+            return model.lr.get_value()
+        callbacks.append(keras.callbacks.LearningRateScheduler(lr_scheduler))
+    optimizer = keras.optimizers.optimizer_from_config(params.optimizer)
+    model.compile(optimizer = optimizer,
+                  loss = params.cost_function,
+                  metrics = metrics
+    )
 
     if params.online_transform is not None:
         def default_online_transform_param(name,default):
