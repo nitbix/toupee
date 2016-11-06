@@ -200,10 +200,10 @@ class Bagging(EnsembleMethod):
 
     def create_member(self):
         resampled = [
-                        self.resampler.make_new_train(self.params.resample_size),
-                        self.resampler.get_valid(),
-                        self.resampler.get_test()
-                    ]
+            self.resampler.make_new_train(self.params.resample_size),
+            self.resampler.get_valid(),
+            self.resampler.get_test()
+        ]
         m = mlp.sequential_model(resampled, self.params,
                 member_number = self.member_number)
         self.member_number += 1
@@ -234,11 +234,18 @@ class DIB(EnsembleMethod):
 
     def create_member(self):
         self.set_defaults()
-        resampled = [
-                        self.resampler.make_new_train(self.params.resample_size),
-                        self.resampler.get_valid(),
-                        self.resampler.get_test()
-                    ]
+        if self.member_number > 0 :
+            resampled = [
+                self.resampler.make_new_train(self.params.resample_size),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
+        else:
+            resampled = [
+                self.resampler.get_train(),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
         if self.member_number > 0:
             self.params.n_epochs = self.n_epochs_after_first
         m = mlp.sequential_model(resampled, self.params,
@@ -300,12 +307,12 @@ DIB {{
                    self.incremental_layers)
 
 
-class RIB(EnsembleMethod):
+class BRN(EnsembleMethod):
     """
     Create Residual Incremental Boosting Ensemble from parameters
     """
 
-    yaml_tag = u'!RIB'
+    yaml_tag = u'!BRN'
 
     def set_defaults(self):
         self._default_value('incremental_index', -1)
@@ -321,11 +328,11 @@ class RIB(EnsembleMethod):
         else:
             input_shape = m.input_shape
         #make input
-        input_layer = Input(shape = input_shape[1:], name = "Input_RIB_{0}".format(member_number))
+        input_layer = Input(shape = input_shape[1:], name = "Input_BRN_{0}".format(member_number))
         #make real layers
         real_layers = input_layer
         for i,l in enumerate(new_layers):
-            l['config']['name'] = "RIB-incremental-{0}-{1}".format(
+            l['config']['name'] = "BRN-incremental-{0}-{1}".format(
                 member_number, i)
             real_layers = layer_from_config(l)(real_layers)
         #make skip layer
@@ -339,31 +346,39 @@ class RIB(EnsembleMethod):
                                      subsample=(stride_width, stride_height),
                                      init="he_normal",
                                      border_mode="same",
-                                     name="shortcut_RIB_{0}".format(member_number))(input_layer)
+                                     name="shortcut_BRN_{0}".format(member_number))(input_layer)
 
         #make merge
-        merge_layer = merge([real_layers,shortcut], mode="sum", name = "merge_RIB_{0}".format(member_number))
+        merge_layer = merge([real_layers,shortcut], mode="sum", name = "merge_BRN_{0}".format(member_number))
         #make model
         model = Model(input=input_layer,output=merge_layer,
-                name="Model_RIB_{0}".format(member_number))
+                name="Model_BRN_{0}".format(member_number))
         #make config
         return {"class_name": "Model", "config": model.get_config()}
 
     def create_member(self):
         self.set_defaults()
-        resampled = [
-                        self.resampler.make_new_train(self.params.resample_size),
-                        self.resampler.get_valid(),
-                        self.resampler.get_test()
-                    ]
+        if self.member_number > 0 :
+            resampled = [
+                self.resampler.make_new_train(self.params.resample_size),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
+        else:
+            resampled = [
+                self.resampler.get_train(),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
         if self.member_number > 0:
             self.params.n_epochs = self.n_epochs_after_first
         m = mlp.sequential_model(resampled, self.params,
             member_number = self.member_number, model_weights = self.weights,
             #the copy is because there is a bug in Keras that deletes names
-            model_config = copy.deepcopy(self.model_config))
+            model_config = copy.deepcopy(self.model_config),
+            frozen_layers = self.frozen_layers)
         self.weights = [l.get_weights() for l in m.layers]
-        injection_index = self.incremental_index + self.member_number * len(self.incremental_layers)
+        injection_index = self.incremental_index + self.member_number
         if self.incremental_layers is not None:
             if injection_index == -1:
                 injection_index = len(self.model_config)
@@ -374,6 +389,8 @@ class RIB(EnsembleMethod):
             new_block = self._residual_block(injection_index, new_layers, m,
                     self.member_number)
             new_model_config = self.model_config[:injection_index] + [new_block] + self.model_config[injection_index:]
+            if self.freeze_old_layers:
+                self.frozen_layers = range(0,injection_index)
             self.model_config = copy.deepcopy(new_model_config)
             self.weights = self.weights[:injection_index]
         orig_train = self.resampler.get_train()
@@ -397,18 +414,123 @@ class RIB(EnsembleMethod):
         self.weights = None
         self.member_number = 0
         self.alphas = []
+        self.frozen_layers = []
         with open(params.model_file, 'r') as model_file:
             model_yaml = model_file.read()
         self.model_config = keras.models.model_from_yaml(model_yaml).get_config()
-
-    def serialize(self):
-        return 'AdaBoostM1'
-
+        self.freeze_old_layers = False
 
     def serialize(self):
         self.set_defaults()
         return """
-DIB {{
+BRN {{
+    n_epochs_after_first: {0},
+    incremental_index: {1},
+    incremental_layers: {2}
+}}
+        """.format(self.n_epochs_after_first,
+                   self.incremental_index,
+                   self.incremental_layers)
+
+
+class BARN(EnsembleMethod):
+    """
+    Create Residual Incremental Boosting Ensemble from parameters
+    """
+
+    yaml_tag = u'!BARN'
+
+    def set_defaults(self):
+        self._default_value('incremental_index', -1)
+        self._default_value('incremental_layers', None)
+
+    def create_aggregator(self,params,members,train_set,valid_set):
+            return AveragingRunner(members, params)
+
+    def _residual_block(self, injection_index, new_layers, m, member_number):
+        #get output shape of last layer before injection from m
+        if injection_index > 0:
+            input_shape = m.layers[injection_index - 1].output_shape
+        else:
+            input_shape = m.input_shape
+        #make input
+        input_layer = Input(shape = input_shape[1:], name = "Input_BARN_{0}".format(member_number))
+        #make real layers
+        real_layers = input_layer
+        for i,l in enumerate(new_layers):
+            l['config']['name'] = "BARN-incremental-{0}-{1}".format(
+                member_number, i)
+            real_layers = layer_from_config(l)(real_layers)
+        #make skip layer
+        stride_width = input_shape[2] / real_layers._keras_shape[2]
+        stride_height = input_shape[3] / real_layers._keras_shape[3]
+        equal_channels = real_layers._keras_shape[1] == input_shape[1]
+        shortcut = input_layer
+        # 1 X 1 conv if shape is different. Else identity.
+        if (stride_width > 1 or stride_height > 1 or not equal_channels) and stride_width > 0 and stride_height > 0:
+            shortcut = Convolution2D(nb_filter=real_layers._keras_shape[1], nb_row=1, nb_col=1,
+                                     subsample=(stride_width, stride_height),
+                                     init="he_normal",
+                                     border_mode="same",
+                                     name="shortcut_BARN_{0}".format(member_number))(input_layer)
+
+        #make merge
+        merge_layer = merge([real_layers,shortcut], mode="sum", name = "merge_BARN_{0}".format(member_number))
+        #make model
+        model = Model(input=input_layer,output=merge_layer,
+                name="Model_BARN_{0}".format(member_number))
+        #make config
+        return {"class_name": "Model", "config": model.get_config()}
+
+    def create_member(self):
+        self.set_defaults()
+        resampled = [
+            self.resampler.get_train(),
+            self.resampler.get_valid(),
+            self.resampler.get_test()
+        ]
+        if self.member_number > 0:
+            self.params.n_epochs = self.n_epochs_after_first
+        m = mlp.sequential_model(resampled, self.params,
+            member_number = self.member_number, model_weights = self.weights,
+            #the copy is because there is a bug in Keras that deletes names
+            model_config = copy.deepcopy(self.model_config),
+            frozen_layers = self.frozen_layers)
+        self.weights = [l.get_weights() for l in m.layers]
+        injection_index = self.incremental_index + self.member_number
+        if self.incremental_layers is not None:
+            if injection_index == -1:
+                injection_index = len(self.model_config)
+            new_layers = []
+            for i,l in enumerate(self.incremental_layers):
+                new_layers.append(copy.deepcopy(l))
+            #make residual block
+            new_block = self._residual_block(injection_index, new_layers, m,
+                    self.member_number)
+            new_model_config = self.model_config[:injection_index] + [new_block] + self.model_config[injection_index:]
+            if self.freeze_old_layers:
+                self.frozen_layers = range(0,injection_index)
+            self.model_config = copy.deepcopy(new_model_config)
+            self.weights = self.weights[:injection_index]
+        self.member_number += 1
+        return m
+
+    def prepare(self, params, dataset):
+        self.params = params
+        self.dataset = dataset
+        self.resampler = Resampler(dataset)
+        self.weights = None
+        self.member_number = 0
+        self.frozen_layers = []
+        with open(params.model_file, 'r') as model_file:
+            model_yaml = model_file.read()
+        self.model_config = keras.models.model_from_yaml(model_yaml).get_config()
+        self.freeze_old_layers = False
+
+    def serialize(self):
+        self.set_defaults()
+        return """
+BARN {{
     n_epochs_after_first: {0},
     incremental_index: {1},
     incremental_layers: {2}
@@ -429,11 +551,18 @@ class AdaBoost_M1(EnsembleMethod):
             return WeightedAveragingRunner(members,self.alphas,params)
 
     def create_member(self):
-        resampled = [
-                        self.resampler.make_new_train(self.params.resample_size),
-                        self.resampler.get_valid(),
-                        self.resampler.get_test()
-                    ]
+        if self.member_number > 0 :
+            resampled = [
+                    self.resampler.make_new_train(self.params.resample_size),
+                    self.resampler.get_valid(),
+                    self.resampler.get_test()
+            ]
+        else:
+            resampled = [
+                self.resampler.get_train(),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
         m = mlp.sequential_model(resampled, self.params,
                 member_number = self.member_number)
         orig_train = self.resampler.get_train()
