@@ -126,10 +126,7 @@ class Resampler:
         self.valid_x, self.valid_y = self.valid
         self.test_x, self.test_y = self.test
         self.train_size = len(self.train_x)
-        self.s_train = None
         self.r_train = None
-        self.s_valid = None
-        self.s_test = None
         np.random.seed(seed)
         
     def make_new_train(self,sample_size,distribution=None):
