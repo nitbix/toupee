@@ -1,7 +1,7 @@
 # Welcome to Toupee
 "The ugly thing on top that covers up what's missing"
-A library for Deep Learning experiments that also includes Ensembles, based on
-Keras.
+A library for Deep Learning ensembles, with a tooolkit for running experiments,
+based on Keras.
 
 Usage:
 
@@ -39,5 +39,7 @@ Each of these files is a serialised dictionary `{x: numpy.array, y: numpy.array}
 where `x` is the input data and `y` is the expected classification output.
 
 ### Experiment files
+TODO
 
 ### Model files
+TODO

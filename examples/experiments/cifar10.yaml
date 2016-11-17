@@ -1,17 +1,21 @@
 ---
 ## MLP Parameters ##
-dataset: /local/cifar10/
+dataset: /local/cifar10-th/
 pickled: false
-model_file: experiments/cifar10.model
-update_rule: rmsprop
-n_epochs: 1 #max number of training epochs
+model_file: experiments/cifar10-test.model
+n_epochs: 10 #max number of training epochs
+optimizer:
+  class_name: RMSProp
+  config:
+    lr: 0.0001
+    decay: 1e-5
 training_method: normal #normal or greedy
-batch_size: 100
+batch_size: 256
 cost_function: categorical_crossentropy
 all_in_memory: true
 shuffle_dataset: true
 
 ## Ensemble Parameters ##
-resample_size: 60000
+resample_size: 40000
 method: !Bagging {}
-ensemble_size: 1
+ensemble_size: 3

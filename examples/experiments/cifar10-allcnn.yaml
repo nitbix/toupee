@@ -1,0 +1,24 @@
+---
+## MLP Parameters ##
+dataset: /local/cifar10-gcn-whitened_th/
+pickled: false
+model_file: experiments/cifar10-allcnn.model
+optimizer:
+  class_name: RMSProp
+  config:
+    lr: 0.0001
+    decay: 1e-5
+#    momentum: 0.9
+#    nesterov: True
+n_epochs: 100 #max number of training epochs
+training_method: normal #normal or greedy
+batch_size: 128
+cost_function: categorical_crossentropy
+shuffle_dataset: true
+#online_transform:
+#    zca_whitening: true
+
+## Ensemble Parameters ##
+resample_size: 40000
+method: !Bagging { voting: true }
+ensemble_size: 10

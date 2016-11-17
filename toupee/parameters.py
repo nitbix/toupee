@@ -10,7 +10,7 @@ __docformat__ = 'restructedtext en'
 
 import copy
 
-to_string = []
+to_string = ['method']
 class Parameters(object):
 
     def __init__(self, **entries): 
@@ -22,6 +22,4 @@ class Parameters(object):
         for x in to_string:
             if x in serialized.__dict__:
                 serialized.__dict__[x] = serialized.__dict__[x].serialize()
-        import pprint
-        pp = pprint.PrettyPrinter(indent=4)
         return serialized.__dict__

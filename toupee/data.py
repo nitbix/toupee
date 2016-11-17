@@ -39,7 +39,7 @@ def std_norm(d):
 
 def load_data(dataset, resize_to = None, pickled = True,
               center_and_normalise = False, join_train_and_valid = False,
-              one_hot_y = True):
+              one_hot_y = False):
   ''' Loads the dataset
 
   :type dataset: string
@@ -100,7 +100,7 @@ def load_data(dataset, resize_to = None, pickled = True,
                 valid_set[1]
             ])
     train_set = (set_x,set_y)
-    valid_set = train_set
+    valid_set = test_set
   if one_hot_y:
       train_set = (train_set[0], one_hot(train_set[1]))
       valid_set = (valid_set[0], one_hot(valid_set[1]))
@@ -126,10 +126,7 @@ class Resampler:
         self.valid_x, self.valid_y = self.valid
         self.test_x, self.test_y = self.test
         self.train_size = len(self.train_x)
-        self.s_train = None
         self.r_train = None
-        self.s_valid = None
-        self.s_test = None
         np.random.seed(seed)
         
     def make_new_train(self,sample_size,distribution=None):

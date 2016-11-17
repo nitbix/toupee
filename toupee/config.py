@@ -14,19 +14,19 @@ import parameters
 
 defaults = { 'random_seed': None,
              'save_images': False,
-             'pretraining_noise': None,
+             'join_train_and_valid': False,
+             #TODO: 'pretraining_noise': None,
              'detailed_stats': False,
              'online_transform': None,
              'resize_data_to': None,
-             'join_train_and_valid': False,
-             'center_and_normalise': False,
+             #TODO:'join_train_and_valid': False,
              'shuffle_dataset': False,
              #TODO:'update_input': False,
              #TODO:'pretraining': None,
              'early_stopping' : None,
-             'training_method' : 'normal',
-             'pretraining_passes' : 0,
-             'one_hot' : True,
+             #TODO:'pretraining_passes' : 0,
+             'one_hot' : False,
+             'pickled' : False,
            }
 
 def load_parameters(filename):

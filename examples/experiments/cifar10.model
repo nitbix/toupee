@@ -118,5 +118,5 @@ config:
     name: dense_2, output_dim: 10, trainable: true}
 - class_name: Activation
   config: {activation: softmax, name: activation_6, trainable: true}
-keras_version: 1.0.8
+keras_version: 1.1.0
 

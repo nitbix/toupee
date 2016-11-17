@@ -65,69 +65,35 @@ class DataHolder:
             self.test_set_x = self.orig_test_set_x.reshape([self.test_set_x.shape[0]] + shape)
 
 
-class TrainingState:
-    """
-    Helps track the state of the current training.
-    """
-    
-    def __init__(self,classifier):
-        self.reset()
-        self.classifier = classifier
-        self.best_valid_loss = numpy.inf
-
-    def reset(self):
-        self.done_looping = False
-        self.best_weights = None
-        self.best_iter = 0
-        self.best_epoch = 0
-        self.test_score = None
-        self.epoch = 0
-        self.previous_minibatch_avg_cost = 1.
-
-    def pre_iter(self):
-        self.best_weights = None
-        self.best_valid_loss = numpy.inf
-        self.best_iter = 0
-        self.best_epoch = 0
-        self.test_score = 0.
-        self.epoch = 0
-
-
 def sequential_model(dataset, params, pretraining_set = None, model_weights = None,
-        return_results = False):
+        return_results = False, member_number = None, model_yaml = None,
+        model_config = None, frozen_layers = []):
     """
     Initialize the parameters and create the network.
     """
 
     print "loading model..."
-    with open(params.model_file, 'r') as model_file:
-        model_yaml = model_file.read()
-    model = keras.models.model_from_yaml(model_yaml)
+    if model_config is not None:
+        model = keras.models.Sequential.from_config(model_config)
+    else:
+        if model_yaml is None:
+            with open(params.model_file, 'r') as model_file:
+                model_yaml = model_file.read()
+        model = keras.models.model_from_yaml(model_yaml)
     total_weights = 0
-    if model_weights is not None:
-        model.set_weights(model_weights)
 
-    #TODO: weight count
+    #TODO: this count is broken for Model layers
+    for w in model.get_weights():
+        total_weights += numpy.prod(w.shape)
+
+    if model_weights is not None:
+        for i in range(len(model_weights)):
+            model.layers[i].set_weights(model_weights[i])
+
     print "total weight count: {0}".format(total_weights)
 
     results = common.Results(params)
     data_holder = DataHolder(dataset)
-    data_holder.reshape_inputs(list(model.inputs[0]._keras_shape[1:]))
-
-    rng = numpy.random.RandomState(params.random_seed)
-
-    state = TrainingState(model)
-    state.train_examples = data_holder.train_set_x.shape[0]
-    state.valid_examples = data_holder.valid_set_x.shape[0]
-
-    print "training examples: {0}".format(state.train_examples)
-    print "validation examples: {0}".format(state.valid_examples)
-
-    if data_holder.has_test():
-        state.test_examples = data_holder.test_set_x.shape[0]
-        print "test examples: {0}".format(state.test_examples)
-
-    print '{0} training...'.format(params.training_method)
 
     start_time = time.clock()
 
@@ -135,32 +101,74 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     if 'additional_metrics' in params.__dict__:
         metrics = metrics + additional_metrics
 
-    model.compile(optimizer = params.update_rule,
-                  loss = params.cost_function,
-                  metrics = metrics
-    )
+    for l in frozen_layers:
+        model.layers[l].trainable = False
 
-    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
-            monitor = 'val_loss',
-            mode = 'min')
+    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=0,
+            monitor = 'val_acc',
+            mode = 'max')
     callbacks = [checkpointer]
+
     if params.early_stopping is not None:
         earlyStopping=keras.callbacks.EarlyStopping(monitor='val_loss',
             patience=params.early_stopping['patience'], verbose=0, mode='auto')
         callbacks.append(earlyStopping)
 
+    if isinstance(params.optimizer['config']['lr'], dict):
+        lr_schedule = params.optimizer['config']['lr']
+        params.optimizer['config']['lr'] = lr_schedule[0]
+        optimizer = keras.optimizers.optimizer_from_config(params.optimizer)
+        model.compile(optimizer = optimizer,
+                      loss = params.cost_function,
+                      metrics = metrics
+        )
+        def lr_scheduler(epoch):
+            if epoch in lr_schedule:
+                print "Changing learning rate to {0}".format(lr_schedule[epoch])
+                model.optimizer.lr.set_value(lr_schedule[epoch])
+            return float(model.optimizer.lr.get_value())
+        callbacks.append(keras.callbacks.LearningRateScheduler(lr_scheduler))
+    else:
+        optimizer = keras.optimizers.optimizer_from_config(params.optimizer)
+        model.compile(optimizer = optimizer,
+                      loss = params.cost_function,
+                      metrics = metrics
+        )
+
     if params.online_transform is not None:
+        def default_online_transform_param(name,default):
+            if name in params.online_transform:
+                return params.online_transform[name]
+            else:
+                return default
+
         datagen = keras.preprocessing.image.ImageDataGenerator(
-            featurewise_center=False,
-            samplewise_center=False,
-            featurewise_std_normalization=False,
-            samplewise_std_normalization=False,
-            zca_whitening=False,
-            rotation_range=0,
-            width_shift_range=0.1,
-            height_shift_range=0.1,
-            horizontal_flip=True,
-            vertical_flip=False)
+            featurewise_center=default_online_transform_param('featurewise_center',False),
+            samplewise_center=default_online_transform_param('samplewise_center',False),
+            featurewise_std_normalization=default_online_transform_param('featurewise_std_normalization',False),
+            samplewise_std_normalization=default_online_transform_param('samplewise_std_normalization',False),
+            zca_whitening=default_online_transform_param('zca_whitening',False),
+            rotation_range=default_online_transform_param('rotation_range',0),
+            width_shift_range=default_online_transform_param('width_shift',0.1),
+            height_shift_range=default_online_transform_param('height_shift',0.1),
+            horizontal_flip=default_online_transform_param('horizontal_flip',True),
+            vertical_flip=default_online_transform_param('vertical_flip',False),
+            elastic_transform=default_online_transform_param('elastic_transform',None),
+            pad=default_online_transform_param('pad',None),
+            crop=default_online_transform_param('crop',None)
+        )
+        pre_epochs = default_online_transform_param("after_epoch", 0)
+
+        if pre_epochs > 0:
+            print "Pre-training without transformations..."
+            pre_hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
+                  batch_size = params.batch_size,
+                  nb_epoch = pre_epochs,
+                  validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
+                  test_data = (data_holder.test_set_x, data_holder.test_set_y),
+                  callbacks = callbacks,
+                  shuffle = params.shuffle_dataset)
+        print "Training with transformations..."
         datagen.fit(data_holder.train_set_x)
         hist = model.fit_generator(
                             datagen.flow(
@@ -170,14 +178,18 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                                 batch_size = params.batch_size
                             ),
                             samples_per_epoch = data_holder.train_set_x.shape[0],
-                            nb_epoch = params.n_epochs,
-                            callbacks = callbacks,
+                            nb_epoch = params.n_epochs - pre_epochs,
                             validation_data = (data_holder.valid_set_x,
                                 data_holder.valid_set_y),
                             test_data = (data_holder.test_set_x,
                                 data_holder.test_set_y),
+                            callbacks = callbacks
                            )
+        if pre_epochs > 0:
+            for k in pre_hist.history:
+                hist.history[k] = pre_hist.history[k] + hist.history[k]
     else:
+        print "Training without transformations..."
         hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
                   batch_size = params.batch_size,
                   nb_epoch = params.n_epochs,
@@ -186,10 +198,13 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   callbacks = callbacks,
                   shuffle = params.shuffle_dataset)
     model.set_weights(checkpointer.best_model)
-    train_metrics = model.evaluate(data_holder.train_set_x,data_holder.train_set_y)
-    valid_metrics = model.evaluate(data_holder.valid_set_x,data_holder.valid_set_y)
+    train_metrics = model.evaluate(data_holder.train_set_x,
+            data_holder.train_set_y, batch_size = params.batch_size)
+    valid_metrics = model.evaluate(data_holder.valid_set_x,
+            data_holder.valid_set_y, batch_size = params.batch_size)
     if data_holder.has_test():
-        test_metrics = model.evaluate(data_holder.test_set_x,data_holder.test_set_y)
+        test_metrics = model.evaluate(data_holder.test_set_x,
+                data_holder.test_set_y, batch_size = params.batch_size)
     for metrics_name,metrics in (
             ('train', train_metrics),
             ('valid', valid_metrics),
@@ -206,8 +221,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             'Obtained at epoch: %i\nTest accuracy: %f %%') %
               (valid_metrics[1] * 100.,
                   checkpointer.best_epoch, test_metrics[1] * 100.))
-        print >> sys.stderr, ('The code for file ' +
-                              os.path.split(__file__)[1] +
+        print('The code for ' + os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
         results.set_final_observation(valid_metrics[1] * 100.,
                 test_metrics[1] * 100.,
@@ -218,6 +232,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         print('Selection : Best valid score of {0} %'.format(
               valid_metrics[1] * 100.))
 
+    if member_number is not None:
+        results.member_number = member_number
     if 'results_db' in params.__dict__ :
         if 'results_host' in params.__dict__:
             host = params.results_host
