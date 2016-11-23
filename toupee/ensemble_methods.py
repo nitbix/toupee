@@ -248,6 +248,8 @@ class DIB(EnsembleMethod):
             ]
         if self.member_number > 0:
             self.params.n_epochs = self.n_epochs_after_first
+            if 'lr_after_first' in self.params.__dict__:
+                self.params.optimizer['config']['lr'] = self.params.lr_after_first
         m = mlp.sequential_model(resampled, self.params,
             member_number = self.member_number, model_weights = self.weights,
             #the copy is because there is a bug in Keras that deletes names

@@ -69,9 +69,11 @@ if __name__ == '__main__':
 
     for arg, param in arg_param_pairings:
         arg_params(arg,param)
+    original_params = copy.deepcopy(params)
     dataset = data.load_data(params.dataset,
                              pickled = params.pickled,
-                             one_hot_y = params.one_hot)
+                             one_hot_y = params.one_hot,
+                             join_train_and_valid = params.join_train_and_valid)
     method = params.method
     method.prepare(params,dataset)
     train_set = method.resampler.get_train()
@@ -93,6 +95,7 @@ if __name__ == '__main__':
     train_set_yhat = ensemble.predict(dataset[0][0])
     distilled_dataset = copy.deepcopy(dataset)
     distilled_dataset = ((dataset[0][0], train_set_yhat), dataset[1], dataset[2])
+    params = original_params
     mlp = sequential_model(distilled_dataset, params)
     exit(1)
     if 'results_db' in params.__dict__:
