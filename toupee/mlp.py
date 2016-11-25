@@ -114,27 +114,23 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             patience=params.early_stopping['patience'], verbose=0, mode='auto')
         callbacks.append(earlyStopping)
 
+    def callbacks_with_lr_scheduler(schedule):
+        def scheduler(epoch):
+            if epoch in schedule:
+                print "Changing learning rate to {0}".format(schedule[epoch])
+                model.optimizer.lr.set_value(schedule[epoch])
+            return float(model.optimizer.lr.get_value())
+        return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]
+
+    lr_schedule = None
     if isinstance(params.optimizer['config']['lr'], dict):
         lr_schedule = params.optimizer['config']['lr']
         params.optimizer['config']['lr'] = lr_schedule[0]
-        optimizer = keras.optimizers.optimizer_from_config(params.optimizer)
-        model.compile(optimizer = optimizer,
-                      loss = params.cost_function,
-                      metrics = metrics
-        )
-        def lr_scheduler(epoch):
-            if epoch in lr_schedule:
-                print "Changing learning rate to {0}".format(lr_schedule[epoch])
-                model.optimizer.lr.set_value(lr_schedule[epoch])
-            return float(model.optimizer.lr.get_value())
-        callbacks.append(keras.callbacks.LearningRateScheduler(lr_scheduler))
-    else:
-        optimizer = keras.optimizers.optimizer_from_config(params.optimizer)
-        model.compile(optimizer = optimizer,
-                      loss = params.cost_function,
-                      metrics = metrics
-        )
-
+    optimizer = keras.optimizers.optimizer_from_config(params.optimizer)
+    model.compile(optimizer = optimizer,
+                  loss = params.cost_function,
+                  metrics = metrics
+    )
     if params.online_transform is not None:
         def default_online_transform_param(name,default):
             if name in params.online_transform:
@@ -158,7 +154,9 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             crop=default_online_transform_param('crop',None)
         )
         pre_epochs = default_online_transform_param("after_epoch", 0)
+        pre_lr = default_online_transform_param("pre_lr", params.optimizer['config']['lr'])
 
+        #TODO: this does not work, the network is reset at every fit() call
         if pre_epochs > 0:
             print "Pre-training without transformations..."
             pre_hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
@@ -166,10 +164,12 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   nb_epoch = pre_epochs,
                   validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
                   test_data = (data_holder.test_set_x, data_holder.test_set_y),
-                  callbacks = callbacks,
+                  callbacks = callbacks_with_lr_scheduler({0: pre_lr}),
                   shuffle = params.shuffle_dataset)
         print "Training with transformations..."
         datagen.fit(data_holder.train_set_x)
+        if lr_schedule is not None:
+            callbacks = callbacks_with_lr_scheduler(lr_schedule)
         hist = model.fit_generator(
                             datagen.flow(
                                 data_holder.train_set_x,
@@ -178,7 +178,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                                 batch_size = params.batch_size
                             ),
                             samples_per_epoch = data_holder.train_set_x.shape[0],
-                            nb_epoch = params.n_epochs - pre_epochs,
+                            nb_epoch = params.n_epochs,
                             validation_data = (data_holder.valid_set_x,
                                 data_holder.valid_set_y),
                             test_data = (data_holder.test_set_x,
@@ -190,6 +190,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                 hist.history[k] = pre_hist.history[k] + hist.history[k]
     else:
         print "Training without transformations..."
+        if lr_schedule is not None:
+            callbacks = callbacks_with_lr_scheduler(lr_schedule)
         hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
                   batch_size = params.batch_size,
                   nb_epoch = params.n_epochs,
