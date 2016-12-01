@@ -199,8 +199,9 @@ class Bagging(EnsembleMethod):
             return AveragingRunner(members,params)
 
     def create_member(self):
+        train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
         resampled = [
-            self.resampler.make_new_train(self.params.resample_size),
+            train_set,
             self.resampler.get_valid(),
             self.resampler.get_test()
         ]
@@ -224,10 +225,12 @@ class DIB(EnsembleMethod):
     Create Deep Incremental Boosting Ensemble from parameters
     """
 
+    #TODO: use sample weight
     yaml_tag = u'!DIB'
 
     def set_defaults(self):
         self._default_value('incremental_index', -1)
+        self._default_value('use_sample_weights', False)
 
     def create_aggregator(self,params,members,train_set,valid_set):
             return WeightedAveragingRunner(members,self.alphas,params)
@@ -235,8 +238,9 @@ class DIB(EnsembleMethod):
     def create_member(self):
         self.set_defaults()
         if self.member_number > 0 :
+            train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
             resampled = [
-                self.resampler.make_new_train(self.params.resample_size),
+                train_set,
                 self.resampler.get_valid(),
                 self.resampler.get_test()
             ]
@@ -250,10 +254,13 @@ class DIB(EnsembleMethod):
             self.params.n_epochs = self.n_epochs_after_first
             if 'lr_after_first' in self.params.__dict__:
                 self.params.optimizer['config']['lr'] = self.params.lr_after_first
+        if not self.use_sample_weights:
+            train_weights = None
         m = mlp.sequential_model(resampled, self.params,
             member_number = self.member_number, model_weights = self.weights,
             #the copy is because there is a bug in Keras that deletes names
-            model_config = copy.deepcopy(self.model_config))
+            model_config = copy.deepcopy(self.model_config),
+            sample_weigth = train_weights)
         self.weights = [l.get_weights() for l in m.layers]
         injection_index = self.incremental_index + self.member_number * len(self.incremental_layers)
         if self.incremental_layers is not None:
@@ -314,11 +321,12 @@ class BRN(EnsembleMethod):
     Create Residual Incremental Boosting Ensemble from parameters
     """
 
+    #TODO: use sample weight
     yaml_tag = u'!BRN'
 
     def set_defaults(self):
         self._default_value('incremental_index', -1)
-        self._default_value('incremental_layers', None)
+        self._default_value('use_sample_weights', False)
 
     def create_aggregator(self,params,members,train_set,valid_set):
             return WeightedAveragingRunner(members,self.alphas,params)
@@ -361,12 +369,14 @@ class BRN(EnsembleMethod):
     def create_member(self):
         self.set_defaults()
         if self.member_number > 0 :
+            train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
             resampled = [
-                self.resampler.make_new_train(self.params.resample_size),
+                train_set,
                 self.resampler.get_valid(),
                 self.resampler.get_test()
             ]
         else:
+            train_weights = None
             resampled = [
                 self.resampler.get_train(),
                 self.resampler.get_valid(),
@@ -374,11 +384,14 @@ class BRN(EnsembleMethod):
             ]
         if self.member_number > 0:
             self.params.n_epochs = self.n_epochs_after_first
+        if not self.use_sample_weights:
+            train_weights = None
         m = mlp.sequential_model(resampled, self.params,
             member_number = self.member_number, model_weights = self.weights,
             #the copy is because there is a bug in Keras that deletes names
             model_config = copy.deepcopy(self.model_config),
-            frozen_layers = self.frozen_layers)
+            frozen_layers = self.frozen_layers,
+            sample_weight = train_weights)
         self.weights = [l.get_weights() for l in m.layers]
         injection_index = self.incremental_index + self.member_number
         if self.incremental_layers is not None:
@@ -439,12 +452,13 @@ class BARN(EnsembleMethod):
     """
     Create Residual Incremental Boosting Ensemble from parameters
     """
+    #TODO: use sample weight
 
     yaml_tag = u'!BARN'
 
     def set_defaults(self):
         self._default_value('incremental_index', -1)
-        self._default_value('incremental_layers', None)
+        self._default_value('use_sample_weights', False)
 
     def create_aggregator(self,params,members,train_set,valid_set):
             return AveragingRunner(members, params)
@@ -486,11 +500,20 @@ class BARN(EnsembleMethod):
 
     def create_member(self):
         self.set_defaults()
-        resampled = [
-            self.resampler.get_train(),
-            self.resampler.get_valid(),
-            self.resampler.get_test()
-        ]
+        if self.member_number > 0 :
+            train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
+            resampled = [
+                train_set,
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
+        else:
+            resampled = [
+                self.resampler.get_train(),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
+        train_weights = None
         if self.member_number > 0:
             self.params.n_epochs = self.n_epochs_after_first
         m = mlp.sequential_model(resampled, self.params,
@@ -542,6 +565,7 @@ BARN {{
                    self.incremental_layers)
 
 
+#TODO: use sample weight and make AdaBoost_M2
 class AdaBoost_M1(EnsembleMethod):
     """
     Create an AdaBoost Ensemble from parameters
@@ -553,9 +577,10 @@ class AdaBoost_M1(EnsembleMethod):
             return WeightedAveragingRunner(members,self.alphas,params)
 
     def create_member(self):
+        train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
         if self.member_number > 0 :
             resampled = [
-                    self.resampler.make_new_train(self.params.resample_size),
+                    train_set,
                     self.resampler.get_valid(),
                     self.resampler.get_test()
             ]
@@ -590,6 +615,59 @@ class AdaBoost_M1(EnsembleMethod):
 
     def serialize(self):
         return 'AdaBoostM1'
+
+
+class AdaBoost_M2(EnsembleMethod):
+    """
+    Create an AdaBoost Ensemble from parameters
+    """
+
+    yaml_tag = u'!AdaBoostM2'
+
+    def create_aggregator(self,params,members,train_set,valid_set):
+            return WeightedAveragingRunner(members,self.alphas,params)
+
+    def create_member(self):
+        train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
+        if self.member_number > 0 :
+            resampled = [
+                train_set,
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
+        else:
+            train_weights = None
+            resampled = [
+                self.resampler.get_train(),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
+        m = mlp.sequential_model(resampled, self.params,
+                member_number = self.member_number,
+                sample_weight = train_weights)
+        orig_train = self.resampler.get_train()
+        errors = common.errors(m, orig_train[0], orig_train[1])
+        e = np.sum((errors * self.D))
+        alpha = .5 * math.log((1-e)/e)
+        w = np.where(errors == 1,
+            self.D * math.exp(alpha),
+            self.D * math.exp(-alpha))
+        self.D = w / w.sum()
+        self.resampler.update_weights(self.D)
+        self.alphas.append(alpha)
+        self.member_number += 1
+        return m
+
+    def prepare(self, params, dataset):
+        self.params = params
+        self.dataset = dataset
+        self.resampler = WeightedResampler(dataset)
+        self.D = self.resampler.weights
+        self.alphas = []
+        self.member_number = 0
+
+    def serialize(self):
+        return 'AdaBoostM2'
 
 
 #class Stacking(EnsembleMethod):

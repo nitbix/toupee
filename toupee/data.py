@@ -130,6 +130,7 @@ class Resampler:
         np.random.seed(seed)
         
     def make_new_train(self,sample_size,distribution=None):
+        weights = []
         if distribution is None:
             sample = np.random.randint(low=0,
                                        high=self.train_size,
@@ -143,10 +144,16 @@ class Resampler:
         for s in sample:
             sampled_x.append(self.train_x[s])
             sampled_y.append(self.train_y[s])
+        if distribution is not None:
+            for s in sample:
+                weights.append(distribution[s])
+            weights = numpy.asarray(weights)
+        else:
+            weights = None
         sampled_x = numpy.asarray(sampled_x)
         sampled_y = numpy.asarray(sampled_y)
         self.r_train = (sampled_x,sampled_y)
-        return self.r_train
+        return self.r_train, weights
 
     def get_train(self):
         return self.train

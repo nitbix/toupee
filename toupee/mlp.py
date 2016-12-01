@@ -67,7 +67,7 @@ class DataHolder:
 
 def sequential_model(dataset, params, pretraining_set = None, model_weights = None,
         return_results = False, member_number = None, model_yaml = None,
-        model_config = None, frozen_layers = []):
+        model_config = None, frozen_layers = [], sample_weight = None):
     """
     Initialize the parameters and create the network.
     """
@@ -165,7 +165,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
                   test_data = (data_holder.test_set_x, data_holder.test_set_y),
                   callbacks = callbacks_with_lr_scheduler({0: pre_lr}),
-                  shuffle = params.shuffle_dataset)
+                  shuffle = params.shuffle_dataset,
+                  sample_weight = sample_weight)
         print "Training with transformations..."
         datagen.fit(data_holder.train_set_x)
         if lr_schedule is not None:
@@ -198,7 +199,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
                   test_data = (data_holder.test_set_x, data_holder.test_set_y),
                   callbacks = callbacks,
-                  shuffle = params.shuffle_dataset)
+                  shuffle = params.shuffle_dataset,
+                  sample_weight = sample_weight)
     model.set_weights(checkpointer.best_model)
     train_metrics = model.evaluate(data_holder.train_set_x,
             data_holder.train_set_y, batch_size = params.batch_size)
