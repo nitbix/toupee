@@ -74,3 +74,5 @@ if __name__ == '__main__':
                              one_hot_y = params.one_hot,
                              join_train_and_valid = params.join_train_and_valid)
     mlp = sequential_model(dataset, params)
+    if args.save_file is not None:
+        mlp.save(args.save_file)
