@@ -260,7 +260,7 @@ class DIB(EnsembleMethod):
             member_number = self.member_number, model_weights = self.weights,
             #the copy is because there is a bug in Keras that deletes names
             model_config = copy.deepcopy(self.model_config),
-            sample_weigth = train_weights)
+            sample_weight = train_weights)
         self.weights = [l.get_weights() for l in m.layers]
         injection_index = self.incremental_index + self.member_number * len(self.incremental_layers)
         if self.incremental_layers is not None:
