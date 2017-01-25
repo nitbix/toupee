@@ -73,6 +73,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     """
 
     print "loading model..."
+    if sample_weight is not None:
+        print "using sample weights..."
     if model_config is not None:
         model = keras.models.Sequential.from_config(model_config)
     else:

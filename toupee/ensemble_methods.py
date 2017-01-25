@@ -20,7 +20,6 @@ from keras.models import Model
 from pprint import pprint
 import copy
 
-
 class Aggregator:
     """
     Base class for all aggregating methods
@@ -96,7 +95,7 @@ class WeightedAveragingRunner(Aggregator):
         for i in range(len(self.members)):
             p = self.members[i].predict_proba(data, batch_size = self.params.batch_size)
             prob.append(p * self.weights[i])
-        prob_arr = np.array(prob) / np.sum(self.weights[i])
+        prob_arr = np.array(prob) / np.sum(self.weights)
         a = np.sum(prob_arr,axis=0) / float(len(self.members))
         m = np.argmax(a,axis=1)
         out_shape = self.members[0].layers[-1].output_shape
@@ -156,6 +155,7 @@ class EnsembleMethod(common.ConfiguredObject):
 
     def _default_value(self, param_name, value):
         if param_name not in self.__dict__:
+            print "WARNING: setting default for: {0} to {1}".format(param_name, value) 
             self.__dict__[param_name] = value
 
     def create_aggregator(self,x,y,train_set,valid_set):
@@ -245,6 +245,7 @@ class DIB(EnsembleMethod):
                 self.resampler.get_test()
             ]
         else:
+            train_weights = None
             resampled = [
                 self.resampler.get_train(),
                 self.resampler.get_valid(),
@@ -309,9 +310,11 @@ class DIB(EnsembleMethod):
 DIB {{
     n_epochs_after_first: {0},
     incremental_index: {1},
-    incremental_layers: {2}
+    use_sample_weights: {2},
+    incremental_layers: {3}
 }}
         """.format(self.n_epochs_after_first,
+                   self.use_sample_weights,
                    self.incremental_index,
                    self.incremental_layers)
 
@@ -327,6 +330,7 @@ class BRN(EnsembleMethod):
     def set_defaults(self):
         self._default_value('incremental_index', -1)
         self._default_value('use_sample_weights', False)
+        self._default_value('resample', False)
 
     def create_aggregator(self,params,members,train_set,valid_set):
             return WeightedAveragingRunner(members,self.alphas,params)
@@ -369,12 +373,20 @@ class BRN(EnsembleMethod):
     def create_member(self):
         self.set_defaults()
         if self.member_number > 0 :
-            train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
-            resampled = [
-                train_set,
-                self.resampler.get_valid(),
-                self.resampler.get_test()
-            ]
+            if self.resample:
+                train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
+                resampled = [
+                    train_set,
+                    self.resampler.get_valid(),
+                    self.resampler.get_test()
+                ]
+            else:
+                train_weights = self.D
+                resampled = [
+                    self.resampler.get_train(),
+                    self.resampler.get_valid(),
+                    self.resampler.get_test()
+                ]
         else:
             train_weights = None
             resampled = [
@@ -433,7 +445,6 @@ class BRN(EnsembleMethod):
         with open(params.model_file, 'r') as model_file:
             model_yaml = model_file.read()
         self.model_config = keras.models.model_from_yaml(model_yaml).get_config()
-        self.freeze_old_layers = False
 
     def serialize(self):
         self.set_defaults()
@@ -441,9 +452,11 @@ class BRN(EnsembleMethod):
 BRN {{
     n_epochs_after_first: {0},
     incremental_index: {1},
-    incremental_layers: {2}
+    use_sample_weights: {2},
+    incremental_layers: {3}
 }}
         """.format(self.n_epochs_after_first,
+                   self.use_sample_weights,
                    self.incremental_index,
                    self.incremental_layers)
 
@@ -565,7 +578,6 @@ BARN {{
                    self.incremental_layers)
 
 
-#TODO: use sample weight and make AdaBoost_M2
 class AdaBoost_M1(EnsembleMethod):
     """
     Create an AdaBoost Ensemble from parameters
@@ -628,20 +640,12 @@ class AdaBoost_M2(EnsembleMethod):
             return WeightedAveragingRunner(members,self.alphas,params)
 
     def create_member(self):
-        train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
-        if self.member_number > 0 :
-            resampled = [
-                train_set,
-                self.resampler.get_valid(),
-                self.resampler.get_test()
-            ]
-        else:
-            train_weights = None
-            resampled = [
-                self.resampler.get_train(),
-                self.resampler.get_valid(),
-                self.resampler.get_test()
-            ]
+        resampled = [
+            self.resampler.get_train(),
+            self.resampler.get_valid(),
+            self.resampler.get_test()
+        ]
+        train_weights = self.D
         m = mlp.sequential_model(resampled, self.params,
                 member_number = self.member_number,
                 sample_weight = train_weights)
