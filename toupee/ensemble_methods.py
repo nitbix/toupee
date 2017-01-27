@@ -301,7 +301,7 @@ class DIB(EnsembleMethod):
         self.model_config = keras.models.model_from_yaml(model_yaml).get_config()
 
     def serialize(self):
-        return 'AdaBoostM1'
+        return 'DIB'
 
 
     def serialize(self):
@@ -602,6 +602,7 @@ class AdaBoost_M1(EnsembleMethod):
                 self.resampler.get_valid(),
                 self.resampler.get_test()
             ]
+        train_weights = None
         m = mlp.sequential_model(resampled, self.params,
                 member_number = self.member_number)
         orig_train = self.resampler.get_train()
@@ -640,12 +641,20 @@ class AdaBoost_M2(EnsembleMethod):
             return WeightedAveragingRunner(members,self.alphas,params)
 
     def create_member(self):
-        resampled = [
-            self.resampler.get_train(),
-            self.resampler.get_valid(),
-            self.resampler.get_test()
-        ]
-        train_weights = self.D
+        train_weights = None
+        if self.member_number > 0 :
+            train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
+            resampled = [
+                    train_set,
+                    self.resampler.get_valid(),
+                    self.resampler.get_test()
+            ]
+        else:
+            resampled = [
+                self.resampler.get_train(),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
         m = mlp.sequential_model(resampled, self.params,
                 member_number = self.member_number,
                 sample_weight = train_weights)

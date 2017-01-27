@@ -93,7 +93,6 @@ if __name__ == '__main__':
     print "\nFinal Ensemble test accuracy: {0} %".format(final_score * 100.)
     print "Preparing distillation dataset.."
     train_set_yhat = ensemble.predict(dataset[0][0])
-    distilled_dataset = copy.deepcopy(dataset)
     distilled_dataset = ((dataset[0][0], train_set_yhat), dataset[1], dataset[2])
     params = original_params
     mlp = sequential_model(distilled_dataset, params)
