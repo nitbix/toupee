@@ -39,7 +39,7 @@ def std_norm(d):
 
 def load_data(dataset, resize_to = None, pickled = True,
               center_and_normalise = False, join_train_and_valid = False,
-              one_hot_y = False):
+              one_hot_y = False, zca_whitening = False):
   ''' Loads the dataset
 
   :type dataset: string
@@ -63,6 +63,8 @@ def load_data(dataset, resize_to = None, pickled = True,
     train_set = (tr['x'],tr['y'])
     valid_set = (v['x'],v['y'])
     test_set = (te['x'],te['y'])
+  
+  #UNIFORM_PADDING
   if resize_to is not None:
     orig_size = math.sqrt(train_set[0].shape[1])
     train_set = (
@@ -86,10 +88,13 @@ def load_data(dataset, resize_to = None, pickled = True,
                       ),
                       resize_to),
                   test_set[1])
+  #MEANSTD
   if center_and_normalise:
     train_set = std_norm(sub_mean(train_set))
     valid_set = std_norm(sub_mean(valid_set))
     test_set  = std_norm(sub_mean(test_set))
+
+  #NO VALID (usually CIFAR)
   if join_train_and_valid:
     set_x = numpy.concatenate([
                 train_set[0],
@@ -101,6 +106,35 @@ def load_data(dataset, resize_to = None, pickled = True,
             ])
     train_set = (set_x,set_y)
     valid_set = test_set
+
+  #ZCA WHITENING
+  if zca_whitening:
+      print("WARNING: ZCA Whitening dataset, you will need the preprocessor to be able to run the network after training")
+      train_shape = train_set[0].shape
+      valid_shape = valid_set[0].shape
+      test_shape = test_set[0].shape
+      flat_shape = np.prod(train_shape[1:])
+      train_flat = train_set[0].reshape((train_shape[0],flat_shape))
+      valid_flat = valid_set[0].reshape((valid_shape[0],flat_shape))
+      test_flat = test_set[0].reshape((test_shape[0],flat_shape))
+      print("finished reshaping")
+      sigma = np.dot(train_flat.T, train_flat) / train_flat.shape[0] #Correlation matrix
+      print("got correlation matrix")
+      U,S,V = np.linalg.svd(sigma) #Singular Value Decomposition
+      print("got SVD")
+      epsilon = 0.1                #Whitening constant, it prevents division by zero
+      ZCAMatrix = np.dot(np.dot(U, np.diag(1.0/np.sqrt(np.diag(S) + epsilon))), U.T)                     #ZCA Whitening matrix
+      print("got whitening matrix")
+      def whiten(inputs):
+        return np.dot(ZCAMatrix, inputs) 
+      train_zca = whiten(train_flat).reshape(train_shape)
+      valid_zca = whiten(valid_flat).reshape(valid_shape)
+      test_zca = whiten(test_flat).reshape(test_shape)
+      train_set = (train_zca, train_set[1])
+      valid_set = (valid_zca, valid_set[1])
+      test_set = (test_zca, train_set[1])
+      print("Done")
+
   if one_hot_y:
       train_set = (train_set[0], one_hot(train_set[1]))
       valid_set = (valid_set[0], one_hot(valid_set[1]))
