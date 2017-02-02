@@ -19,7 +19,7 @@ defaults = { 'random_seed': None,
              'detailed_stats': False,
              'online_transform': None,
              'resize_data_to': None,
-             #TODO:'join_train_and_valid': False,
+             'join_train_and_valid': False,
              'shuffle_dataset': False,
              #TODO:'update_input': False,
              #TODO:'pretraining': None,
@@ -27,6 +27,7 @@ defaults = { 'random_seed': None,
              #TODO:'pretraining_passes' : 0,
              'one_hot' : False,
              'pickled' : False,
+             'zca_whitening' : False,
            }
 
 def load_parameters(filename):
