@@ -73,7 +73,8 @@ if __name__ == '__main__':
     dataset = data.load_data(params.dataset,
                              pickled = params.pickled,
                              one_hot_y = params.one_hot,
-                             join_train_and_valid = params.join_train_and_valid)
+                             join_train_and_valid = params.join_train_and_valid,
+                             zca_whitening = params.zca_whitening)
     method = params.method
     method.prepare(params,dataset)
     train_set = method.resampler.get_train()
