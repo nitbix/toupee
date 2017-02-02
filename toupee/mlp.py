@@ -147,14 +147,15 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             samplewise_std_normalization=default_online_transform_param('samplewise_std_normalization',False),
             zca_whitening=default_online_transform_param('zca_whitening',False),
             rotation_range=default_online_transform_param('rotation_range',0),
-            width_shift_range=default_online_transform_param('width_shift',0.1),
-            height_shift_range=default_online_transform_param('height_shift',0.1),
-            horizontal_flip=default_online_transform_param('horizontal_flip',True),
+            width_shift_range=default_online_transform_param('width_shift',0),
+            height_shift_range=default_online_transform_param('height_shift',0),
+            horizontal_flip=default_online_transform_param('horizontal_flip',False),
             vertical_flip=default_online_transform_param('vertical_flip',False),
             elastic_transform=default_online_transform_param('elastic_transform',None),
             pad=default_online_transform_param('pad',None),
             crop=default_online_transform_param('crop',None)
         )
+        datagen.fit(data_holder.train_set_x, augment=True, rounds=2)
         pre_epochs = default_online_transform_param("after_epoch", 0)
         pre_lr = default_online_transform_param("pre_lr", params.optimizer['config']['lr'])
 
@@ -170,7 +171,6 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   shuffle = params.shuffle_dataset,
                   sample_weight = sample_weight)
         print "Training with transformations..."
-        datagen.fit(data_holder.train_set_x)
         if lr_schedule is not None:
             callbacks = callbacks_with_lr_scheduler(lr_schedule)
         hist = model.fit_generator(
