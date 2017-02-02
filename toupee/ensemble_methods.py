@@ -200,11 +200,19 @@ class Bagging(EnsembleMethod):
 
     def create_member(self):
         train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
-        resampled = [
-            train_set,
-            self.resampler.get_valid(),
-            self.resampler.get_test()
-        ]
+        if self.member_number > 0 :
+            resampled = [
+                train_set,
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
+        else:
+            train_weights = None
+            resampled = [
+                self.resampler.get_train(),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
         m = mlp.sequential_model(resampled, self.params,
                 member_number = self.member_number)
         self.member_number += 1
