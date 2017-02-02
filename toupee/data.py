@@ -22,7 +22,6 @@ import cPickle
 import math
 from skimage import transform as tf
 import multiprocessing
-from scipy.misc import imsave
 
 def corrupt(data,p):
     return mask(1-p,data.shape,dtype=floatX) * data
