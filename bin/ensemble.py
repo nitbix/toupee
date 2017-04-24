@@ -90,10 +90,6 @@ if __name__ == '__main__':
         intermediate_scores.append(test_score)
         final_score = test_score
     print 'Final test accuracy: {0} %'.format(final_score * 100.)
-    with open("/tmp/full-resnet.model","w") as f:
-        f.truncate()
-        f.write(members[-1].to_yaml())
-    exit(1)
     if 'results_db' in params.__dict__:
         if 'results_host' in params.__dict__:
             host = params.results_host

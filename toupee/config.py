@@ -28,6 +28,7 @@ defaults = { 'random_seed': None,
              'one_hot' : False,
              'pickled' : False,
              'zca_whitening' : False,
+             'test_at_each_epoch': True,
            }
 
 def load_parameters(filename):

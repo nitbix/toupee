@@ -48,13 +48,15 @@ class AveragingRunner(Aggregator):
 
     def predict(self,data):
         prob = []
-        for m in self.members:
+        for (m_yaml, m_weights) in self.members:
+            m = keras.models.model_from_yaml(m_yaml)
+            m.set_weights(m_weights)
             p = m.predict_proba(data, batch_size = self.params.batch_size)
             prob.append(p)
+            out_shape = m.layers[-1].output_shape
         prob_arr = np.array(prob)
         a = np.sum(prob_arr,axis=0) / float(len(self.members))
         m = np.argmax(a,axis=1)
-        out_shape = self.members[0].layers[-1].output_shape
         return np.eye(out_shape[1])[m]
 
 
@@ -69,13 +71,15 @@ class MajorityVotingRunner(Aggregator):
 
     def predict(self,data):
         classifs = []
-        for m in self.members:
+        for (m_yaml, m_weights) in self.members:
+            m = keras.models.model_from_yaml(m_yaml)
+            m.set_weights(m_weights)
             c = m.predict(data, batch_size = self.params.batch_size)
             classifs.append(c)
+            out_shape = m.layers[-1].output_shape
         classifs_arr = np.array(classifs)
         a = np.sum(classifs_arr,axis=0) / float(len(self.members))
         m = np.argmax(a,axis=1)
-        out_shape = self.members[0].layers[-1].output_shape
         return np.eye(out_shape[1])[m]
 
 
@@ -93,12 +97,15 @@ class WeightedAveragingRunner(Aggregator):
     def predict(self,data):
         prob = []
         for i in range(len(self.members)):
-            p = self.members[i].predict_proba(data, batch_size = self.params.batch_size)
+            m_yaml, m_weights = self.members[i]
+            m = keras.models.model_from_yaml(m_yaml)
+            m.set_weights(m_weights)
+            p = m.predict_proba(data, batch_size = self.params.batch_size)
             prob.append(p * self.weights[i])
+            out_shape = m.layers[-1].output_shape
         prob_arr = np.array(prob) / np.sum(self.weights)
         a = np.sum(prob_arr,axis=0) / float(len(self.members))
         m = np.argmax(a,axis=1)
-        out_shape = self.members[0].layers[-1].output_shape
         return np.eye(out_shape[1])[m]
 
 
@@ -216,7 +223,7 @@ class Bagging(EnsembleMethod):
         m = mlp.sequential_model(resampled, self.params,
                 member_number = self.member_number)
         self.member_number += 1
-        return m
+        return (m.to_yaml(), m.get_weights())
 
     def prepare(self, params, dataset):
         self.params = params
@@ -294,7 +301,7 @@ class DIB(EnsembleMethod):
         self.resampler.update_weights(self.D)
         self.alphas.append(alpha)
         self.member_number += 1
-        return m
+        return (m.to_yaml(), m.get_weights())
 
     def prepare(self, params, dataset):
         self.params = params
@@ -439,7 +446,7 @@ class BRN(EnsembleMethod):
         self.resampler.update_weights(self.D)
         self.alphas.append(alpha)
         self.member_number += 1
-        return m
+        return (m.to_yaml(), m.get_weights())
 
     def prepare(self, params, dataset):
         self.params = params
@@ -559,7 +566,7 @@ class BARN(EnsembleMethod):
             self.model_config = copy.deepcopy(new_model_config)
             self.weights = self.weights[:injection_index]
         self.member_number += 1
-        return m
+        return (m.to_yaml(), m.get_weights())
 
     def prepare(self, params, dataset):
         self.params = params
@@ -624,7 +631,7 @@ class AdaBoost_M1(EnsembleMethod):
         self.resampler.update_weights(self.D)
         self.alphas.append(alpha)
         self.member_number += 1
-        return m
+        return (m.to_yaml(), m.get_weights())
 
     def prepare(self, params, dataset):
         self.params = params
@@ -677,7 +684,7 @@ class AdaBoost_M2(EnsembleMethod):
         self.resampler.update_weights(self.D)
         self.alphas.append(alpha)
         self.member_number += 1
-        return m
+        return (m.to_yaml(), m.get_weights())
 
     def prepare(self, params, dataset):
         self.params = params

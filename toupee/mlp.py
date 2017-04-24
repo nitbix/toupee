@@ -173,6 +173,10 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         print "Training with transformations..."
         if lr_schedule is not None:
             callbacks = callbacks_with_lr_scheduler(lr_schedule)
+        if params.test_at_each_epoch:
+            test_data = (data_holder.test_set_x, data_holder.test_set_y)
+        else:
+            test_data = None
         hist = model.fit_generator(
                             datagen.flow(
                                 data_holder.train_set_x,
@@ -184,8 +188,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                             nb_epoch = params.n_epochs,
                             validation_data = (data_holder.valid_set_x,
                                 data_holder.valid_set_y),
-                            test_data = (data_holder.test_set_x,
-                                data_holder.test_set_y),
+                            test_data = test_data,
                             callbacks = callbacks
                            )
         if pre_epochs > 0:

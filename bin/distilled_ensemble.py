@@ -96,8 +96,7 @@ if __name__ == '__main__':
     train_set_yhat = ensemble.predict(dataset[0][0])
     distilled_dataset = ((dataset[0][0], train_set_yhat), dataset[1], dataset[2])
     params = original_params
-    mlp = sequential_model(distilled_dataset, params)
-    exit(1)
+    mlp = sequential_model(distilled_dataset, params, model_yaml = members[-1][0])
     if 'results_db' in params.__dict__:
         if 'results_host' in params.__dict__:
             host = params.results_host
