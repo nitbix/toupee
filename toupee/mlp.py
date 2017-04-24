@@ -229,15 +229,15 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         print(('Optimization complete.\nBest valid accuracy: %f %%\n'
             'Obtained at epoch: %i\nTest accuracy: %f %%') %
               (valid_metrics[1] * 100.,
-                  checkpointer.best_epoch, test_metrics[1] * 100.))
+                  checkpointer.best_epoch + 1, test_metrics[1] * 100.))
         print('The code for ' + os.path.split(__file__)[1] +
                               ' ran for %.2fm' % ((end_time - start_time) / 60.))
         results.set_final_observation(valid_metrics[1] * 100.,
                 test_metrics[1] * 100.,
-                checkpointer.best_epoch)
+                checkpointer.best_epoch + 1)
     else:
         results.set_final_observation(valid_metrics[1]* 100., None,
-                checkpointer.best_epoch)
+                checkpointer.best_epoch + 1)
         print('Selection : Best valid score of {0} %'.format(
               valid_metrics[1] * 100.))
 
