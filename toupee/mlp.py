@@ -128,7 +128,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     if isinstance(params.optimizer['config']['lr'], dict):
         lr_schedule = params.optimizer['config']['lr']
         params.optimizer['config']['lr'] = lr_schedule[0]
-    optimizer = keras.optimizers.optimizer_from_config(params.optimizer)
+    optimizer = keras.optimizers.deserialize(params.optimizer)
     model.compile(optimizer = optimizer,
                   loss = params.cost_function,
                   metrics = metrics
@@ -184,8 +184,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                                 shuffle = params.shuffle_dataset,
                                 batch_size = params.batch_size
                             ),
-                            samples_per_epoch = data_holder.train_set_x.shape[0],
-                            nb_epoch = params.n_epochs,
+                            steps_per_epoch = data_holder.train_set_x.shape[0] / params.batch_size,
+                            epochs = params.n_epochs,
                             validation_data = (data_holder.valid_set_x,
                                 data_holder.valid_set_y),
                             test_data = test_data,
@@ -200,6 +200,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             callbacks = callbacks_with_lr_scheduler(lr_schedule)
         hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
                   batch_size = params.batch_size,
+
                   nb_epoch = params.n_epochs,
                   validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
                   test_data = (data_holder.test_set_x, data_holder.test_set_y),

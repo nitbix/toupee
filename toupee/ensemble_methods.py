@@ -15,7 +15,6 @@ import common
 import math
 import keras
 from keras.layers import Input, Convolution2D, merge
-from keras.utils.layer_utils import layer_from_config
 from keras.models import Model
 from pprint import pprint
 import copy
@@ -301,7 +300,10 @@ class DIB(EnsembleMethod):
         self.resampler.update_weights(self.D)
         self.alphas.append(alpha)
         self.member_number += 1
-        return (m.to_yaml(), m.get_weights())
+        m_yaml = m.to_yaml()
+        m_weights = m.get_weights()
+        del m
+        return (m_yaml, m_weights)
 
     def prepare(self, params, dataset):
         self.params = params
@@ -363,7 +365,7 @@ class BRN(EnsembleMethod):
         for i,l in enumerate(new_layers):
             l['config']['name'] = "BRN-incremental-{0}-{1}".format(
                 member_number, i)
-            real_layers = layer_from_config(l)(real_layers)
+            real_layers = keras.engine.Layer.from_config(l)(real_layers)
         #make skip layer
         stride_width = input_shape[2] / real_layers._keras_shape[2]
         stride_height = input_shape[3] / real_layers._keras_shape[3]
@@ -504,7 +506,7 @@ class BARN(EnsembleMethod):
         for i,l in enumerate(new_layers):
             l['config']['name'] = "BARN-incremental-{0}-{1}".format(
                 member_number, i)
-            real_layers = layer_from_config(l)(real_layers)
+            real_layers = keras.engine.Layer.from_config(l)(real_layers)
         #make skip layer
         stride_width = input_shape[2] / real_layers._keras_shape[2]
         stride_height = input_shape[3] / real_layers._keras_shape[3]
