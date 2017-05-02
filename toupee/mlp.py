@@ -164,7 +164,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             print "Pre-training without transformations..."
             pre_hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
                   batch_size = params.batch_size,
-                  nb_epoch = pre_epochs,
+                  epochs = pre_epochs,
                   validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
                   test_data = (data_holder.test_set_x, data_holder.test_set_y),
                   callbacks = callbacks_with_lr_scheduler({0: pre_lr}),
@@ -201,7 +201,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
                   batch_size = params.batch_size,
 
-                  nb_epoch = params.n_epochs,
+                  epochs = params.n_epochs,
                   validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
                   test_data = (data_holder.test_set_x, data_holder.test_set_y),
                   callbacks = callbacks,
