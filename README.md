@@ -105,7 +105,17 @@ The parameters are as follows:
 
 
 *ensemble methods*
-INCOMPLETE
+ - Bagging: Bagging
+ - AdaBoostM1: AdaBoost.M1
+ - DIB: [Deep Incremental Boosting](http://easychair.org/publications/paper/Deep_Incremental_Boosting).
+   Parameters are as follows.
+    - `n_epochs_after_first`: The number of epochs for which to train from the
+      second round onwards
+    - `freeze_old_layers`: `true` if the layers transferred to the next round
+      are to be frozen (made not trainable)
+    - `incremental_index`: the location where the new layers are to be inserted
+    - `incremental_layers`: a serialized yaml of the layers to be added at each
+      round
 
 ### Model files
 These are standard Keras models, serialised to yaml. Effectively, this is the
