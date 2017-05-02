@@ -365,7 +365,7 @@ class BRN(EnsembleMethod):
         for i,l in enumerate(new_layers):
             l['config']['name'] = "BRN-incremental-{0}-{1}".format(
                 member_number, i)
-            real_layers = keras.engine.Layer.from_config(l)(real_layers)
+            real_layers = keras.layers.deserialize(l)(real_layers)
         #make skip layer
         stride_width = input_shape[2] / real_layers._keras_shape[2]
         stride_height = input_shape[3] / real_layers._keras_shape[3]
@@ -506,7 +506,7 @@ class BARN(EnsembleMethod):
         for i,l in enumerate(new_layers):
             l['config']['name'] = "BARN-incremental-{0}-{1}".format(
                 member_number, i)
-            real_layers = keras.engine.Layer.from_config(l)(real_layers)
+            real_layers = keras.layers.deserialize(l)(real_layers)
         #make skip layer
         stride_width = input_shape[2] / real_layers._keras_shape[2]
         stride_height = input_shape[3] / real_layers._keras_shape[3]
