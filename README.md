@@ -43,8 +43,6 @@ where `x` is the input data and `y` is the expected classification output.
 
 ### Experiment files
 
-THIS SECTION IS INCOMPLETE
-
 This is the file given as an argument to `mlp.py`, `ensemble.py` or
 `distilled_ensemble.py`. It is a yaml description of the experiment.
 Here is an example experiment file:
