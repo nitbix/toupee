@@ -35,6 +35,8 @@ if __name__ == '__main__':
                         help='mongodb table name for storing results')
     parser.add_argument('--device', nargs='?',
                         help='gpu/cpu device to use for training')
+    parser.add_argument('--dump-shapes-to', type=str, nargs='?', default=42,
+                        help='location where to save the shape of the ensemble members')
 
     args = parser.parse_args()
     #this needs to come before all the toupee and theano imports
@@ -97,9 +99,11 @@ if __name__ == '__main__':
     distilled_dataset = ((dataset[0][0], train_set_yhat), dataset[1], dataset[2])
     params = original_params
     mlp = sequential_model(distilled_dataset, params, model_yaml = members[-1][0])
-    with open("full-resnet.model","w") as f:
-        f.truncate()
-        f.write(members[-1][0])
+    if args.dump_shapes_to is not None:
+        for i in range(len(members)):
+            with open("{0}member-{1}.model".format(args.dump_shapes_to, i),"w") as f:
+                f.truncate()
+                f.write(members[i][0])
     if 'results_db' in params.__dict__:
         if 'results_host' in params.__dict__:
             host = params.results_host
