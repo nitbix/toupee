@@ -27,7 +27,7 @@ In examples/ there are a few ready-cooked models that you can look at.
 * Install keras from the [fork](http://github.com/nitbix/keras)
 * Clone this repo
 * In examples/ there are a few working examples of experiments:
-  * Download the needed dataset [here](https://www.dropbox.com/sh/zqxqyx9g9rjhiuo/AACLpzyG-YC2BAKjV4yEaOmwa?dl=0),
+  * Download the needed dataset from [here](https://www.dropbox.com/sh/zqxqyx9g9rjhiuo/AACLpzyG-YC2BAKjV4yEaOmwa?dl=0)
     and save it to the correct location (or change the location in the example)
 * Run bin/mlp.py for single network experiments, bin/ensemble.py for ensemble
   experiments
