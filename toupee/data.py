@@ -36,6 +36,52 @@ def std_norm(d):
     x = x / np.std(x,axis=0)
     return(x,y)
 
+def load_single_file(filename, resize_to = None, center_and_normalise = False,
+                     one_hot_y = False, zca_whitening = False):
+  ''' Loads the dataset
+
+  :type dataset: string
+  :param dataset: the path to the dataset (here MNIST)
+  '''
+
+  data = np.load(filename + '.npz')
+  data = (data['x'],data['y'])
+  
+  #UNIFORM_PADDING
+  if resize_to is not None:
+    orig_size = math.sqrt(data[0].shape[1])
+    data = (pad_dataset(
+              data[0].reshape((data[0].shape[0], orig_size,orig_size)),
+              resize_to),
+            data[1])
+  #MEANSTD
+  if center_and_normalise:
+    data = std_norm(sub_mean(data))
+
+  #ZCA WHITENING
+  if zca_whitening:
+      print("WARNING: ZCA Whitening dataset, you will need the preprocessor to be able to run the network after training")
+      data_shape = data[0].shape
+      flat_shape = np.prod(data_shape[1:])
+      data_flat = data[0].reshape((data_shape[0],flat_shape))
+      print("finished reshaping")
+      sigma = np.dot(data_flat.T, data_flat) / data_flat.shape[0] #Correlation matrix
+      print("got correlation matrix")
+      U,S,V = np.linalg.svd(sigma) #Singular Value Decomposition
+      print("got SVD")
+      epsilon = 0.1                #Whitening constant, it prevents division by zero
+      ZCAMatrix = np.dot(np.dot(U, np.diag(1.0/np.sqrt(np.diag(S) + epsilon))), U.T)                     #ZCA Whitening matrix
+      print("got whitening matrix")
+      def whiten(inputs):
+        return np.dot(ZCAMatrix, inputs) 
+      data_zca = whiten(data_flat).reshape(data_shape)
+      data = (data_zca, data[1])
+      print("Done")
+
+  if one_hot_y:
+      data = (data[0], one_hot(data[1]))
+  return data
+
 def load_data(dataset, resize_to = None, pickled = True,
               center_and_normalise = False, join_train_and_valid = False,
               one_hot_y = False, zca_whitening = False):

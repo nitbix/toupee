@@ -382,7 +382,7 @@ class BRN(EnsembleMethod):
         #make merge
         merge_layer = merge([real_layers,shortcut], mode="sum", name = "merge_BRN_{0}".format(member_number))
         #make model
-        model = Model(input=input_layer,output=merge_layer,
+        model = Model(inputs=[input_layer],outputs=[merge_layer],
                 name="Model_BRN_{0}".format(member_number))
         #make config
         return {"class_name": "Model", "config": model.get_config()}

@@ -13,6 +13,7 @@ n_epochs: 50
 batch_size: 128
 cost_function: categorical_crossentropy
 shuffle_dataset: true
+update_inputs: true
 
 ## Ensemble Parameters ##
 resample_size: 60000

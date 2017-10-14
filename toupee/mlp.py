@@ -131,8 +131,12 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     optimizer = keras.optimizers.deserialize(params.optimizer)
     model.compile(optimizer = optimizer,
                   loss = params.cost_function,
-                  metrics = metrics
+                  metrics = metrics,
+                  update_inputs = params.update_inputs,
+                  update_inputs_lr = params.update_inputs_lr
+
     )
+
     if params.online_transform is not None:
         def default_online_transform_param(name,default):
             if name in params.online_transform:
@@ -155,7 +159,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             pad=default_online_transform_param('pad',None),
             crop=default_online_transform_param('crop',None)
         )
-        datagen.fit(data_holder.train_set_x, augment=True, rounds=2)
+        datagen.fit(data_holder.train_set_x, rounds=1)
         pre_epochs = default_online_transform_param("after_epoch", 0)
         pre_lr = default_online_transform_param("pre_lr", params.optimizer['config']['lr'])
 
