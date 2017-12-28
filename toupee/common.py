@@ -10,6 +10,7 @@ __docformat__ = 'restructedtext en'
 
 import numpy
 import yaml
+import os
 
 numpy.set_printoptions(threshold=numpy.inf)
 
@@ -51,6 +52,20 @@ class ConfiguredObject(yaml.YAMLObject):
         if param_name not in self.__dict__:
             self.__dict__[param_name] = value
 
+def yaml_include(loader, node):
+    # Get the path out of the yaml file
+    file_name = os.path.join(os.path.dirname(loader.name), node.value)
+
+    with file(file_name) as inputfile:
+        return yaml.load(inputfile)
+
+yaml.add_constructor("!include", yaml_include)
+
+def read_yaml_file(filename):
+    with open(filename, 'r') as f:
+        model_yaml = yaml.load(f)
+    return yaml.dump(model_yaml)
+
 def serialize(o):
     if isinstance(o, numpy.float32):
         return float(o)
@@ -73,7 +88,8 @@ def serialize(o):
 def errors(classifier, test_set_x, test_set_y):
     classification = classifier.predict_classes(test_set_x)
     c = numpy.argmax(test_set_y, axis=1)
-    return numpy.where(classification != c, 1.0, 0.0)
+    r = numpy.where(classification != c, 1.0, 0.0)
+    return r
 
 def accuracy(classifier, test_set_x, test_set_y):
     e = errors(classifier, test_set_x, test_set_y)

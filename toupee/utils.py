@@ -8,6 +8,7 @@ All code released under Apachev2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import numpy as np
+import os
 
 def gauss(x, y, sigma=2.0):
     Z = 2 * np.pi * sigma**2

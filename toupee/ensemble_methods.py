@@ -9,11 +9,13 @@ All code released under Apachev2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import numpy as np
+from numpy.core.umath_tests import inner1d
 import mlp
 from data import Resampler, WeightedResampler
 import common
 import math
 import keras
+from common import read_yaml_file
 from keras.layers import Input, Convolution2D, merge
 from keras.models import Model
 from pprint import pprint
@@ -26,14 +28,14 @@ class Aggregator:
     def __init__(self):
         pass
 
-    def compute(self, set_x):
+    def compute(self, X):
         raise NotImplementedException()
 
-    def predict(self, set_x):
+    def predict(self, X):
         raise NotImplementedException()
 
-    def predict_classes(self, set_x):
-        return np.argmax(self.predict(set_x), axis = 1)
+    def predict_classes(self, X):
+        return np.argmax(self.predict(X), axis = 1)
 
 
 class AveragingRunner(Aggregator):
@@ -41,16 +43,19 @@ class AveragingRunner(Aggregator):
     Take an ensemble and produce the majority vote output on a dataset
     """
 
-    def __init__(self,members,params):
+    def __init__(self, members, params, wrapper=None):
         self.params = params
         self.members = members
+        self.wrapper = wrapper
 
-    def predict(self,data):
+    def predict(self, data):
         prob = []
         for (m_yaml, m_weights) in self.members:
             m = keras.models.model_from_yaml(m_yaml)
             m.set_weights(m_weights)
             p = m.predict_proba(data, batch_size = self.params.batch_size)
+            if self.wrapper is not None:
+                p = self.wrapper(p)
             prob.append(p)
             out_shape = m.layers[-1].output_shape
         prob_arr = np.array(prob)
@@ -194,6 +199,7 @@ class Bagging(EnsembleMethod):
     """
 
     yaml_tag = u'!Bagging'
+
     def __init__(self,voting=False):
         self.voting = voting
         self.resampler = None
@@ -205,7 +211,7 @@ class Bagging(EnsembleMethod):
             return AveragingRunner(members,params)
 
     def create_member(self):
-        train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
+        train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
         if self.member_number > 0 :
             resampled = [
                 train_set,
@@ -213,7 +219,6 @@ class Bagging(EnsembleMethod):
                 self.resampler.get_test()
             ]
         else:
-            train_weights = None
             resampled = [
                 self.resampler.get_train(),
                 self.resampler.get_valid(),
@@ -251,15 +256,15 @@ class DIB(EnsembleMethod):
 
     def create_member(self):
         self.set_defaults()
+        train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
         if self.member_number > 0 :
-            train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
             resampled = [
                 train_set,
                 self.resampler.get_valid(),
                 self.resampler.get_test()
             ]
         else:
-            train_weights = None
+            sample_weights = None
             resampled = [
                 self.resampler.get_train(),
                 self.resampler.get_valid(),
@@ -270,12 +275,12 @@ class DIB(EnsembleMethod):
             if 'lr_after_first' in self.params.__dict__:
                 self.params.optimizer['config']['lr'] = self.params.lr_after_first
         if not self.use_sample_weights:
-            train_weights = None
+            sample_weights = None
         m = mlp.sequential_model(resampled, self.params,
             member_number = self.member_number, model_weights = self.weights,
             #the copy is because there is a bug in Keras that deletes names
             model_config = copy.deepcopy(self.model_config),
-            sample_weight = train_weights)
+            sample_weight = sample_weights)
         self.weights = [l.get_weights() for l in m.layers]
         injection_index = self.incremental_index + self.member_number * len(self.incremental_layers)
         if self.incremental_layers is not None:
@@ -290,9 +295,10 @@ class DIB(EnsembleMethod):
             self.model_config = copy.deepcopy(new_model_config)
             self.weights = self.weights[:injection_index]
         orig_train = self.resampler.get_train()
+        K = orig_train[1].shape[1]
         errors = common.errors(m, orig_train[0], orig_train[1])
-        e = np.sum((errors * self.D))
-        alpha = .5 * math.log((1-e)/e)
+        e = sum((errors * self.D)) / sum(errors + np.finfo(np.float32).eps)
+        alpha = math.log((1-e)/e + np.finfo(np.float32).eps) + math.log(K - 1)
         w = np.where(errors == 1,
             self.D * math.exp(alpha),
             self.D * math.exp(-alpha))
@@ -313,8 +319,7 @@ class DIB(EnsembleMethod):
         self.weights = None
         self.member_number = 0
         self.alphas = []
-        with open(params.model_file, 'r') as model_file:
-            model_yaml = model_file.read()
+        model_yaml = read_yaml_file(params.model_file)
         self.model_config = keras.models.model_from_yaml(model_yaml).get_config()
 
     def serialize(self):
@@ -347,10 +352,21 @@ class BRN(EnsembleMethod):
     def set_defaults(self):
         self._default_value('incremental_index', -1)
         self._default_value('use_sample_weights', False)
-        self._default_value('resample', False)
+        self._default_value('real', False)
+        self._default_value('early_stopping', False)
+        self._default_value('resample', True)
 
     def create_aggregator(self,params,members,train_set,valid_set):
-            return WeightedAveragingRunner(members,self.alphas,params)
+        if self.real:
+            return AveragingRunner(members, params, self._samme_proba)
+        else:
+            return WeightedAveragingRunner(members, self.alphas, params)
+
+    def _samme_proba(self, proba):
+        proba[proba < np.finfo(proba.dtype).eps] = np.finfo(proba.dtype).eps
+        log_proba = np.log(proba)
+        return (self.n_classes - 1) * (log_proba - (1. / self.n_classes)
+                    * log_proba.sum(axis=1)[:, np.newaxis])
 
     def _residual_block(self, injection_index, new_layers, m, member_number):
         #get output shape of last layer before injection from m
@@ -391,21 +407,21 @@ class BRN(EnsembleMethod):
         self.set_defaults()
         if self.member_number > 0 :
             if self.resample:
-                train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
+                train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
                 resampled = [
                     train_set,
                     self.resampler.get_valid(),
                     self.resampler.get_test()
                 ]
             else:
-                train_weights = self.D
+                sample_weights = self.D
                 resampled = [
                     self.resampler.get_train(),
                     self.resampler.get_valid(),
                     self.resampler.get_test()
                 ]
         else:
-            train_weights = None
+            sample_weights = None
             resampled = [
                 self.resampler.get_train(),
                 self.resampler.get_valid(),
@@ -414,13 +430,13 @@ class BRN(EnsembleMethod):
         if self.member_number > 0:
             self.params.n_epochs = self.n_epochs_after_first
         if not self.use_sample_weights:
-            train_weights = None
+            sample_weights = None
         m = mlp.sequential_model(resampled, self.params,
             member_number = self.member_number, model_weights = self.weights,
             #the copy is because there is a bug in Keras that deletes names
             model_config = copy.deepcopy(self.model_config),
             frozen_layers = self.frozen_layers,
-            sample_weight = train_weights)
+            sample_weight = sample_weights)
         self.weights = [l.get_weights() for l in m.layers]
         injection_index = self.incremental_index + self.member_number
         if self.incremental_layers is not None:
@@ -438,17 +454,48 @@ class BRN(EnsembleMethod):
             self.model_config = copy.deepcopy(new_model_config)
             self.weights = self.weights[:injection_index]
         orig_train = self.resampler.get_train()
+        K = orig_train[1].shape[1]
+        self.n_classes = K
         errors = common.errors(m, orig_train[0], orig_train[1])
-        e = np.sum((errors * self.D))
-        alpha = .5 * math.log((1-e)/e)
-        w = np.where(errors == 1,
-            self.D * math.exp(alpha),
-            self.D * math.exp(-alpha))
-        self.D = w / w.sum()
-        self.resampler.update_weights(self.D)
-        self.alphas.append(alpha)
-        self.member_number += 1
-        return (m.to_yaml(), m.get_weights())
+        error_rate = np.mean(errors)
+        if error_rate >= 1. - (1. / K):
+            return (None, None, False)
+        if not self.real:
+            if error_rate > 0:
+                continue_boosting = True
+                #e = sum((errors * self.D)) / sum(self.D)
+                e = np.average(errors, weights = self.D)
+                alpha = math.log((1-e)/e) + math.log(K - 1)
+                factor = np.clip(
+                        np.where(errors == 1, math.exp(alpha), math.exp(-alpha)),
+                        1e-3, 1e3)
+                w = self.D * factor
+                self.D = w / w.sum()
+                self.resampler.update_weights(self.D)
+            else:
+                continue_boosting = not self.early_stopping
+                alpha = 1.
+            self.alphas.append(alpha)
+            self.member_number += 1
+            return (m.to_yaml(), m.get_weights(), continue_boosting)
+        else:
+            #Real BRN
+            if error_rate > 0:
+                continue_boosting = True
+                y_coding = np.where(orig_train[1] == 0., -1. / (K - 1), 1.)
+                proba = m.predict(orig_train[0])
+                proba[proba < np.finfo(proba.dtype).eps] = np.finfo(proba.dtype).eps
+                alpha = 1.
+                w = self.D * np.exp( -1. * (((K - 1.) / K) *
+                    inner1d(y_coding, np.log(proba))))
+                self.D = w / w.sum()
+                self.resampler.update_weights(self.D)
+            else:
+                continue_boosting = not self.early_stopping
+                alpha = 1.
+            self.alphas.append(alpha)
+            self.member_number += 1
+            return (m.to_yaml(), m.get_weights(), continue_boosting)
 
     def prepare(self, params, dataset):
         self.params = params
@@ -459,8 +506,7 @@ class BRN(EnsembleMethod):
         self.member_number = 0
         self.alphas = []
         self.frozen_layers = []
-        with open(params.model_file, 'r') as model_file:
-            model_yaml = model_file.read()
+        model_yaml = read_yaml_file(params.model_file)
         self.model_config = keras.models.model_from_yaml(model_yaml).get_config()
 
     def serialize(self):
@@ -531,7 +577,7 @@ class BARN(EnsembleMethod):
     def create_member(self):
         self.set_defaults()
         if self.member_number > 0 :
-            train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
+            train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
             resampled = [
                 train_set,
                 self.resampler.get_valid(),
@@ -543,7 +589,7 @@ class BARN(EnsembleMethod):
                 self.resampler.get_valid(),
                 self.resampler.get_test()
             ]
-        train_weights = None
+        sample_weights = None
         if self.member_number > 0:
             self.params.n_epochs = self.n_epochs_after_first
         m = mlp.sequential_model(resampled, self.params,
@@ -577,8 +623,7 @@ class BARN(EnsembleMethod):
         self.weights = None
         self.member_number = 0
         self.frozen_layers = []
-        with open(params.model_file, 'r') as model_file:
-            model_yaml = model_file.read()
+        model_yaml = read_yaml_file(params.model_file)
         self.model_config = keras.models.model_from_yaml(model_yaml).get_config()
         self.freeze_old_layers = False
 
@@ -606,7 +651,7 @@ class AdaBoost_M1(EnsembleMethod):
             return WeightedAveragingRunner(members,self.alphas,params)
 
     def create_member(self):
-        train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
+        train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
         if self.member_number > 0 :
             resampled = [
                     train_set,
@@ -619,17 +664,19 @@ class AdaBoost_M1(EnsembleMethod):
                 self.resampler.get_valid(),
                 self.resampler.get_test()
             ]
-        train_weights = None
         m = mlp.sequential_model(resampled, self.params,
                 member_number = self.member_number)
         orig_train = self.resampler.get_train()
         errors = common.errors(m, orig_train[0], orig_train[1])
         e = np.sum((errors * self.D))
-        alpha = .5 * math.log((1-e)/e)
-        w = np.where(errors == 1,
-            self.D * math.exp(alpha),
-            self.D * math.exp(-alpha))
-        self.D = w / w.sum()
+        if e > 0:
+            alpha = .5 * math.log((1-e)/e)
+            w = np.where(errors == 1,
+                self.D * math.exp(alpha),
+                self.D * math.exp(-alpha))
+            self.D = w / w.sum()
+        else:
+            alpha = 1.0 / (self.member_number + 1)
         self.resampler.update_weights(self.D)
         self.alphas.append(alpha)
         self.member_number += 1
@@ -658,15 +705,15 @@ class AdaBoost_M2(EnsembleMethod):
             return WeightedAveragingRunner(members,self.alphas,params)
 
     def create_member(self):
-        train_weights = None
+        train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
         if self.member_number > 0 :
-            train_set, train_weights = self.resampler.make_new_train(self.params.resample_size)
             resampled = [
                     train_set,
                     self.resampler.get_valid(),
                     self.resampler.get_test()
             ]
         else:
+            sample_weights = None
             resampled = [
                 self.resampler.get_train(),
                 self.resampler.get_valid(),
@@ -674,15 +721,18 @@ class AdaBoost_M2(EnsembleMethod):
             ]
         m = mlp.sequential_model(resampled, self.params,
                 member_number = self.member_number,
-                sample_weight = train_weights)
+                sample_weight = sample_weights)
         orig_train = self.resampler.get_train()
         errors = common.errors(m, orig_train[0], orig_train[1])
         e = np.sum((errors * self.D))
-        alpha = .5 * math.log((1-e)/e)
-        w = np.where(errors == 1,
-            self.D * math.exp(alpha),
-            self.D * math.exp(-alpha))
-        self.D = w / w.sum()
+        if e > 0:
+            alpha = .5 * math.log((1-e)/e)
+            w = np.where(errors == 1,
+                self.D * math.exp(alpha),
+                self.D * math.exp(-alpha))
+            self.D = w / w.sum()
+        else:
+            alpha = 1.0 / (self.member_number + 1)
         self.resampler.update_weights(self.D)
         self.alphas.append(alpha)
         self.member_number += 1

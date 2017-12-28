@@ -84,13 +84,16 @@ if __name__ == '__main__':
     final_score = None
     for i in range(0,params.ensemble_size):
         print 'training member {0}'.format(i)
-        members.append(method.create_member())
+        m = method.create_member()
+        members.append(m[:2])
         ensemble = method.create_aggregator(params,members,train_set,valid_set)
         test_set_x, test_set_y = method.resampler.get_test()
         test_score = accuracy(ensemble,test_set_x,test_set_y)
         print 'Intermediate test accuracy: {0} %'.format(test_score * 100.)
         intermediate_scores.append(test_score)
         final_score = test_score
+        if len(m) > 2 and not m[2]: #the ensemble method told us to stop
+            break
     print 'Final test accuracy: {0} %'.format(final_score * 100.)
     if args.dump_shapes_to is not None:
         for i in range(len(members)):
