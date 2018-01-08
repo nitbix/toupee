@@ -250,6 +250,7 @@ class DIB(EnsembleMethod):
     def set_defaults(self):
         self._default_value('incremental_index', -1)
         self._default_value('use_sample_weights', False)
+        self._default_value('resample', False)
 
     def create_aggregator(self,params,members,train_set,valid_set):
             return WeightedAveragingRunner(members,self.alphas,params)
@@ -258,11 +259,18 @@ class DIB(EnsembleMethod):
         self.set_defaults()
         train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
         if self.member_number > 0 :
-            resampled = [
-                train_set,
-                self.resampler.get_valid(),
-                self.resampler.get_test()
-            ]
+            if self.resample:
+                resampled = [
+                    train_set,
+                    self.resampler.get_valid(),
+                    self.resampler.get_test()
+                ]
+            else:
+                resampled = [
+                    self.resampler.get_train(),
+                    self.resampler.get_valid(),
+                    self.resampler.get_test()
+                ]
         else:
             sample_weights = None
             resampled = [
@@ -333,10 +341,12 @@ DIB {{
     n_epochs_after_first: {0},
     incremental_index: {1},
     use_sample_weights: {2},
-    incremental_layers: {3}
+    resample: {3},
+    incremental_layers: {4}
 }}
         """.format(self.n_epochs_after_first,
                    self.use_sample_weights,
+                   self.resample,
                    self.incremental_index,
                    self.incremental_layers)
 
@@ -354,7 +364,7 @@ class BRN(EnsembleMethod):
         self._default_value('use_sample_weights', False)
         self._default_value('real', False)
         self._default_value('early_stopping', False)
-        self._default_value('resample', True)
+        self._default_value('resample', False)
 
     def create_aggregator(self,params,members,train_set,valid_set):
         if self.real:
@@ -460,7 +470,29 @@ class BRN(EnsembleMethod):
         error_rate = np.mean(errors)
         if error_rate >= 1. - (1. / K):
             return (None, None, False)
-        if not self.real:
+        if self.real:
+            #Real BRN
+            print("-" * 40)
+            print("error rate: {}".format(error_rate))
+            if error_rate > 0:
+                continue_boosting = True
+                y_coding = np.where(orig_train[1] == 0., -1. / (K - 1), 1.)
+                proba = m.predict(orig_train[0])
+                proba[proba < np.finfo(proba.dtype).eps] = np.finfo(proba.dtype).eps
+                print(proba[:10])
+                print(self.D[:10])
+                factor = np.exp( -1. * (((K - 1.) / K) *
+                    inner1d(y_coding, np.log(proba))))
+                print(factor[:10])
+                w = self.D * factor
+                print(w[:10])
+                self.D = w / w.sum()
+                self.resampler.update_weights(self.D)
+            else:
+                continue_boosting = not self.early_stopping
+            self.member_number += 1
+            return (m.to_yaml(), m.get_weights(), continue_boosting)
+        else:
             if error_rate > 0:
                 continue_boosting = True
                 #e = sum((errors * self.D)) / sum(self.D)
@@ -474,25 +506,7 @@ class BRN(EnsembleMethod):
                 self.resampler.update_weights(self.D)
             else:
                 continue_boosting = not self.early_stopping
-                alpha = 1.
-            self.alphas.append(alpha)
-            self.member_number += 1
-            return (m.to_yaml(), m.get_weights(), continue_boosting)
-        else:
-            #Real BRN
-            if error_rate > 0:
-                continue_boosting = True
-                y_coding = np.where(orig_train[1] == 0., -1. / (K - 1), 1.)
-                proba = m.predict(orig_train[0])
-                proba[proba < np.finfo(proba.dtype).eps] = np.finfo(proba.dtype).eps
-                alpha = 1.
-                w = self.D * np.exp( -1. * (((K - 1.) / K) *
-                    inner1d(y_coding, np.log(proba))))
-                self.D = w / w.sum()
-                self.resampler.update_weights(self.D)
-            else:
-                continue_boosting = not self.early_stopping
-                alpha = 1.
+                alpha = 1. / (self.member_number + 1)
             self.alphas.append(alpha)
             self.member_number += 1
             return (m.to_yaml(), m.get_weights(), continue_boosting)
