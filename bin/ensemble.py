@@ -15,6 +15,7 @@ import numpy
 import argparse
 import os
 import re
+import dill
 from toupee.common import accuracy
 
 if __name__ == '__main__':
@@ -36,6 +37,8 @@ if __name__ == '__main__':
                         help='gpu/cpu device to use for training')
     parser.add_argument('--dump-shapes-to', type=str, nargs='?', default=42,
                         help='location where to save the shape of the ensemble members')
+    parser.add_argument('--dump-to', type=str, nargs='?', default='ensemble.pkl',
+                        help='location where to save the ensemble')
 
     args = parser.parse_args()
     #this needs to come before all the toupee and theano imports
@@ -95,6 +98,9 @@ if __name__ == '__main__':
         if len(m) > 2 and not m[2]: #the ensemble method told us to stop
             break
     print 'Final test accuracy: {0} %'.format(final_score * 100.)
+    if args.dump_shapes_to is not None:
+        dill.dump({'members': members, 'ensemble': ensemble},
+                open(args.dump_to,"wb"))
     if args.dump_shapes_to is not None:
         for i in range(len(members)):
             with open("{0}member-{1}.model".format(args.dump_shapes_to, i),"w") as f:
