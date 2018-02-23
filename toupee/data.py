@@ -18,7 +18,7 @@ import scipy.ndimage as ni
 import scipy.stats
 import numpy.random
 import gzip
-import cPickle
+import pickle
 import math
 from skimage import transform as tf
 import multiprocessing
@@ -99,7 +99,7 @@ def load_data(dataset, resize_to = None, pickled = True,
         dataset = new_path
     print('loading data...')
     f = gzip.open(dataset, 'rb')
-    train_set, valid_set, test_set = cPickle.load(f)
+    train_set, valid_set, test_set = pickle.load(f)
     f.close()
   else:
     tr = np.load(dataset + 'train.npz')

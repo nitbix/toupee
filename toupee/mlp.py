@@ -22,11 +22,10 @@ import math
 from pymongo import MongoClient
 import json
 
-import data
-from data import Resampler, Transformer
-import config 
-import common
-import utils
+from toupee.data import Resampler, Transformer
+import toupee.config as config
+import toupee.common as common
+import toupee.utils as utils
 
 import keras
 import keras.preprocessing.image
@@ -72,9 +71,9 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     Initialize the parameters and create the network.
     """
 
-    print "loading model..."
+    print("loading model...")
     if sample_weight is not None:
-        print "using sample weights..."
+        print("using sample weights...")
     if model_config is not None:
         model = keras.models.Sequential.from_config(model_config)
     else:
@@ -92,7 +91,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         for i in range(len(model_weights)):
             model.layers[i].set_weights(model_weights[i])
 
-    print "total weight count: {0}".format(total_weights)
+    print("total weight count: {0}".format(total_weights))
 
     results = common.Results(params)
     data_holder = DataHolder(dataset)
@@ -119,7 +118,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     def callbacks_with_lr_scheduler(schedule):
         def scheduler(epoch):
             if epoch in schedule:
-                print "Changing learning rate to {0}".format(schedule[epoch])
+                print("Changing learning rate to {0}".format(schedule[epoch]))
                 model.optimizer.lr.set_value(schedule[epoch])
             return float(model.optimizer.lr.get_value())
         return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]
@@ -165,7 +164,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 
         #TODO: this does not work, the network is reset at every fit() call
         if pre_epochs > 0:
-            print "Pre-training without transformations..."
+            print("Pre-training without transformations...")
             pre_hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
                   batch_size = params.batch_size,
                   epochs = pre_epochs,
@@ -174,7 +173,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                   callbacks = callbacks_with_lr_scheduler({0: pre_lr}),
                   shuffle = params.shuffle_dataset,
                   sample_weight = sample_weight)
-        print "Training with transformations..."
+        print("Training with transformations...")
         if lr_schedule is not None:
             callbacks = callbacks_with_lr_scheduler(lr_schedule)
         if params.test_at_each_epoch:
@@ -199,7 +198,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             for k in pre_hist.history:
                 hist.history[k] = pre_hist.history[k] + hist.history[k]
     else:
-        print "Training without transformations..."
+        print("Training without transformations...")
         if lr_schedule is not None:
             callbacks = callbacks_with_lr_scheduler(lr_schedule)
         hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
@@ -224,9 +223,9 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             ('valid', valid_metrics),
             ('test', test_metrics)
         ):
-        print "{0}:".format(metrics_name)
+        print("{0}:".format(metrics_name))
         for i in range(len(metrics)):
-            print "  {0} = {1}".format(model.metrics_names[i], metrics[i])
+            print("  {0} = {1}".format(model.metrics_names[i], metrics[i]))
 
     results.set_history(hist)
     end_time = time.clock()
@@ -260,7 +259,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         else:
             table_name = 'results'
         table = db[table_name]
-        print "saving results to {0}@{1}:{2}".format(params.results_db,host,table)
+        print("saving results to {0}@{1}:{2}".format(params.results_db,host,table))
         table.insert(json.loads(json.dumps(results.__dict__,default=common.serialize)))
     if return_results:
         return model, results

@@ -10,12 +10,12 @@ __docformat__ = 'restructedtext en'
 
 import numpy as np
 from numpy.core.umath_tests import inner1d
-import mlp
-from data import Resampler, WeightedResampler
-import common
+import toupee.mlp as mlp
+from toupee.data import Resampler, WeightedResampler
+import toupee.common as common
 import math
 import keras
-from common import read_yaml_file
+from toupee.common import read_yaml_file
 from keras.layers import Input, Convolution2D, merge
 from keras.models import Model
 from pprint import pprint
@@ -166,7 +166,7 @@ class EnsembleMethod(common.ConfiguredObject):
 
     def _default_value(self, param_name, value):
         if param_name not in self.__dict__:
-            print "WARNING: setting default for: {0} to {1}".format(param_name, value) 
+            print("WARNING: setting default for: {0} to {1}".format(param_name, value))
             self.__dict__[param_name] = value
 
     def create_aggregator(self,x,y,train_set,valid_set):

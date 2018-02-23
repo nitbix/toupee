@@ -8,9 +8,9 @@ All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
-import ensemble_methods
+# import toupee.ensemble_methods
 import yaml 
-import parameters
+import toupee.parameters as parameters
 import os
 
 def yaml_include(loader, node):
