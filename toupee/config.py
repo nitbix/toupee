@@ -40,6 +40,7 @@ defaults = { 'random_seed': None,
              'pickled' : False,
              'zca_whitening' : False,
              'test_at_each_epoch': True,
+             'classification' : True
            }
 
 class Loader(yaml.Loader):

@@ -94,6 +94,16 @@ def errors(classifier, test_set_x, test_set_y):
 def accuracy(classifier, test_set_x, test_set_y):
     e = errors(classifier, test_set_x, test_set_y)
     return 1.0 - (float(e.sum()) / float(test_set_y.shape[0]))
+    
+def euclidian_distance(predictor, test_set_x, test_set_y):
+    #euclidian_distance = sqrt{(y[0]-y_pred[0])^2 + (y[1]-y_pred[1])^2 + ... + (y[n-1]-y_pred[n-1])^2}
+    prediction = predictor.predict_classes(test_set_x)
+    elementwise_d_squared = np.square(prediction - test_set_y)
+    euclidian_distance = np.sqrt(np.sum(elementwise_d_squared, axis = 1))
+    return(np.sum(euclidian_distance) / float(test_set_y.shape[0]))
+    
+    
+    
 
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()
