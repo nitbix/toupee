@@ -103,13 +103,13 @@ def accuracy(classifier, test_set_x, test_set_y):
 def distance(predictor, test_set_x, test_set_y):
     #euclidian_distance = sqrt{(y[0]-y_pred[0])^2 + (y[1]-y_pred[1])^2 + ... + (y[n-1]-y_pred[n-1])^2}
     prediction = predictor.predict(test_set_x)
-    elementwise_d_squared = np.square(prediction - test_set_y)
-    euclidian_distance = np.sqrt(np.sum(elementwise_d_squared, axis = 1))
+    elementwise_d_squared = numpy.square(prediction - test_set_y)
+    euclidian_distance = numpy.sqrt(numpy.sum(elementwise_d_squared, axis = 1))
     return euclidian_distance
 
 def euclidian_distance(predictor, test_set_x, test_set_y):
     euclidian_distance = distance(predictor, test_set_x, test_set_y)
-    return(np.sum(euclidian_distance) / float(test_set_y.shape[0]))
+    return(numpy.sum(euclidian_distance) / float(test_set_y.shape[0]))
     
     
     
