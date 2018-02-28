@@ -103,7 +103,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         scorer_name = 'accuracy'
         monitor_type = 'val_acc'
     else:
-        scorer_name = 'loss'
+        scorer_name = 'mean_squared_error'
         monitor_type = 'val_loss'
     
 
