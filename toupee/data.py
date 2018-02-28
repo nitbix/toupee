@@ -213,6 +213,11 @@ class Resampler:
         self.valid_y = self.valid_y.reshape(self.valid_y.shape[0],-1)
         self.test_y = self.test_y.reshape(self.test_y.shape[0],-1)
         
+        self.train = [self.train_x, self.train_y]
+        self.valid = [self.valid_x, self.valid_y]
+        self.test = [self.test_x, self.test_y]
+        
+        
     def make_new_train(self,sample_size,distribution=None):
         weights = []
         if distribution is None:
