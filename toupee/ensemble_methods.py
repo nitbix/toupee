@@ -32,7 +32,7 @@ class Aggregator:
         raise NotImplementedException()
 
     def predict(self, X):
-        raise NotImplementedException()
+        return self.predict(X)
 
     def predict_classes(self, X):
         return np.argmax(self.predict(X), axis = 1)
@@ -111,6 +111,32 @@ class WeightedAveragingRunner(Aggregator):
         a = np.sum(prob_arr,axis=0) / float(len(self.members))
         m = np.argmax(a,axis=1)
         return np.eye(out_shape[1])[m]
+        
+        
+class WeightedAveragingRunner_Regression(Aggregator):
+    """
+    Take an Ensemble and produce a weighted average, usually done in AdaBoost (for regressions)
+    """
+
+
+    def __init__(self,members,weights,params):
+        self.params = params
+        self.members = members
+        self.weights = weights
+
+    def predict(self,data):
+        result = []
+        for i in range(len(self.members)):
+            m_yaml, m_weights = self.members[i]
+            m = keras.models.model_from_yaml(m_yaml)
+            m.set_weights(m_weights)
+            r = m.predict(data, batch_size = self.params.batch_size)
+            result.append(r * self.weights[i])
+            
+        result_arr = np.array(result) / np.sum(self.weights)
+        final_result = np.sum(result_arr,axis=0) / float(len(self.members))
+
+        return final_result
 
 
 #class StackingRunner(Aggregator):
@@ -764,6 +790,73 @@ class AdaBoost_M2(EnsembleMethod):
         return 'AdaBoostM2'
 
 
+class AdaBoost_Regression(EnsembleMethod):
+    """
+    Create an AdaBoost Ensemble from parameters 
+    (based on [1]"Improving Regressors using Boosting Techniques", 1997)
+    """
+
+    yaml_tag = u'!AdaBoostRegression'
+
+    def create_aggregator(self,params,members,train_set,valid_set):
+            return WeightedAveragingRunner_Regression(members,self.alphas,params)
+
+    def create_member(self):
+        train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
+        if self.member_number > 0 :
+            resampled = [
+                    train_set,
+                    self.resampler.get_valid(),
+                    self.resampler.get_test()
+            ]
+        else:
+            resampled = [
+                self.resampler.get_train(),
+                self.resampler.get_valid(),
+                self.resampler.get_test()
+            ]
+        m = mlp.sequential_model(resampled, self.params,            # <--- trains the new model(step 2 in [1]) 
+                member_number = self.member_number)
+        orig_train = self.resampler.get_train()
+        
+        distance = common.distance(m, orig_train[0], orig_train[1]) # <--- loss for each element (steps 3 and 4 in [1])
+        
+        #TO DO: this should be automatically computed, see [1]
+        max_dist = 100
+        for i in distance:
+            assert i < max_dist
+        distance_norm = distance / max_dist                         # <--- the loss function is now normalized in range [0,1]
+        
+        weighted_dist = np.sum((distance_norm * self.D))            # <--- average weighted loss (step 5 in [1])
+        
+        beta = weighted_dist / (1 - weighted_dist)                  # <--- computation of the confidence in the predictor (step 6 in [1])
+                                                                    #       [low beta = good prediction]
+        
+        w = self.D * (beta ** (1 - distance_norm))                  # <--- updates the weights for each sample (step 7 in [1])
+        self.D = w / w.sum()
+        
+        #alfa = the better the model is (smaller beta), the bigger alfa will be   [alfa is computed to maintain consistency with other models]
+        alfa = 0.5 * log(1/beta)
+        
+        self.resampler.update_weights(self.D)
+        self.alphas.append(alpha)
+        self.member_number += 1
+        return (m.to_yaml(), m.get_weights())
+
+    def prepare(self, params, dataset):
+        self.params = params
+        self.dataset = dataset
+        self.resampler = WeightedResampler(dataset)
+        self.D = self.resampler.weights                             # <--- sets the initial weights (step 1 in [1])
+        self.alphas = []
+        self.member_number = 0
+
+    def serialize(self):
+        return 'AdaBoostRegression'
+        
+        
+        
+        
 #class Stacking(EnsembleMethod):
 #    """
 #    Create a Stacking Runner from parameters

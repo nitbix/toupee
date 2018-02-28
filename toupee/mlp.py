@@ -97,8 +97,17 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     data_holder = DataHolder(dataset)
 
     start_time = time.clock()
+    
+    
+    if params.classification == True:   
+        scorer_name = 'accuracy'
+        monitor_type = 'val_acc'
+    else:
+        scorer_name = 'loss'
+        monitor_type = 'val_loss'
+    
 
-    metrics = ['accuracy']
+    metrics = [scorer_name]
     if 'additional_metrics' in params.__dict__:
         metrics = metrics + additional_metrics
 
@@ -106,7 +115,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         model.layers[l].trainable = False
 
     checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
-            monitor = 'val_acc',
+            monitor = monitor_type,
             mode = 'max')
     callbacks = [checkpointer]
 
@@ -242,8 +251,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     else:
         results.set_final_observation(valid_metrics[1]* 100., None,
                 checkpointer.best_epoch + 1)
-        print('Selection : Best valid score of {0} %'.format(
-              valid_metrics[1] * 100.))
+        print('Selection : Best valid score of {0}'.format(
+              valid_metrics[1]))
 
     if member_number is not None:
         results.member_number = member_number
