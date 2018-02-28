@@ -836,7 +836,7 @@ class AdaBoost_Regression(EnsembleMethod):
         self.D = w / w.sum()
         
         #alfa = the better the model is (smaller beta), the bigger alfa will be   [alfa is computed to maintain consistency with other models]
-        alfa = 0.5 * log(1/beta)
+        alfa = 0.5 * math.log(1/beta)
         
         self.resampler.update_weights(self.D)
         self.alphas.append(alpha)
