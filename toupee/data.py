@@ -208,6 +208,11 @@ class Resampler:
         self.r_train = None
         np.random.seed(seed)
         
+        #to avoid ending up with 1D arrays
+        self.train_y = self.train_y.reshape(self.train_y.shape[0],-1)
+        self.valid_y = self.valid_y.reshape(self.valid_y.shape[0],-1)
+        self.test_y = self.test_y.reshape(self.test_y.shape[0],-1)
+        
     def make_new_train(self,sample_size,distribution=None):
         weights = []
         if distribution is None:

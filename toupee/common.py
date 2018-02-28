@@ -103,6 +103,8 @@ def accuracy(classifier, test_set_x, test_set_y):
 def distance(predictor, test_set_x, test_set_y):
     #euclidian_distance = sqrt{(y[0]-y_pred[0])^2 + (y[1]-y_pred[1])^2 + ... + (y[n-1]-y_pred[n-1])^2}
     prediction = predictor.predict(test_set_x)
+    print("prediction shape:", prediction.shape)
+    print("test_set_y shape:", test_set_y.shape)
     elementwise_d_squared = numpy.square(prediction - test_set_y)
     euclidian_distance = numpy.sqrt(numpy.sum(elementwise_d_squared, axis = 1))
     return euclidian_distance
