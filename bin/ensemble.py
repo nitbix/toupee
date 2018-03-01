@@ -106,8 +106,9 @@ if __name__ == '__main__':
         ensemble = method.create_aggregator(params,members,train_set,valid_set)
         test_set_x, test_set_y = method.resampler.get_test()
         
+        test_score = []
         for j in range(len(scorer)):
-            test_score[j] = scorer[j](ensemble,test_set_x,test_set_y)
+            test_score.append(scorer[j](ensemble,test_set_x,test_set_y))
             print('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j]))
         
         intermediate_scores.append(test_score)
