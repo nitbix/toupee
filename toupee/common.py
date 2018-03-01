@@ -101,15 +101,24 @@ def accuracy(classifier, test_set_x, test_set_y):
     
 #for regression problems:   
 def distance(predictor, test_set_x, test_set_y):
-    #euclidian_distance = sqrt{(y[0]-y_pred[0])^2 + (y[1]-y_pred[1])^2 + ... + (y[n-1]-y_pred[n-1])^2}
+    #returns the distance squared (=MMSE)
     prediction = predictor.predict(test_set_x)
     elementwise_d_squared = numpy.square(prediction - test_set_y)
-    euclidian_distance = numpy.sqrt(numpy.sum(elementwise_d_squared, axis = 1))
-    return euclidian_distance
+    euclidian_distance_squared = numpy.sum(elementwise_d_squared, axis = 1)
+    return euclidian_distance_squared
 
 def euclidian_distance(predictor, test_set_x, test_set_y):
-    euclidian_distance = distance(predictor, test_set_x, test_set_y)
+    #euclidian_distance = sqrt{(y[0]-y_pred[0])^2 + (y[1]-y_pred[1])^2 + ... + (y[n-1]-y_pred[n-1])^2}
+    euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
+    euclidian_distance = numpy.sqrt(euclidian_distance_squared)
     return(numpy.sum(euclidian_distance) / float(test_set_y.shape[0]))
+    
+def relative_distance(predictor, test_set_x, test_set_y):
+    #relative_distance = distance(y-y_pred) / sqrt(y^2)      [sqrt(y^2) = L2 norm]
+    euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
+    y_squared = numpy.sum(numpy.square(test_set_y), axis = 1)                   #both this and the previous line will need a sqrt, which can be done after the division
+    relative_distance = numpy.sqrt(euclidian_distance_squared / y_squared)
+    return(numpy.sum(relative_distance) / float(test_set_y.shape[0]))
     
     
     

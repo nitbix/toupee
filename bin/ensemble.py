@@ -16,7 +16,7 @@ import argparse
 import os
 import re
 import dill
-from toupee.common import accuracy, euclidian_distance
+from toupee.common import accuracy, euclidian_distance, relative_distance
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a single MLP')
@@ -84,29 +84,37 @@ if __name__ == '__main__':
     valid_set = method.resampler.get_valid()
     
     #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
+    scorer = []
     if params.classification == True:   
-        scorer = accuracy
-        scorer_name = 'accuracy'
+        scorer[0] = accuracy
+        scorer_name[0] = 'accuracy'
     else:
-        scorer = euclidian_distance
-        scorer_name = 'euclidian distance'
+        scorer[0] = euclidian_distance
+        scorer[1] = relative_distance
+        scorer_name[0] = 'euclidian distance'
+        scorer_name[1] = 'relative distance'
     
     members = []
     intermediate_scores = []
     final_score = None
     for i in range(0,params.ensemble_size):
-        print('training member {0}'.format(i))
+        print('\n\ntraining member {0}'.format(i))
         m = method.create_member()
         members.append(m[:2])
         ensemble = method.create_aggregator(params,members,train_set,valid_set)
         test_set_x, test_set_y = method.resampler.get_test()
-        test_score = scorer(ensemble,test_set_x,test_set_y)
-        print('Intermediate test {0}: {1}'.format(scorer_name, test_score))
+        
+        for j in len(scorer):
+            test_score[j] = scorer[j](ensemble,test_set_x,test_set_y)
+            print('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j]))
+        
         intermediate_scores.append(test_score)
         final_score = test_score
         if len(m) > 2 and not m[2]: #the ensemble method told us to stop
             break
-    print('Final test {0}: {1}'.format(scorer_name, test_score))
+    
+    for j in len(scorer): print('Final test {0}: {1}'.format(scorer_name[j], test_score[j]))
+    
     if args.dump_shapes_to is not None:
         dill.dump({'members': members, 'ensemble': ensemble},
                 open(args.dump_to,"wb"))
