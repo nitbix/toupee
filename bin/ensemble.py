@@ -85,14 +85,16 @@ if __name__ == '__main__':
     
     #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
     scorer = []
+    scorer_name = []
     if params.classification == True:   
-        scorer[0] = accuracy
-        scorer_name[0] = 'accuracy'
+        scorer.append(accuracy)
+        scorer_name.append('accuracy')
     else:
-        scorer[0] = euclidian_distance
-        scorer[1] = relative_distance
-        scorer_name[0] = 'euclidian distance'
-        scorer_name[1] = 'relative distance'
+        scorer.append(euclidian_distance)
+        scorer_name.append('euclidian distance')
+        
+        scorer.append(relative_distance)
+        scorer_name.append('relative distance')
     
     members = []
     intermediate_scores = []
