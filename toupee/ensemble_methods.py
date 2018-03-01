@@ -822,7 +822,7 @@ class AdaBoost_Regression(EnsembleMethod):
         distance = common.distance(m, orig_train[0], orig_train[1]) # <--- loss for each element (steps 3 and 4 in [1])
         
         #TO DO: this should be automatically computed, see [1]
-        max_dist = 100
+        max_dist = 200
         for i in distance:
             assert i < max_dist, "distance = {0}".format(i)
         distance_norm = distance / max_dist                         # <--- the loss function is now normalized in range [0,1]
