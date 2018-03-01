@@ -824,7 +824,7 @@ class AdaBoost_Regression(EnsembleMethod):
         #TO DO: this should be automatically computed, see [1]
         max_dist = 100
         for i in distance:
-            assert i < max_dist
+            assert i < max_dist, "distance = %f", i
         distance_norm = distance / max_dist                         # <--- the loss function is now normalized in range [0,1]
         
         weighted_dist = np.sum((distance_norm * self.D))            # <--- average weighted loss (step 5 in [1])
