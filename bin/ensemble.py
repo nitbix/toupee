@@ -106,7 +106,7 @@ if __name__ == '__main__':
         ensemble = method.create_aggregator(params,members,train_set,valid_set)
         test_set_x, test_set_y = method.resampler.get_test()
         
-        for j in len(scorer):
+        for j in range(len(scorer)):
             test_score[j] = scorer[j](ensemble,test_set_x,test_set_y)
             print('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j]))
         
@@ -115,7 +115,7 @@ if __name__ == '__main__':
         if len(m) > 2 and not m[2]: #the ensemble method told us to stop
             break
     
-    for j in len(scorer): print('Final test {0}: {1}'.format(scorer_name[j], test_score[j]))
+    for j in range(len(scorer)): print('Final test {0}: {1}'.format(scorer_name[j], test_score[j]))
     
     if args.dump_shapes_to is not None:
         dill.dump({'members': members, 'ensemble': ensemble},
