@@ -147,8 +147,10 @@ if __name__ == '__main__':
                     "params": params.__dict__,
                     "intermediate_test_scores" : intermediate_scores,
                     "final_test_score" : final_score,
-                    "date": datetime.datetime.utcnow()
-                    "code version": subprocess.check_output(["git", "describe","--always"]).strip()
+                    "best_score": np.max(intermediate_scores),
+                    "best_score_ensemble": np.argmax(intermediate_scores),
+                    "date": datetime.datetime.utcnow(),
+                    "code version": subprocess.check_output(["git", "describe","--always"]).strip(),
                   }
         
         #adds the dependency ID
