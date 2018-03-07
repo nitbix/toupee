@@ -165,4 +165,14 @@ if __name__ == '__main__':
         
         id = table.insert_one(results).inserted_id
         
+        #prints stuff if needed [for now its on, to help with the dbg]
+        if True:
+            import pprint
+            print("PRINTING DB ENTRY:")
+            print("DB NAME = ", params.results_db)
+            print("TABLE NAME = ", table_name)
+            print("TABLE ENRTY:")
+            latest_entry = table.find().sort("_id", -1).limit(1)
+            pprint.pprint(latest_entry[0])
+        
         print("\n\nDone. [Results stored in the DB, ID = {0}]".format(id))
