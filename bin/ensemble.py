@@ -33,6 +33,8 @@ if __name__ == '__main__':
                         help='mongodb host name for storing results')
     parser.add_argument('--results-table', nargs='?',
                         help='mongodb table name for storing results')
+    parser.add_argument('--results-dep', nargs='?',
+                        help='mongodb table name for dependencies')
     parser.add_argument('--device', nargs='?',
                         help='gpu/cpu device to use for training')
     parser.add_argument('--dump-shapes-to', type=str, nargs='?', default=42,
@@ -55,6 +57,7 @@ if __name__ == '__main__':
         (args.results_db, 'results_db'),
         (args.results_host, 'results_host'),
         (args.results_table, 'results_table'),
+        (args.results_dep, 'results_dep'),
         (args.epochs, 'n_epochs'),
     ]
     
@@ -139,9 +142,27 @@ if __name__ == '__main__':
         else:
             table_name = 'results'
         table = db[table_name]
+        
         results = {
                     "params": params.__dict__,
                     "intermediate_test_scores" : intermediate_scores,
                     "final_test_score" : final_score,
+                    "date": datetime.datetime.utcnow()
+                    "code version": subprocess.check_output(["git", "describe","--always"]).strip()
                   }
-        table.insert(json.loads(json.dumps(results,default=common.serialize)))
+        
+        #adds the dependency ID
+        if 'results_dep' in params.__dict__:
+            for i in params.results_dep:
+                depend_col = db[i]
+                if(depend_col.count() > 0): #if the collection exists
+                    latest_entry = depend_col.find().sort("_id", -1).limit(1)
+                    latest_id = latest_entry[0]['_id']
+                else:
+                    latest_id = 'no previous entry!'
+                column_name = i + '_id'
+                results[column_name] = latest_id
+        
+        id = table.insert_one(results).inserted_id
+        
+        print("\n\nDone. [Results stored in the DB, ID = {0}]".format(id))
