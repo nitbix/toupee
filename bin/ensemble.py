@@ -155,15 +155,14 @@ if __name__ == '__main__':
         
         #adds the dependency ID
         if 'results_dep' in params.__dict__:
-            for i in params.results_dep:
-                depend_col = db[i]
-                if(depend_col.count() > 0): #if the collection exists
-                    latest_entry = depend_col.find().sort("_id", -1).limit(1)
-                    latest_id = latest_entry[0]['_id']
-                else:
-                    latest_id = 'no previous entry!'
-                column_name = i + '_id'
-                results[column_name] = latest_id
+            depend_col = db[params.results_dep]
+            if(depend_col.count() > 0): #if the collection exists
+                latest_entry = depend_col.find().sort("_id", -1).limit(1)
+                latest_id = latest_entry[0]['_id']
+            else:
+                latest_id = 'no previous entry!'
+            column_name = params.results_dep + '_id'
+            results[column_name] = latest_id
         
         id = table.insert_one(results).inserted_id
         

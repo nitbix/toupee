@@ -131,6 +131,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
                 model.optimizer.lr.set_value(schedule[epoch])
             return float(model.optimizer.lr.get_value())
         return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]
+        
 
     lr_schedule = None
     if isinstance(params.optimizer['config']['lr'], dict):
