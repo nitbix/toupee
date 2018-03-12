@@ -18,6 +18,11 @@ import re
 import dill
 from toupee.common import accuracy, euclidian_distance, relative_distance
 
+from pymongo import MongoClient
+import numpy as np
+import datetime
+import subprocess
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a single MLP')
     parser.add_argument('params_file', help='the parameters file')
@@ -129,6 +134,7 @@ if __name__ == '__main__':
             with open("{0}member-{1}.model".format(args.dump_shapes_to, i),"w") as f:
                 f.truncate()
                 f.write(members[i][0])
+                
     if 'results_db' in params.__dict__:
         if 'results_host' in params.__dict__:
             host = params.results_host
@@ -143,15 +149,19 @@ if __name__ == '__main__':
             table_name = 'results'
         table = db[table_name]
         
+        #removes mongodb-buggy "params" entries
+        params.method = ''
+        
         results = {
+                    "params_file": args.params_file,
                     "params": params.__dict__,
                     "intermediate_test_scores" : intermediate_scores,
                     "final_test_score" : final_score,
                     "best_score": np.max(intermediate_scores),
-                    "best_score_ensemble": np.argmax(intermediate_scores),
+                    "best_score_after_ensemble_#": np.argmax(intermediate_scores).item(),   #without "item()", defaults to np.int64, which is not supported by mongodb
                     "date": datetime.datetime.utcnow(),
                     "code version": subprocess.check_output(["git", "describe","--always"]).strip(),
-                  }
+                  }                
         
         #adds the dependency ID
         if 'results_dep' in params.__dict__:
@@ -163,6 +173,7 @@ if __name__ == '__main__':
                 latest_id = 'no previous entry!'
             column_name = params.results_dep + '_id'
             results[column_name] = latest_id
+        
         
         id = table.insert_one(results).inserted_id
         

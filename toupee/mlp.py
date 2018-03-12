@@ -257,20 +257,21 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 
     if member_number is not None:
         results.member_number = member_number
-    if 'results_db' in params.__dict__ :
-        if 'results_host' in params.__dict__:
-            host = params.results_host
-        else:
-            host = None
-        conn = MongoClient(host=host)
-        db = conn[params.results_db]
-        if 'results_table' in params.__dict__: 
-            table_name = params.results_table
-        else:
-            table_name = 'results'
-        table = db[table_name]
-        print("saving results to {0}@{1}:{2}".format(params.results_db,host,table))
-        table.insert(json.loads(json.dumps(results.__dict__,default=common.serialize)))
+    #JOAO: this commented section tries to input a 100MB+ file in the DB. TODO: fix this
+    # if 'results_db' in params.__dict__ :
+        # if 'results_host' in params.__dict__:
+            # host = params.results_host
+        # else:
+            # host = None
+        # conn = MongoClient(host=host)
+        # db = conn[params.results_db]
+        # if 'results_table' in params.__dict__: 
+            # table_name = params.results_table
+        # else:
+            # table_name = 'results'
+        # table = db[table_name]
+        # print("saving results to {0}@{1}:{2}".format(params.results_db,host,table))
+        # table.insert(json.loads(json.dumps(results.__dict__,default=common.serialize)))
     if return_results:
         return model, results
     else:
