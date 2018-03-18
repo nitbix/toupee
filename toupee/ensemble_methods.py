@@ -192,7 +192,7 @@ class EnsembleMethod(common.ConfiguredObject):
 
     def _default_value(self, param_name, value):
         if param_name not in self.__dict__:
-            print("WARNING: setting default for: {0} to {1}".format(param_name, value))
+            print(("WARNING: setting default for: {0} to {1}".format(param_name, value)))
             self.__dict__[param_name] = value
 
     def create_aggregator(self,x,y,train_set,valid_set):
@@ -224,7 +224,7 @@ class Bagging(EnsembleMethod):
     Create a Bagging Runner from parameters
     """
 
-    yaml_tag = u'!Bagging'
+    yaml_tag = '!Bagging'
 
     def __init__(self,voting=False):
         self.voting = voting
@@ -271,7 +271,7 @@ class DIB(EnsembleMethod):
     """
 
     #TODO: use sample weight
-    yaml_tag = u'!DIB'
+    yaml_tag = '!DIB'
 
     def set_defaults(self):
         self._default_value('incremental_index', -1)
@@ -383,7 +383,7 @@ class BRN(EnsembleMethod):
     """
 
     #TODO: use sample weight
-    yaml_tag = u'!BRN'
+    yaml_tag = '!BRN'
 
     def set_defaults(self):
         self._default_value('incremental_index', -1)
@@ -486,7 +486,7 @@ class BRN(EnsembleMethod):
                     self.member_number)
             new_model_config = self.model_config[:injection_index] + [new_block] + self.model_config[injection_index:]
             if self.freeze_old_layers:
-                self.frozen_layers = range(0,injection_index)
+                self.frozen_layers = list(range(0,injection_index))
             self.model_config = copy.deepcopy(new_model_config)
             self.weights = self.weights[:injection_index]
         orig_train = self.resampler.get_train()
@@ -498,20 +498,20 @@ class BRN(EnsembleMethod):
             return (None, None, False)
         if self.real:
             #Real BRN
-            print("-" * 40)
-            print("error rate: {}".format(error_rate))
+            print(("-" * 40))
+            print(("error rate: {}".format(error_rate)))
             if error_rate > 0:
                 continue_boosting = True
                 y_coding = np.where(orig_train[1] == 0., -1. / (K - 1), 1.)
                 proba = m.predict(orig_train[0])
                 proba[proba < np.finfo(proba.dtype).eps] = np.finfo(proba.dtype).eps
-                print(proba[:10])
-                print(self.D[:10])
+                print((proba[:10]))
+                print((self.D[:10]))
                 factor = np.exp( -1. * (((K - 1.) / K) *
                     inner1d(y_coding, np.log(proba))))
-                print(factor[:10])
+                print((factor[:10]))
                 w = self.D * factor
-                print(w[:10])
+                print((w[:10]))
                 self.D = w / w.sum()
                 self.resampler.update_weights(self.D)
             else:
@@ -570,7 +570,7 @@ class BARN(EnsembleMethod):
     """
     #TODO: use sample weight
 
-    yaml_tag = u'!BARN'
+    yaml_tag = '!BARN'
 
     def set_defaults(self):
         self._default_value('incremental_index', -1)
@@ -650,7 +650,7 @@ class BARN(EnsembleMethod):
                     self.member_number)
             new_model_config = self.model_config[:injection_index] + [new_block] + self.model_config[injection_index:]
             if self.freeze_old_layers:
-                self.frozen_layers = range(0,injection_index)
+                self.frozen_layers = list(range(0,injection_index))
             self.model_config = copy.deepcopy(new_model_config)
             self.weights = self.weights[:injection_index]
         self.member_number += 1
@@ -685,7 +685,7 @@ class AdaBoost_M1(EnsembleMethod):
     Create an AdaBoost Ensemble from parameters
     """
 
-    yaml_tag = u'!AdaBoostM1'
+    yaml_tag = '!AdaBoostM1'
 
     def create_aggregator(self,params,members,train_set,valid_set):
             return WeightedAveragingRunner(members,self.alphas,params)
@@ -739,7 +739,7 @@ class AdaBoost_M2(EnsembleMethod):
     Create an AdaBoost Ensemble from parameters
     """
 
-    yaml_tag = u'!AdaBoostM2'
+    yaml_tag = '!AdaBoostM2'
 
     def create_aggregator(self,params,members,train_set,valid_set):
             return WeightedAveragingRunner(members,self.alphas,params)
@@ -796,7 +796,7 @@ class AdaBoost_Regression(EnsembleMethod):
     (based on [1]"Improving Regressors using Boosting Techniques", 1997)
     """
 
-    yaml_tag = u'!AdaBoostRegression'
+    yaml_tag = '!AdaBoostRegression'
 
     def create_aggregator(self,params,members,train_set,valid_set):
             return WeightedAveragingRunner_Regression(members,self.alphas,params)

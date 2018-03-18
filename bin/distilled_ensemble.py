@@ -57,7 +57,7 @@ if __name__ == '__main__':
     ]
     
     if 'seed' in args.__dict__:
-        print "setting random seed to: {0}".format(args.seed)
+        print("setting random seed to: {0}".format(args.seed))
         numpy.random.seed(args.seed)
     from toupee import data
     from toupee import config 
@@ -86,20 +86,20 @@ if __name__ == '__main__':
     final_score = None
     continue_learning = True
     for i in range(0,params.ensemble_size):
-        print 'training member {0}'.format(i)
+        print('training member {0}'.format(i))
         m = method.create_member()
         if m[0] is not None:
             members.append(m[:2])
             ensemble = method.create_aggregator(params,members,train_set,valid_set)
             test_set_x, test_set_y = method.resampler.get_test()
             test_score = accuracy(ensemble,test_set_x,test_set_y)
-            print 'Intermediate test accuracy: {0} %'.format(test_score * 100.)
+            print('Intermediate test accuracy: {0} %'.format(test_score * 100.))
             intermediate_scores.append(test_score)
             final_score = test_score
         if len(m) > 2 and not m[2]: #the ensemble method told us to stop
             break
-    print "\nFinal Ensemble test accuracy: {0} %".format(final_score * 100.)
-    print "Preparing distillation dataset.."
+    print("\nFinal Ensemble test accuracy: {0} %".format(final_score * 100.))
+    print("Preparing distillation dataset..")
     train_set_yhat = ensemble.predict(dataset[0][0])
     distilled_dataset = ((dataset[0][0], train_set_yhat), dataset[1], dataset[2])
     params = original_params
@@ -114,7 +114,7 @@ if __name__ == '__main__':
             host = params.results_host
         else:
             host = None
-        print "saving results to {0}@{1}".format(params.results_db,host)
+        print("saving results to {0}@{1}".format(params.results_db,host))
         conn = MongoClient(host=host)
         db = conn[params.results_db]
         if 'results_table' in params.__dict__: 

@@ -24,7 +24,7 @@ if __name__ == '__main__':
     valid_set = method.resampler.get_valid()
     members = []
     for i in range(0,params.ensemble_size):
-        print 'training member {0}'.format(i)
+        print('training member {0}'.format(i))
         new_member = method.create_member(x,y)
         members.append(new_member)
         gc.collect()

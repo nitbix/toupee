@@ -11,6 +11,7 @@ __docformat__ = 'restructedtext en'
 import numpy
 import yaml
 import os
+import collections
 
 numpy.set_printoptions(threshold=numpy.inf)
 
@@ -74,9 +75,9 @@ def serialize(o):
             return numpy.asfarray(o).tolist()
         except:
             if isinstance(o, object):
-                if 'serialize' in dir(o) and callable(getattr(o,'serialize')):
+                if 'serialize' in dir(o) and isinstance(getattr(o,'serialize'), collections.Callable):
                     return o.serialize()
-                if 'tolist' in dir(o) and callable(getattr(o,'tolist')):
+                if 'tolist' in dir(o) and isinstance(getattr(o,'tolist'), collections.Callable):
                     return o.tolist()
                 try:
                     return json.loads(json.dumps(o.__dict__,default=serialize))

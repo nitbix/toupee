@@ -53,14 +53,14 @@ if __name__ == '__main__':
     ]
     
     if 'seed' in args.__dict__:
-        print "setting random seed to: {0}".format(args.seed)
+        print(("setting random seed to: {0}".format(args.seed)))
         numpy.random.seed(args.seed)
     from toupee import data
     from toupee import config 
     from toupee.mlp import sequential_model
 
     import toupee
-    print "using toupee version {0}".format(toupee.version)
+    print(("using toupee version {0}".format(toupee.version)))
     params = config.load_parameters(args.params_file)
 
     def arg_params(arg_value,param):

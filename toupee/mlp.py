@@ -91,7 +91,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         for i in range(len(model_weights)):
             model.layers[i].set_weights(model_weights[i])
 
-    print("total weight count: {0}".format(total_weights))
+    print(("total weight count: {0}".format(total_weights)))
 
     results = common.Results(params)
     data_holder = DataHolder(dataset)
@@ -127,7 +127,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     def callbacks_with_lr_scheduler(schedule):
         def scheduler(epoch):
             if epoch in schedule:
-                print("Changing learning rate to {0}".format(schedule[epoch]))
+                print(("Changing learning rate to {0}".format(schedule[epoch])))
                 model.optimizer.lr.set_value(schedule[epoch])
             return float(model.optimizer.lr.get_value())
         return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]
@@ -233,27 +233,27 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             ('valid', valid_metrics),
             ('test', test_metrics)
         ):
-        print("{0}:".format(metrics_name))
+        print(("{0}:".format(metrics_name)))
         for i in range(len(metrics)):
-            print("  {0} = {1}".format(model.metrics_names[i], metrics[i]))
+            print(("  {0} = {1}".format(model.metrics_names[i], metrics[i])))
 
     results.set_history(hist)
     end_time = time.clock()
     if data_holder.test_set_x is not None:
-        print(('Optimization complete.\nBest valid: %f \n'
+        print((('Optimization complete.\nBest valid: %f \n'
             'Obtained at epoch: %i\nTest: %f ') %
               (valid_metrics[1],
-                  checkpointer.best_epoch + 1, test_metrics[1]))
-        print('The code for ' + os.path.split(__file__)[1] +
-                              ' ran for %.2fm' % ((end_time - start_time) / 60.))
+                  checkpointer.best_epoch + 1, test_metrics[1])))
+        print(('The code for ' + os.path.split(__file__)[1] +
+                              ' ran for %.2fm' % ((end_time - start_time) / 60.)))
         results.set_final_observation(valid_metrics[1],
                 test_metrics[1],
                 checkpointer.best_epoch + 1)
     else:
         results.set_final_observation(valid_metrics[1], None,
                 checkpointer.best_epoch + 1)
-        print('Selection : Best valid score of {0}'.format(
-              valid_metrics[1]))
+        print(('Selection : Best valid score of {0}'.format(
+              valid_metrics[1])))
 
     if member_number is not None:
         results.member_number = member_number

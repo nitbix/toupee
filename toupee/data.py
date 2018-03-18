@@ -1,5 +1,5 @@
 #!/usr/bin/python
-from __future__ import print_function
+
 
 """
 Alan Mosca
@@ -225,7 +225,7 @@ class Resampler:
                                        high=self.train_size,
                                        size=sample_size)
         else:
-            values = (range(len(distribution)),distribution)
+            values = (list(range(len(distribution))),distribution)
             d = scipy.stats.rv_discrete(a=0,b=len(distribution),values=values)
             sample = d.rvs(size=sample_size)
         sampled_x = []

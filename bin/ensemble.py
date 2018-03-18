@@ -67,7 +67,7 @@ if __name__ == '__main__':
     ]
     
     if 'seed' in args.__dict__:
-        print("setting random seed to: {0}".format(args.seed))
+        print(("setting random seed to: {0}".format(args.seed)))
         numpy.random.seed(args.seed)
     from toupee import data
     from toupee import config 
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     intermediate_scores = []
     final_score = None
     for i in range(0,params.ensemble_size):
-        print('\n\ntraining member {0}'.format(i))
+        print(('\n\ntraining member {0}'.format(i)))
         m = method.create_member()
         members.append(m[:2])
         ensemble = method.create_aggregator(params,members,train_set,valid_set)
@@ -117,14 +117,14 @@ if __name__ == '__main__':
         test_score = []
         for j in range(len(scorer)):
             test_score.append(scorer[j](ensemble,test_set_x,test_set_y))
-            print('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j]))
+            print(('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j])))
         
         intermediate_scores.append(test_score)
         final_score = test_score
         if len(m) > 2 and not m[2]: #the ensemble method told us to stop
             break
     
-    for j in range(len(scorer)): print('Final test {0}: {1}'.format(scorer_name[j], test_score[j]))
+    for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
     
     if args.dump_shapes_to is not None:
         dill.dump({'members': members, 'ensemble': ensemble},
@@ -140,7 +140,7 @@ if __name__ == '__main__':
             host = params.results_host
         else:
             host = None
-        print("saving results to {0}@{1}".format(params.results_db,host))
+        print(("saving results to {0}@{1}".format(params.results_db,host)))
         conn = MongoClient(host=host)
         db = conn[params.results_db]
         if 'results_table' in params.__dict__: 
@@ -181,10 +181,10 @@ if __name__ == '__main__':
         if True:
             import pprint
             print("PRINTING DB ENTRY:")
-            print("DB NAME = ", params.results_db)
-            print("TABLE NAME = ", table_name)
+            print(("DB NAME = ", params.results_db))
+            print(("TABLE NAME = ", table_name))
             print("TABLE ENRTY:")
             latest_entry = table.find().sort("_id", -1).limit(1)
             pprint.pprint(latest_entry[0])
         
-        print("\n\nDone. [Results stored in the DB, ID = {0}]".format(id))
+        print(("\n\nDone. [Results stored in the DB, ID = {0}]".format(id)))

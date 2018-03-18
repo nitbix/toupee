@@ -30,4 +30,4 @@ if __name__ == '__main__':
         outputs=ensemble.errors,
         givens={x:test_set_x, y:test_set_y})
     test_score = test_model()
-    print 'Final error: {0} %'.format(test_score * 100.)
+    print('Final error: {0} %'.format(test_score * 100.))
