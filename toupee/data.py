@@ -105,9 +105,15 @@ def load_data(dataset, resize_to = None, pickled = True,
     tr = np.load(dataset + 'train.npz')
     v = np.load(dataset + 'valid.npz')
     te = np.load(dataset + 'test.npz')
-    train_set = (tr['x'],tr['y'])
-    valid_set = (v['x'],v['y'])
-    test_set = (te['x'],te['y'])
+    if 'x' in tr and 'x' in v and 'x' in te:
+        xlabel = 'x'
+    elif 'X' in tr and 'X' in v and 'X' in te:
+        xlabel = 'X'
+    else:
+        raise ValueError('training, testing and validation sets must have either x or X fields')
+    train_set = (tr[xlabel],tr['y'])
+    valid_set = (v[xlabel],v['y'])
+    test_set = (te[xlabel],te['y'])
   
   #UNIFORM_PADDING
   if resize_to is not None:
