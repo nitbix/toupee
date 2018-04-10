@@ -46,6 +46,12 @@ if __name__ == '__main__':
                         help='location where to save the shape of the ensemble members')
     parser.add_argument('--dump-to', type=str, nargs='?', default='ensemble.pkl',
                         help='location where to save the ensemble')
+    parser.add_argument('--testfile', default='test.npz',
+                        help='test set npz file name')
+    parser.add_argument('--validfile', default='valid.npz',
+                        help='valid set npz file name')
+    parser.add_argument('--trainfile', default='train.npz',
+                        help='training set npz file name')
 
     args = parser.parse_args()
     #this needs to come before all the toupee and theano imports
@@ -64,6 +70,9 @@ if __name__ == '__main__':
         (args.results_table, 'results_table'),
         (args.results_dep, 'results_dep'),
         (args.epochs, 'n_epochs'),
+        (args.testfile, 'testfile'),
+        (args.validfile, 'validfile'),
+        (args.trainfile, 'trainfile'),
     ]
     
     if 'seed' in args.__dict__:
@@ -85,7 +94,10 @@ if __name__ == '__main__':
                              pickled = params.pickled,
                              one_hot_y = params.one_hot,
                              join_train_and_valid = params.join_train_and_valid,
-                             zca_whitening = params.zca_whitening)
+                             zca_whitening = params.zca_whitening,
+                             testfile = args.testfile, 
+                             validfile = args.validfile, 
+                             trainfile = args.trainfile)
     method = params.method
     method.prepare(params,dataset)
     train_set = method.resampler.get_train()

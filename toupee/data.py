@@ -84,7 +84,8 @@ def load_single_file(filename, resize_to = None, center_and_normalise = False,
 
 def load_data(dataset, resize_to = None, pickled = True,
               center_and_normalise = False, join_train_and_valid = False,
-              one_hot_y = False, zca_whitening = False):
+              one_hot_y = False, zca_whitening = False,
+              trainfile  = 'train.npz', validfile = 'valid.npz', testfile = 'test.npz'):
   ''' Loads the dataset
 
   :type dataset: string
@@ -102,9 +103,9 @@ def load_data(dataset, resize_to = None, pickled = True,
     train_set, valid_set, test_set = pickle.load(f)
     f.close()
   else:
-    tr = np.load(dataset + 'train.npz')
-    v = np.load(dataset + 'valid.npz')
-    te = np.load(dataset + 'test.npz')
+    tr = np.load(os.path.join(dataset, trainfile))
+    v = np.load(os.path.join(dataset, validfile))
+    te = np.load(os.path.join(dataset, testfile))
     if 'x' in tr and 'x' in v and 'x' in te:
         xlabel = 'x'
     elif 'X' in tr and 'X' in v and 'X' in te:
