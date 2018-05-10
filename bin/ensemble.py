@@ -52,6 +52,8 @@ if __name__ == '__main__':
                         help='valid set npz file name')
     parser.add_argument('--trainfile', default='train.npz',
                         help='training set npz file name')
+    parser.add_argument('--latest-experiment', help="uses the latest experiment",
+                action='store_true')
 
     args = parser.parse_args()
     #this needs to come before all the toupee and theano imports
@@ -83,6 +85,24 @@ if __name__ == '__main__':
     from toupee.mlp import sequential_model
 
     params = config.load_parameters(args.params_file)
+    
+    
+    #with latest-experiment flag, always loads the most recent experiment on the system
+    if args.latest_experiment:
+        conn = MongoClient(host=args.results_host)
+        db = conn[args.results_db]
+        table = db[args.results_dep]
+        
+        #gets the most recent ID
+        latest_entry = table.find().sort("_id", -1).limit(1)
+        if latest_entry.count() == 0:
+            raise ValueError('No DB entries for trained NNs')
+        else:
+            latest_entry = latest_entry[0]
+            
+        latest_entry_location = latest_entry['file_location']
+        params.dataset = latest_entry_location
+        
 
     def arg_params(arg_value,param):
         if arg_value is not None:
@@ -140,7 +160,8 @@ if __name__ == '__main__':
     
     if args.dump_shapes_to is not None:
         dill.dump({'members': members, 'ensemble': ensemble},
-                open(args.dump_to,"wb"))
+                # open(args.dump_to,"wb"))
+                open(params.dataset + '/' + args.dump_to,"wb"))
     if args.dump_shapes_to is not None:
         for i in range(len(members)):
             with open("{0}member-{1}.model".format(args.dump_shapes_to, i),"w") as f:
