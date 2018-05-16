@@ -23,6 +23,7 @@ import numpy as np
 import datetime
 import subprocess
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a single MLP')
     parser.add_argument('params_file', help='the parameters file')
@@ -52,8 +53,10 @@ if __name__ == '__main__':
                         help='valid set npz file name')
     parser.add_argument('--trainfile', default='train.npz',
                         help='training set npz file name')
+    parser.add_argument('--dict-number', help="dict_number to use (= dataset location)",
+                        default=None)
     parser.add_argument('--latest-experiment', help="uses the latest experiment",
-                action='store_true')
+                        action='store_true')
 
     args = parser.parse_args()
     #this needs to come before all the toupee and theano imports
@@ -84,25 +87,39 @@ if __name__ == '__main__':
     from toupee import config 
     from toupee.mlp import sequential_model
 
+    
+    
+    #Dataset location: hardcoded (@.yaml) < latest-experiment flag < specific dict number
+    
     params = config.load_parameters(args.params_file)
-    
-    
-    #with latest-experiment flag, always loads the most recent experiment on the system
-    if args.latest_experiment:
+
+    if args.latest_experiment or args.dict_number:
         conn = MongoClient(host=args.results_host)
         db = conn[args.results_db]
         table = db[args.results_dep]
         
-        #gets the most recent ID
-        latest_entry = table.find().sort("_id", -1).limit(1)
-        if latest_entry.count() == 0:
-            raise ValueError('No DB entries for trained NNs')
-        else:
-            latest_entry = latest_entry[0]
+        if args.latest_experiment:
+            #gets the most recent ID
+            latest_entry = table.find().sort("_id", -1).limit(1)
+            if latest_entry.count() == 0:
+                raise ValueError('No DB entries for trained NNs')
+            else:
+                latest_entry = latest_entry[0]
+                
+            latest_entry_location = latest_entry['file_location']
+            params.dataset = latest_entry_location
             
-        latest_entry_location = latest_entry['file_location']
-        params.dataset = latest_entry_location
-        
+        if args.dict_number is not None:
+            #TODO: for now, it assumes it is the local user folder
+            target_root = os.path.expanduser("~/data_tmp"))
+            dict_dir = os.path.join(target_root, 'dict_' + str(args.dict_number))
+            
+            if os.path.exists(dict_dir):
+                params.dataset = dict_dir
+            else:
+                print("The desired dict_number doesn't exist!")
+            
+
 
     def arg_params(arg_value,param):
         if arg_value is not None:
