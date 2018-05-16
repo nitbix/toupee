@@ -111,7 +111,7 @@ if __name__ == '__main__':
             
         if args.dict_number is not None:
             #TODO: for now, it assumes it is the local user folder
-            target_root = os.path.expanduser("~/data_tmp"))
+            target_root = os.path.expanduser("~/data_tmp")
             dict_dir = os.path.join(target_root, 'dict_' + str(args.dict_number))
             
             if os.path.exists(dict_dir):
