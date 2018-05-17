@@ -211,6 +211,7 @@ if __name__ == '__main__':
                     "best_score_after_ensemble_#": np.argmax(intermediate_scores).item(),   #without "item()", defaults to np.int64, which is not supported by mongodb
                     "date": datetime.datetime.utcnow(),
                     "code version": subprocess.check_output(["git", "describe","--always"]).strip(),
+                    "dict_number": args.dict_number,
                   }                
         
         #adds the dependency ID
