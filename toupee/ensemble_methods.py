@@ -40,7 +40,7 @@ class Aggregator:
     def predict(self, X):
         a = self.predict_proba(X)
         m = np.argmax(a,axis=1)
-        return np.eye(out_shape[1])[m]
+        return np.eye(self.out_shape[1])[m]
 
 
 
@@ -84,11 +84,11 @@ class MajorityVotingRunner(Aggregator):
             m.set_weights(m_weights)
             c = m.predict(X, batch_size = self.params.batch_size)
             classifs.append(c)
-            out_shape = m.layers[-1].output_shape
+            self.out_shape = m.layers[-1].output_shape
         classifs_arr = np.array(classifs)
         a = np.sum(classifs_arr,axis=0) / float(len(self.members))
         m = np.argmax(a,axis=1)
-        return np.eye(out_shape[1])[m]
+        return np.eye(self.out_shape[1])[m]
 
 
 class WeightedAveragingRunner(Aggregator):
