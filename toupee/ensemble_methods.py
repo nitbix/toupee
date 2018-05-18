@@ -63,6 +63,7 @@ class AveragingRunner(Aggregator):
             if self.wrapper is not None:
                 p = self.wrapper(p)
             prob.append(p)
+            self.out_shape = m.layers[-1].output_shape
         prob_arr = np.array(prob)
         a = np.sum(prob_arr,axis=0) / float(len(self.members))
         return a
@@ -78,15 +79,15 @@ class MajorityVotingRunner(Aggregator):
         self.members = members
 
     def predict_proba(self,X):
-        classifs = []
+        prob = []
         for (m_yaml, m_weights) in self.members:
             m = keras.models.model_from_yaml(m_yaml)
             m.set_weights(m_weights)
             c = m.predict(X, batch_size = self.params.batch_size)
-            classifs.append(c)
+            prob.append(c)
             self.out_shape = m.layers[-1].output_shape
-        classifs_arr = np.array(classifs)
-        a = np.sum(classifs_arr,axis=0) / float(len(self.members))
+        prob_arr = np.array(prob)
+        a = np.sum(prob_arr,axis=0) / float(len(self.members))
         m = np.argmax(a,axis=1)
         return np.eye(self.out_shape[1])[m]
 
