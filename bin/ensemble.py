@@ -33,6 +33,8 @@ if __name__ == '__main__':
                         help='random seed to use for this sim')
     parser.add_argument('--epochs', type=int, nargs='?',
                         help='number of epochs to run')
+    parser.add_argument('--ensemble-size', type=int, nargs='?',
+                        help="ensemble size")
     parser.add_argument('--results-db', nargs='?',
                         help='mongodb db name for storing results')
     parser.add_argument('--results-host', nargs='?',
@@ -75,6 +77,7 @@ if __name__ == '__main__':
         (args.results_table, 'results_table'),
         (args.results_dep, 'results_dep'),
         (args.epochs, 'n_epochs'),
+        (args.ensemble_size, 'ensemble_size'),
         (args.testfile, 'testfile'),
         (args.validfile, 'validfile'),
         (args.trainfile, 'trainfile'),
