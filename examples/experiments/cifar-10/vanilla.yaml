@@ -1,0 +1,21 @@
+---
+## MLP Parameters ##
+dataset: /datasets/test_data/cifar10-th/
+model_file: all-cnn.model
+optimizer:
+  class_name: WAME
+  config:
+    lr:
+      0:  0.001
+      10: 0.0001
+      20: 0.00001
+n_epochs: 50
+batch_size: 128
+cost_function: categorical_crossentropy
+shuffle_dataset: true
+update_inputs: true
+
+## Ensemble Parameters ##
+resample_size: 60000
+method: !Bagging {}
+ensemble_size: 1
