@@ -45,7 +45,7 @@ if __name__ == '__main__':
                         help='mongodb table name for dependencies')
     parser.add_argument('--device', nargs='?',
                         help='gpu/cpu device to use for training')
-    parser.add_argument('--dump-shapes-to', type=str, nargs='?', default=42,
+    parser.add_argument('--dump-shapes-to', type=str, nargs='?', default='',
                         help='location where to save the shape of the ensemble members')
     parser.add_argument('--dump-to', type=str, nargs='?', default='ensemble.pkl',
                         help='location where to save the ensemble')
@@ -58,6 +58,8 @@ if __name__ == '__main__':
     parser.add_argument('--dict-number', help="dict_number to use (= dataset location)",
                         default=None)
     parser.add_argument('--latest-experiment', help="uses the latest experiment",
+                        action='store_true')
+    parser.add_argument('--remove-tmp-files', help="remove the temporary model files at the end.",
                         action='store_true')
 
     args = parser.parse_args()
@@ -178,13 +180,17 @@ if __name__ == '__main__':
     
     for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
     
-    if args.dump_shapes_to is not None:
+    if args.dump_to is not None:
         dill.dump({'members': members, 'ensemble': ensemble},
                 # open(args.dump_to,"wb"))
-                open(params.dataset + '/' + args.dump_to,"wb"))
+                open(os.path.join(params.dataset, args.dump_to),"wb"))
     if args.dump_shapes_to is not None:
+        if args.dump_shapes_to == '':
+            dump_shapes_to = args.seed
+        else:
+            dump_shapes_to = args.dump_shapes_to
         for i in range(len(members)):
-            with open("{0}member-{1}.model".format(args.dump_shapes_to, i),"w") as f:
+            with open("{0}member-{1}.model".format(dump_shapes_to, i),"w") as f:
                 f.truncate()
                 f.write(members[i][0])
                 
