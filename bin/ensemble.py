@@ -45,8 +45,8 @@ if __name__ == '__main__':
                         help='mongodb table name for dependencies')
     parser.add_argument('--device', nargs='?',
                         help='gpu/cpu device to use for training')
-    parser.add_argument('--dump-shapes-to', type=str, nargs='?', default='',
-                        help='location where to save the shape of the ensemble members')
+    parser.add_argument('--dump-shapes-to', type=str, nargs='?', default=None,
+                        help='location where to save the shape of the ensemble members. Pass \'\' to use the same number as --seed')
     parser.add_argument('--dump-to', type=str, nargs='?', default='ensemble.pkl',
                         help='location where to save the ensemble')
     parser.add_argument('--testfile', default='test.npz',
