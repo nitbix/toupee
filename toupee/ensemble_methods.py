@@ -112,7 +112,7 @@ class WeightedAveragingRunner(Aggregator):
             p = m.predict_proba(X, batch_size = self.params.batch_size)
             prob.append(p * self.weights[i])
         prob_arr = np.array(prob) / np.sum(self.weights)
-        a = np.sum(prob_arr,axis=0) / float(len(self.members))
+        a = np.sum(prob_arr,axis=0)
         return a
         
         
