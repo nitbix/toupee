@@ -40,7 +40,8 @@ defaults = { 'random_seed': None,
              'pickled' : False,
              'zca_whitening' : False,
              'test_at_each_epoch': True,
-             'classification' : True
+             'classification' : True,
+             'h5_name' : 'h5data'
            }
 
 class Loader(yaml.Loader):
