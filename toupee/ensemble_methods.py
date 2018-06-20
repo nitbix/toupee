@@ -20,6 +20,7 @@ from keras.layers import Input, Convolution2D, merge
 from keras.models import Model
 from pprint import pprint
 import copy
+import h5py
 
 class Aggregator:
     """
@@ -682,8 +683,8 @@ BARN {{
                    self.incremental_index,
                    self.incremental_layers)
 
-
-class AdaBoost_M1(EnsembleMethod):
+                   
+class AdaBoost_M1(EnsembleMethod):                  #<------------------ This one uses the new h5 code; TODO: update the other methods
     """
     Create an AdaBoost Ensemble from parameters
     """
@@ -694,20 +695,25 @@ class AdaBoost_M1(EnsembleMethod):
             return WeightedAveragingRunner(members,self.alphas,params)
 
     def create_member(self):
-        train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
+        #gets the training data as a new h5
         if self.member_number > 0 :
-            resampled = [
-                    train_set,
-                    self.resampler.get_valid(),
-                    self.resampler.get_test()
-            ]
+            train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
         else:
-            resampled = [
-                self.resampler.get_train(),
-                self.resampler.get_valid(),
-                self.resampler.get_test()
-            ]
-        m = mlp.sequential_model(resampled, self.params,
+            train_set = self.resampler.get_train()
+            
+        f = h5py.File(self.params.h5_name,'w')
+        dsetX = f.create_dataset('x',data=train_set[0])
+        dsetY = f.create_dataset('y',data=train_set[1])
+        f.close()
+        
+        #gets the eval data
+        eval_sets = [
+            self.resampler.get_valid(),
+            self.resampler.get_test()
+        ]
+        
+        #trains the model
+        m = mlp.sequential_model_h5(eval_sets, self.params,
                 member_number = self.member_number)
         orig_train = self.resampler.get_train()
         errors = common.errors(m, orig_train[0], orig_train[1])
