@@ -701,7 +701,7 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
         else:
             train_set = self.resampler.get_train()
             
-        f = h5py.File(params.h5_name,'w')
+        f = h5py.File(self.params.h5_name,'w')
         dsetX = f.create_dataset('x',data=train_set[0])
         dsetY = f.create_dataset('y',data=train_set[1])
         f.close()
