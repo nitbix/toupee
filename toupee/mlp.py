@@ -21,9 +21,9 @@ import scipy
 import math
 import json
 import h5py
+import random
 
 from pymongo import MongoClient
-from random import sample
 
 from toupee.data import Resampler, Transformer
 import toupee.config as config
@@ -300,25 +300,25 @@ class DataHolderGen:
         self.data_x = self.file['x'] # Read x data
         self.data_y = self.file['y'] # Read labels
         
-        num_examples = self.data_y.shape[0] # Number of examples in the dataset
+        self.num_examples = self.data_y.shape[0] # Number of examples in the dataset
         self.batch_size = batch_size
-        self.steps_per_epoch = math.ceil(num_examples/batch_size)
+        self.steps_per_epoch = math.ceil(self.num_examples/self.batch_size)
         self.current_step = 0
+        self.shuffle = shuffle
         
         #eval sets: valid/test data             <----- no generator for the eval sets (keeps the old structure)
-        self.orig_valid_set_x = eval_sets[0][0]
-        self.orig_valid_set_y = eval_sets[0][1]
-        self.orig_test_set_x = eval_sets[1][0]
-        self.orig_test_set_y = eval_sets[1][1]
-        self.train_set_x = self.orig_train_set_x
-        self.train_set_y = self.orig_train_set_y
-        self.valid_set_x = self.orig_valid_set_x
-        self.valid_set_y = self.orig_valid_set_y
-        if len(eval_sets) > 1:
-            self.test_set_x = self.orig_test_set_x
-            self.test_set_y = self.orig_test_set_y
-        else:
-            self.test_set_x, self.test_set_y = (None,None)
+        if eval_sets is not None:
+            self.orig_valid_set_x = eval_sets[0][0]
+            self.orig_valid_set_y = eval_sets[0][1]
+            self.orig_test_set_x = eval_sets[1][0]
+            self.orig_test_set_y = eval_sets[1][1]
+            self.valid_set_x = self.orig_valid_set_x
+            self.valid_set_y = self.orig_valid_set_y
+            if len(eval_sets) > 1:
+                self.test_set_x = self.orig_test_set_x
+                self.test_set_y = self.orig_test_set_y
+            else:
+                self.test_set_x, self.test_set_y = (None,None)
     
     def has_test(self):
         return self.test_set_x is not None
@@ -330,14 +330,19 @@ class DataHolderGen:
     def __next__(self):
         #no stop condition! "fit_generator" assumes an endless generator
         
-        if shuffle:
+        if self.shuffle:
+            #TODO: we should be able to select the random seed
+            random.seed(42)            
             # Create a list of non-repeated random numbers in the range [0,num_examples] of the size of the desired batch
-            batch = sample(range(self.num_examples),self.batch_size)
+            batch = random.sample(range(self.num_examples),self.batch_size)
             batch.sort()
         else:
             #sequential iteration over the data
             step = self.current_step % self.steps_per_epoch
-            batch = list(range(step*self.batch_size, (step+1)*self.batch_size))
+            if (step+1) == self.steps_per_epoch:
+                batch = list(range(step*self.batch_size, self.num_examples))
+            else:
+                batch = list(range(step*self.batch_size, (step+1)*self.batch_size))
             self.current_step += 1
         
         # Return the arrays in the shape that fit_gen uses (data, target)
@@ -381,8 +386,11 @@ def sequential_model_h5(eval_sets, params, pretraining_set = None, model_weights
 
     results = common.Results(params)
     
+    #there is a separate generator for the train set evaluation: we don't want to shuffle there, 
+    # since the current implementation of shuffle doesn't ensure we'll go through all elements
     data_holder = DataHolderGen(eval_sets, params.h5_name, params.batch_size, shuffle=params.shuffle_dataset)
-
+    eval_holder = DataHolderGen(None, params.h5_name, params.batch_size, shuffle = False) 
+    
     start_time = time.clock()
     
     
@@ -502,7 +510,7 @@ def sequential_model_h5(eval_sets, params, pretraining_set = None, model_weights
             callbacks = callbacks_with_lr_scheduler(lr_schedule)
         
         hist = model.fit_generator(data_holder,
-                  steps_per_epoch = data_holder.steps_per_epoch
+                  steps_per_epoch = data_holder.steps_per_epoch,
                   epochs = params.n_epochs,
                   validation_data = (data_holder.valid_set_x,
                                 data_holder.valid_set_y),
@@ -512,8 +520,10 @@ def sequential_model_h5(eval_sets, params, pretraining_set = None, model_weights
                   sample_weight = sample_weight)
                   
     model.set_weights(checkpointer.best_model)
-    train_metrics = model.evaluate(data_holder.train_set_x,
-            data_holder.train_set_y, batch_size = params.batch_size)
+    
+    #evals the train as a generator, the rest without a generator
+    train_metrics = model.evaluate_generator(eval_holder,
+            steps = eval_holder.steps_per_epoch)
     valid_metrics = model.evaluate(data_holder.valid_set_x,
             data_holder.valid_set_y, batch_size = params.batch_size)
     if data_holder.has_test():
