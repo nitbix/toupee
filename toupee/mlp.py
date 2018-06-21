@@ -20,7 +20,6 @@ import numpy
 import scipy
 import math
 import json
-import h5py
 import random
 
 from pymongo import MongoClient

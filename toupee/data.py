@@ -22,6 +22,7 @@ import pickle
 import math
 from skimage import transform as tf
 import multiprocessing
+import h5py
 
 def corrupt(data,p):
     return mask(1-p,data.shape,dtype=floatX) * data
@@ -89,10 +90,9 @@ def load_data(dataset, resize_to = None, pickled = True,
   ''' Loads the dataset
 
   :type dataset: string
-  :param dataset: the path to the dataset (here MNIST)
+  :param dataset: the path to the dataset (.npz or .h5)
   '''
 
-  #TODO: this should also load h5
   data_dir, data_file = os.path.split(dataset)
   if pickled:
     if data_dir == "" and not os.path.isfile(dataset):
@@ -104,9 +104,18 @@ def load_data(dataset, resize_to = None, pickled = True,
     train_set, valid_set, test_set = pickle.load(f)
     f.close()
   else:
-    tr = np.load(os.path.join(dataset, trainfile))
-    v = np.load(os.path.join(dataset, validfile))
-    te = np.load(os.path.join(dataset, testfile))
+    #loads the .npz / .h5
+    if (trainfile[-4:] == '.npz') and (validfile[-4:] == '.npz') and (testfile[-4:] == '.npz'):
+        tr = np.load(os.path.join(dataset, trainfile))
+        v = np.load(os.path.join(dataset, validfile))
+        te = np.load(os.path.join(dataset, testfile))
+    elif (trainfile[-3:] == '.h5') and (validfile[-3:] == '.h5') and (testfile[-3:] == '.h5'):
+        tr = h5py.File(os.path.join(dataset, trainfile),'r')
+        v = h5py.File(os.path.join(dataset, validfile),'r')
+        te = h5py.File(os.path.join(dataset, testfile),'r')
+    else:
+        raise ValueError('.npz or .h5 files are required; All sets must have the same format.')
+        
     if 'x' in tr and 'x' in v and 'x' in te:
         xlabel = 'x'
     elif 'X' in tr and 'X' in v and 'X' in te:
