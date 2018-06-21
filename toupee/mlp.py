@@ -35,7 +35,7 @@ import keras.preprocessing.image
 
 
 #---------------------------------------------------------------------------------------------------------------
-# non-h5 stuff 
+# non-generator stuff 
 
 class DataHolder:
     """
@@ -291,14 +291,13 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
             
             
 #---------------------------------------------------------------------------------------------------------------
-# new h5 stuff            
+# new generator stuff            
             
 class DataHolderGen:
     ''' Data holder generator class'''
-    def __init__(self, eval_sets, h5_fname, batch_size, shuffle=False):
-        self.file = h5py.File(h5_fname,'r') # Open the h5 file
-        self.data_x = self.file['x'] # Read x data
-        self.data_y = self.file['y'] # Read labels
+    def __init__(self, eval_sets, train_set, batch_size, shuffle=False):
+        self.data_x = train_set[0]
+        self.data_y = train_set[1]
         
         self.num_examples = self.data_y.shape[0] # Number of examples in the dataset
         self.batch_size = batch_size
@@ -355,7 +354,7 @@ class DataHolderGen:
         
             
 
-def sequential_model_h5(eval_sets, params, pretraining_set = None, model_weights = None,
+def sequential_model_generator(eval_sets, train_set, pretraining_set = None, model_weights = None,
         return_results = False, member_number = None, model_yaml = None,
         model_config = None, frozen_layers = [], sample_weight = None):
     """
@@ -387,9 +386,9 @@ def sequential_model_h5(eval_sets, params, pretraining_set = None, model_weights
     results = common.Results(params)
     
     #there is a separate generator for the train set evaluation: we don't want to shuffle there, 
-    # since the current implementation of shuffle doesn't ensure we'll go through all elements
-    data_holder = DataHolderGen(eval_sets, params.h5_name, params.batch_size, shuffle=params.shuffle_dataset)
-    eval_holder = DataHolderGen(None, params.h5_name, params.batch_size, shuffle = False) 
+    # since our implementation of shuffle doesn't ensure we'll go through all elements
+    data_holder = DataHolderGen(eval_sets, train_set, params.batch_size, shuffle=params.shuffle_dataset)
+    eval_holder = DataHolderGen(None, train_set, params.batch_size, shuffle = False) 
     
     start_time = time.clock()
     
