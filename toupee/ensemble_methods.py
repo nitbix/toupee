@@ -701,13 +701,14 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
             train_set = self.resampler.get_train()
         
         #gets the eval data
-        eval_sets = [
+        dataset = [
+            train_set,
             self.resampler.get_valid(),
             self.resampler.get_test()
         ]
         
         #trains the model
-        m = mlp.sequential_model_generator(eval_sets, train_set, self.params,
+        m = mlp.sequential_model(dataset, self.params,
                 member_number = self.member_number)
         orig_train = self.resampler.get_train()
         errors = common.errors(m, orig_train[0], orig_train[1])
