@@ -695,16 +695,11 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
             return WeightedAveragingRunner(members,self.alphas,params)
 
     def create_member(self):
-        #gets the training data as a new h5
+        #gets the training data
         if self.member_number > 0 :
             train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
         else:
             train_set = self.resampler.get_train()
-            
-        f = h5py.File(self.params.h5_name,'w')
-        dsetX = f.create_dataset('x',data=train_set[0])
-        dsetY = f.create_dataset('y',data=train_set[1])
-        f.close()
         
         #gets the eval data
         eval_sets = [
@@ -713,7 +708,7 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
         ]
         
         #trains the model
-        m = mlp.sequential_model_h5(eval_sets, self.params,
+        m = mlp.sequential_model_generator(eval_sets, train_set, self.params,
                 member_number = self.member_number)
         orig_train = self.resampler.get_train()
         errors = common.errors(m, orig_train[0], orig_train[1])
