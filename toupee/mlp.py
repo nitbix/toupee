@@ -353,7 +353,7 @@ class DataHolderGen:
         
             
 
-def sequential_model_generator(eval_sets, train_set, pretraining_set = None, model_weights = None,
+def sequential_model_generator(eval_sets, train_set, params, pretraining_set = None, model_weights = None,
         return_results = False, member_number = None, model_yaml = None,
         model_config = None, frozen_layers = [], sample_weight = None):
     """
