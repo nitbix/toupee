@@ -20,7 +20,6 @@ from keras.layers import Input, Convolution2D, merge
 from keras.models import Model
 from pprint import pprint
 import copy
-import h5py
 
 class Aggregator:
     """
