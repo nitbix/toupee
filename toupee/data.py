@@ -92,6 +92,7 @@ def load_data(dataset, resize_to = None, pickled = True,
   :param dataset: the path to the dataset (here MNIST)
   '''
 
+  #TODO: this should also load h5
   data_dir, data_file = os.path.split(dataset)
   if pickled:
     if data_dir == "" and not os.path.isfile(dataset):
