@@ -347,10 +347,6 @@ class DataHolderGen:
         return (self.data_x[batch,...],
                 self.data_y[batch,...])
         
-    # Close file when object is deleted    
-    def __del__(self):
-        self.file.close() 
-        
             
 
 def sequential_model_generator(eval_sets, train_set, params, pretraining_set = None, model_weights = None,
