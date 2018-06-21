@@ -683,7 +683,7 @@ BARN {{
                    self.incremental_layers)
 
                    
-class AdaBoost_M1(EnsembleMethod):                  #<------------------ This one uses the new h5 code; TODO: update the other methods
+class AdaBoost_M1(EnsembleMethod):                  #<------------------ This one uses the new generator mlp code; TODO: update the other methods
     """
     Create an AdaBoost Ensemble from parameters
     """
