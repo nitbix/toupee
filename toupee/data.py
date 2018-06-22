@@ -104,17 +104,13 @@ def load_data(dataset, resize_to = None, pickled = True,
     train_set, valid_set, test_set = pickle.load(f)
     f.close()
   else:
-    #loads the .npz / .h5
+    #loads the .npz
     if (trainfile[-4:] == '.npz') and (validfile[-4:] == '.npz') and (testfile[-4:] == '.npz'):
         tr = np.load(os.path.join(dataset, trainfile))
         v = np.load(os.path.join(dataset, validfile))
         te = np.load(os.path.join(dataset, testfile))
-    elif (trainfile[-3:] == '.h5') and (validfile[-3:] == '.h5') and (testfile[-3:] == '.h5'):
-        tr = h5py.File(os.path.join(dataset, trainfile),'r')
-        v = h5py.File(os.path.join(dataset, validfile),'r')
-        te = h5py.File(os.path.join(dataset, testfile),'r')
     else:
-        raise ValueError('.npz or .h5 files are required; All sets must have the same format.')
+        raise ValueError('.npz files are required here; All sets must have the same format.')
         
     if 'x' in tr and 'x' in v and 'x' in te:
         xlabel = 'x'
@@ -209,7 +205,7 @@ def make_pretraining_set(datasets,mode):
   else:
     return None
 
-
+    
 class Resampler:
     """
     Resample a dataset either uniformly or with a given probability
