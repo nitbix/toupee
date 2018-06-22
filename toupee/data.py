@@ -90,7 +90,7 @@ def load_data(dataset, resize_to = None, pickled = True,
   ''' Loads the dataset
 
   :type dataset: string
-  :param dataset: the path to the dataset (.npz or .h5)
+  :param dataset: the path to the dataset (.npz)
   '''
 
   data_dir, data_file = os.path.split(dataset)
@@ -212,27 +212,42 @@ class Resampler:
     distribution
     """
 
-    def __init__(self, dataset, seed = 42):
-        self.train,self.valid,self.test = dataset
-        self.train_x, self.train_y = self.train
-        self.valid_x, self.valid_y = self.valid
-        self.test_x, self.test_y = self.test
-        self.train_size = len(self.train_x)
+    def __init__(self, dataset, seed = 42, h5_size = 0):
+        
         self.r_train = None
         np.random.seed(seed)
         
-        #to avoid ending up with 1D arrays
-        self.train_y = self.train_y.reshape(self.train_y.shape[0],-1)
-        self.valid_y = self.valid_y.reshape(self.valid_y.shape[0],-1)
-        self.test_y = self.test_y.reshape(self.test_y.shape[0],-1)
-        
-        self.train = [self.train_x, self.train_y]
-        self.valid = [self.valid_x, self.valid_y]
-        self.test = [self.test_x, self.test_y]
+        if h5_size > 0:
+            #h5 handling  -> with h5, returns the indexes, and not the samples themselves
+            self.is_h5 = True
+            self.train_size = h5_size
+            
+            
+        else:
+            #normal npz handling
+            self.is_h5 = False
+            self.train,self.valid,self.test = dataset
+            self.train_x, self.train_y = self.train
+            self.valid_x, self.valid_y = self.valid
+            self.test_x, self.test_y = self.test
+            self.train_size = len(self.train_x)
+            
+            #to avoid ending up with 1D arrays
+            self.train_y = self.train_y.reshape(self.train_y.shape[0],-1)
+            self.valid_y = self.valid_y.reshape(self.valid_y.shape[0],-1)
+            self.test_y = self.test_y.reshape(self.test_y.shape[0],-1)
+            
+            self.train = [self.train_x, self.train_y]
+            self.valid = [self.valid_x, self.valid_y]
+            self.test = [self.test_x, self.test_y]
         
         
     def make_new_train(self,sample_size,distribution=None):
+        #with h5 returns the indexes; with npz returns the samples
+        
         weights = []
+        
+        #gets the sample indexes
         if distribution is None:
             sample = np.random.randint(low=0,
                                        high=self.train_size,
@@ -241,36 +256,51 @@ class Resampler:
             values = (list(range(len(distribution))),distribution)
             d = scipy.stats.rv_discrete(a=0,b=len(distribution),values=values)
             sample = d.rvs(size=sample_size)
-        sampled_x = []
-        sampled_y = []
-        for s in sample:
-            sampled_x.append(self.train_x[s])
-            sampled_y.append(self.train_y[s])
+            
+        #sets the selected weights
         if distribution is not None:
             for s in sample:
                 weights.append(distribution[s])
             weights = numpy.asarray(weights)
         else:
             weights = None
-        sampled_x = numpy.asarray(sampled_x)
-        sampled_y = numpy.asarray(sampled_y)
-        self.r_train = (sampled_x,sampled_y)
+         
+         
+        if self.is_h5:
+            self.r_train = sample
+        
+        else:
+            #gets the actual samples, given the indexes
+            sampled_x = []
+            sampled_y = []
+            for s in sample:
+                sampled_x.append(self.train_x[s])
+                sampled_y.append(self.train_y[s])
+            
+            sampled_x = numpy.asarray(sampled_x)
+            sampled_y = numpy.asarray(sampled_y)
+            self.r_train = (sampled_x,sampled_y)
+        
+        #returns the indexes/samples, depending on the case
         return self.r_train, weights
 
     def get_train(self):
+        assert self.is_h5 is False
         return self.train
 
     def get_valid(self):
+        assert self.is_h5 is False
         return self.valid
 
     def get_test(self):
+        assert self.is_h5 is False
         return self.test
 
 
-class WeightedResampler(Resampler):
+class WeightedResampler(Resampler, h5_size = 0):
 
     def __init__(self, dataset, seed = 42):
-        Resampler.__init__(self, dataset, seed)
+        Resampler.__init__(self, dataset, seed = seed, h5_size = h5_size)
         self.weights = numpy.repeat([1.0/self.train_size], self.train_size)
 
     def update_weights(self,new_weights):
