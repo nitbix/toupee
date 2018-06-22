@@ -297,9 +297,9 @@ class Resampler:
         return self.test
 
 
-class WeightedResampler(Resampler, h5_size = 0):
+class WeightedResampler(Resampler):
 
-    def __init__(self, dataset, seed = 42):
+    def __init__(self, dataset, seed = 42, h5_size = 0):
         Resampler.__init__(self, dataset, seed = seed, h5_size = h5_size)
         self.weights = numpy.repeat([1.0/self.train_size], self.train_size)
 

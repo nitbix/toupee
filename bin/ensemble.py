@@ -47,7 +47,7 @@ def get_scorer(classification, is_h5 = False):
     scorer = []
     scorer_name = []
     if classification:
-        if if_h5:
+        if is_h5:
             scorer.append(accuracy_h5)
             scorer_name.append('accuracy')
         else:

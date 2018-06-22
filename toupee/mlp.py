@@ -33,7 +33,8 @@ import keras
 import keras.preprocessing.image
 
 
-def initialize_model(sample_weight, model_config, model_yaml, model_weights):
+def initialize_model(params, sample_weight, model_config, model_yaml, 
+                        model_weights, frozen_layers):
     
     print("loading model...")
     if sample_weight is not None:
@@ -208,7 +209,8 @@ def sequential_model(dataset, params, pretraining_set = None,
     Initialize the parameters and create the network.
     """
 
-    model, total_weights = initialize_model(sample_weight, model_config, model_yaml, model_weights)
+    model, total_weights = initialize_model(params, sample_weight, model_config, 
+                                            model_yaml, model_weights, frozen_layers)
 
     results = common.Results(params)
     
@@ -315,7 +317,8 @@ def sequential_model_h5(dataset, params, pretraining_set = None,
     [H5 DATA VERSION]
     """
 
-    model, total_weights = initialize_model(sample_weight, model_config, model_yaml, model_weights)
+    model, total_weights = initialize_model(params, sample_weight, model_config, 
+                                            model_yaml, model_weights, frozen_layers)
 
     results = common.Results(params)
     
