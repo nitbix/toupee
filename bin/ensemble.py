@@ -16,12 +16,13 @@ import argparse
 import os
 import re
 import dill
-from toupee.common import accuracy, euclidian_distance, relative_distance
+from toupee.common import accuracy, euclidian_distance, relative_distance, accuracy_h5
 
 from pymongo import MongoClient
 import numpy as np
 import datetime
 import subprocess
+import h5py
 
 
 def check_data_format(args):
@@ -39,11 +40,33 @@ def check_data_format(args):
         raise ValueError('.npz or .h5 files are required; All sets must have the same format.')
         
     return(is_h5)
+    
+    
+def get_scorer(classification, is_h5 = False):
+    
+    scorer = []
+    scorer_name = []
+    if classification:
+        if if_h5:
+            scorer.append(accuracy_h5)
+            scorer_name.append('accuracy')
+        else:
+            scorer.append(accuracy)
+            scorer_name.append('accuracy')
+    else:
+        scorer.append(euclidian_distance)
+        scorer_name.append('euclidian distance')
+        
+        scorer.append(relative_distance)
+        scorer_name.append('relative distance')
+        
+    return (scorer, scorer_name)
+        
 
 
 def run_ensembles_npz(args, params):
 
-    method = params.method
+    #loads the npz dataset to memory
     dataset = data.load_data(params.dataset,
                              pickled = params.pickled,
                              one_hot_y = params.one_hot,
@@ -53,22 +76,13 @@ def run_ensembles_npz(args, params):
                              validfile = args.validfile, 
                              trainfile = args.trainfile)
 
+    method = params.method
     method.prepare(params, dataset)
     train_set = method.resampler.get_train()
     valid_set = method.resampler.get_valid()
     
     #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
-    scorer = []
-    scorer_name = []
-    if params.classification == True:   
-        scorer.append(accuracy)
-        scorer_name.append('accuracy')
-    else:
-        scorer.append(euclidian_distance)
-        scorer_name.append('euclidian distance')
-        
-        scorer.append(relative_distance)
-        scorer_name.append('relative distance')
+    scorer, scorer_name = get_scorer(params.classification)
     
     members = []
     intermediate_scores = []
@@ -109,7 +123,47 @@ def run_ensembles_npz(args, params):
     return (intermediate_scores, final_score)
 
     
+def run_ensembles_h5(args, params):
 
+    #startup: opens the h5 files
+    trainfile = h5py.File(args.trainfile, 'r')
+    validfile = h5py.File(args.validfile, 'r')
+    testfile = h5py.File(args.testfile, 'r')
+    
+    #gets the train size
+    train_size = trainfile['y'].shape[0]
+    
+    #initializes the ensemble method for the h5 file
+    method = params.method
+    method.prepare(params, None, h5_size = train_size)
+    
+    #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
+    scorer, scorer_name = get_scorer(params.classification, is_h5 = True)
+    
+    members = []
+    intermediate_scores = []
+    final_score = None
+    for i in range(0,params.ensemble_size):
+        print(('\n\ntraining member {0}'.format(i)))
+        m = method.create_member([trainfile, validfile, testfile])
+        members.append(m[:2])
+        ensemble = method.create_aggregator(params,members,None,None)
+        test_score = []
+        for j in range(len(scorer)):
+            test_score.append(scorer[j](ensemble,trainfile,params.batch_size))
+            print(('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j])))
+        
+        intermediate_scores.append(test_score)
+        final_score = test_score
+        if len(m) > 2 and not m[2]: #the ensemble method told us to stop
+            break
+            
+    #cleanup: closes the h5 files
+    trainfile.close()
+    validfile.close()
+    testfile.close()
+    
+    return (intermediate_scores, final_score)
     
 
 if __name__ == '__main__':
@@ -226,10 +280,10 @@ if __name__ == '__main__':
     #TODO: if any data transform option is true, the h5 version will be incorrect
     is_h5 = check_data_format(args)
     
-    
     if is_h5 is False: 
         intermediate_scores, final_score = run_ensembles_npz(args, params)
-    #else:
+    else:
+        intermediate_scores, final_score = run_ensembles_h5(args, params)
         
                 
     if 'results_db' in params.__dict__:

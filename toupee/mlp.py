@@ -33,10 +33,81 @@ import keras
 import keras.preprocessing.image
 
 
-#---------------------------------------------------------------------------------------------------------------
-# non-generator stuff 
+def initialize_model(sample_weight, model_config, model_yaml, model_weights):
+    
+    print("loading model...")
+    if sample_weight is not None:
+        print("using sample weights...")
+    if model_config is not None:
+        model = keras.models.Sequential.from_config(model_config)
+    else:
+        if model_yaml is None:
+            with open(params.model_file, 'r') as model_file:
+                model_yaml = model_file.read()
+        model = keras.models.model_from_yaml(model_yaml)
+    total_weights = 0
 
-#TODO: move everything into the sequential_model_generator?
+    #TODO: this count is broken for Model layers
+    for w in model.get_weights():
+        total_weights += numpy.prod(w.shape)
+
+    if model_weights is not None:
+        for i in range(len(model_weights)):
+            model.layers[i].set_weights(model_weights[i])
+
+    print(("total weight count: {0}".format(total_weights)))
+    
+    for l in frozen_layers:
+        model.layers[l].trainable = False
+    
+    return(model, total_weights)
+
+    
+
+def initialize_metrics(params):
+    
+    if params.classification == True:   
+        scorer_name = 'accuracy'
+        monitor_type = 'val_acc'
+    else:
+        scorer_name = 'mean_squared_error'
+        monitor_type = 'val_loss'
+    
+    metrics = [scorer_name]
+    if 'additional_metrics' in params.__dict__:
+        metrics = metrics + additional_metrics
+
+    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
+            monitor = monitor_type,
+            mode = 'max')
+            
+    return(metrics, checkpointer)
+
+    
+    
+def callbacks_with_lr_scheduler(schedule, model, callbacks):
+    def scheduler(epoch):
+        if epoch in schedule:
+            print(("Changing learning rate to {0}".format(schedule[epoch])))
+            model.optimizer.lr.set_value(schedule[epoch])
+        return float(model.optimizer.lr.get_value())
+    return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]   
+    
+
+def print_results(model, train_metrics, valid_metrics, test_metrics):
+    
+    for metrics_name,metrics in (
+            ('train', train_metrics),
+            ('valid', valid_metrics),
+            ('test', test_metrics)
+        ):
+        print(("{0}:".format(metrics_name)))
+        for i in range(len(metrics)):
+            print(("  {0} = {1}".format(model.metrics_names[i], metrics[i])))
+
+    
+#------------------------------------------------------------------------------------------
+# Non-h5 stuff
 
 class DataHolder:
     """
@@ -73,7 +144,7 @@ class DataHolder:
            
             
 class DataHolderGen:
-    ''' Data holder generator class'''
+    ''' Data holder "generator" [currently it's an iterator, got it's good enough] class'''
     def __init__(self, dataset, batch_size, shuffle=False, eval_set = False):
         self.data_x = dataset[0][0]
         self.data_y = dataset[0][1]
@@ -129,34 +200,15 @@ class DataHolderGen:
         
             
 
-def sequential_model(dataset, params, pretraining_set = None, model_weights = None,
-        return_results = False, member_number = None, model_yaml = None,
-        model_config = None, frozen_layers = [], sample_weight = None):
+def sequential_model(dataset, params, pretraining_set = None, 
+        model_weights = None, return_results = False, member_number = None, 
+        model_yaml = None, model_config = None, frozen_layers = [], 
+        sample_weight = None):
     """
     Initialize the parameters and create the network.
     """
 
-    print("loading model...")
-    if sample_weight is not None:
-        print("using sample weights...")
-    if model_config is not None:
-        model = keras.models.Sequential.from_config(model_config)
-    else:
-        if model_yaml is None:
-            with open(params.model_file, 'r') as model_file:
-                model_yaml = model_file.read()
-        model = keras.models.model_from_yaml(model_yaml)
-    total_weights = 0
-
-    #TODO: this count is broken for Model layers
-    for w in model.get_weights():
-        total_weights += numpy.prod(w.shape)
-
-    if model_weights is not None:
-        for i in range(len(model_weights)):
-            model.layers[i].set_weights(model_weights[i])
-
-    print(("total weight count: {0}".format(total_weights)))
+    model, total_weights = initialize_model(sample_weight, model_config, model_yaml, model_weights)
 
     results = common.Results(params)
     
@@ -167,39 +219,13 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     
     start_time = time.clock()
     
-    
-    if params.classification == True:   
-        scorer_name = 'accuracy'
-        monitor_type = 'val_acc'
-    else:
-        scorer_name = 'mean_squared_error'
-        monitor_type = 'val_loss'
-    
-
-    metrics = [scorer_name]
-    if 'additional_metrics' in params.__dict__:
-        metrics = metrics + additional_metrics
-
-    for l in frozen_layers:
-        model.layers[l].trainable = False
-
-    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
-            monitor = monitor_type,
-            mode = 'max')
+    metrics, checkpointer = initialize_metrics(params)
     callbacks = [checkpointer]
 
     if params.early_stopping is not None:
         earlyStopping=keras.callbacks.EarlyStopping(monitor='val_loss',
             patience=params.early_stopping['patience'], verbose=0, mode='auto')
         callbacks.append(earlyStopping)
-
-    def callbacks_with_lr_scheduler(schedule):
-        def scheduler(epoch):
-            if epoch in schedule:
-                print(("Changing learning rate to {0}".format(schedule[epoch])))
-                model.optimizer.lr.set_value(schedule[epoch])
-            return float(model.optimizer.lr.get_value())
-        return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]
         
 
     lr_schedule = None
@@ -215,73 +241,16 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 
     )
 
-    if params.online_transform is not None:                     #<---- Joao: I think this if branch needs to be updated with the new data holder
-        def default_online_transform_param(name,default):
-            if name in params.online_transform:
-                return params.online_transform[name]
-            else:
-                return default
-
-        datagen = keras.preprocessing.image.ImageDataGenerator(
-            featurewise_center=default_online_transform_param('featurewise_center',False),
-            samplewise_center=default_online_transform_param('samplewise_center',False),
-            featurewise_std_normalization=default_online_transform_param('featurewise_std_normalization',False),
-            samplewise_std_normalization=default_online_transform_param('samplewise_std_normalization',False),
-            zca_whitening=default_online_transform_param('zca_whitening',False),
-            rotation_range=default_online_transform_param('rotation_range',0),
-            width_shift_range=default_online_transform_param('width_shift',0),
-            height_shift_range=default_online_transform_param('height_shift',0),
-            horizontal_flip=default_online_transform_param('horizontal_flip',False),
-            vertical_flip=default_online_transform_param('vertical_flip',False),
-            elastic_transform=default_online_transform_param('elastic_transform',None),
-            pad=default_online_transform_param('pad',None),
-            crop=default_online_transform_param('crop',None)
-        )
-        datagen.fit(data_holder.train_set_x, rounds=1)
-        pre_epochs = default_online_transform_param("after_epoch", 0)
-        pre_lr = default_online_transform_param("pre_lr", params.optimizer['config']['lr'])
-
-        #TODO: this does not work, the network is reset at every fit() call
-        if pre_epochs > 0:
-            print("Pre-training without transformations...")
-            pre_hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
-                  batch_size = params.batch_size,
-                  epochs = pre_epochs,
-                  validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
-                  test_data = (data_holder.test_set_x, data_holder.test_set_y),
-                  callbacks = callbacks_with_lr_scheduler({0: pre_lr}),
-                  shuffle = params.shuffle_dataset,
-                  sample_weight = sample_weight)
-        print("Training with transformations...")
-        if lr_schedule is not None:
-            callbacks = callbacks_with_lr_scheduler(lr_schedule)
-        if params.test_at_each_epoch:
-            test_data = (data_holder.test_set_x, data_holder.test_set_y)
-        else:
-            test_data = None
-        hist = model.fit_generator(
-                            datagen.flow(
-                                data_holder.train_set_x,
-                                data_holder.train_set_y,
-                                shuffle = params.shuffle_dataset,
-                                batch_size = params.batch_size
-                            ),
-                            steps_per_epoch = data_holder.train_set_x.shape[0] / params.batch_size,
-                            epochs = params.n_epochs,
-                            validation_data = (data_holder.valid_set_x,
-                                data_holder.valid_set_y),
-                            test_data = test_data,
-                            callbacks = callbacks
-                           )
-        if pre_epochs > 0:
-            for k in pre_hist.history:
-                hist.history[k] = pre_hist.history[k] + hist.history[k]
     
+    #TODO - Joao: I think this if branch needs to be updated with the new data holder
+    if params.online_transform is not None:
+        raise NotImplementedException()
+        #check the bottom of this file for the old code
 
     else:
         print("Training without transformations...")
         if lr_schedule is not None:
-            callbacks = callbacks_with_lr_scheduler(lr_schedule)
+            callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
         
         hist = model.fit_generator(data_holder,
                   steps_per_epoch = data_holder.steps_per_epoch,
@@ -303,14 +272,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     if eval_holder.has_test():
         test_metrics = model.evaluate(eval_holder.test_set_x,
                 eval_holder.test_set_y, batch_size = params.batch_size)
-    for metrics_name,metrics in (
-            ('train', train_metrics),
-            ('valid', valid_metrics),
-            ('test', test_metrics)
-        ):
-        print(("{0}:".format(metrics_name)))
-        for i in range(len(metrics)):
-            print(("  {0} = {1}".format(model.metrics_names[i], metrics[i])))
+    
+    print_results(model, train_metrics, valid_metrics, test_metrics)
 
     results.set_history(hist)
     end_time = time.clock()
@@ -337,3 +300,164 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
         return model, results
     else:
         return model
+
+        
+#------------------------------------------------------------------------------------------
+# h5 stuff
+
+              
+def sequential_model_h5(dataset, params, pretraining_set = None, 
+        model_weights = None, return_results = False, member_number = None, 
+        model_yaml = None, model_config = None, frozen_layers = [], 
+        sample_weight = None):
+    """
+    Initialize the parameters and create the network.
+    [H5 DATA VERSION]
+    """
+
+    model, total_weights = initialize_model(sample_weight, model_config, model_yaml, model_weights)
+
+    results = common.Results(params)
+    
+    #3-4 data holders: (1) sampled train data, (2-3) eval data - train/valid/[test] sets
+    sampled_indexes = dataset[0]
+    files = dataset[1]
+    train_holder = common.DataHolderH5(files[0], params.batch_size, sampled_indexes)
+    train_eval_holder = common.DataHolderH5(files[0], params.batch_size, None)
+    valid_holder = common.DataHolderH5(files[1], params.batch_size, None)
+    test_holder = common.DataHolderH5(files[2], params.batch_size, None)
+    
+    start_time = time.clock()
+    
+    metrics, checkpointer = initialize_metrics(params)
+    callbacks = [checkpointer]
+
+    if params.early_stopping is not None:
+        earlyStopping=keras.callbacks.EarlyStopping(monitor='val_loss',
+            patience=params.early_stopping['patience'], verbose=0, mode='auto')
+        callbacks.append(earlyStopping)
+
+    lr_schedule = None
+    if isinstance(params.optimizer['config']['lr'], dict):
+        lr_schedule = params.optimizer['config']['lr']
+        params.optimizer['config']['lr'] = lr_schedule[0]
+    optimizer = keras.optimizers.deserialize(params.optimizer)
+    model.compile(optimizer = optimizer,
+                  loss = params.cost_function,
+                  metrics = metrics,
+                  update_inputs = params.update_inputs,
+                  update_inputs_lr = params.update_inputs_lr
+    )
+
+    #TODO - Joao: I think this if branch needs to be updated with the new data holder
+    if params.online_transform is not None:
+        raise NotImplementedException()
+        #check the bottom of this file for the old code
+    else:
+        print("Training without transformations...")
+        if lr_schedule is not None:
+            callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
+        
+        hist = model.fit_generator(train_holder,
+                  steps_per_epoch = train_holder.steps_per_epoch,
+                  epochs = params.n_epochs,
+                  validation_data = valid_holder,
+                  test_data = test_holder,
+                  callbacks = callbacks,
+                  sample_weight = sample_weight)
+                  
+    model.set_weights(checkpointer.best_model)
+    
+    #evals everything with a generator
+    train_metrics = model.evaluate_generator(train_eval_holder,
+            steps = train_eval_holder.steps_per_epoch)
+    valid_metrics = model.evaluate_generator(valid_holder,
+            steps = valid_holder.steps_per_epoch)
+    test_metrics = model.evaluate_generator(test_holder,
+            steps = test_holder.steps_per_epoch)
+            
+    print_results(model, train_metrics, valid_metrics, test_metrics)
+
+    results.set_history(hist)
+    end_time = time.clock()
+    
+    print((('Optimization complete.\nBest valid: %f \n'
+        'Obtained at epoch: %i\nTest: %f ') %
+          (valid_metrics[1],
+              checkpointer.best_epoch + 1, test_metrics[1])))
+    print(('The code for ' + os.path.split(__file__)[1] +
+                          ' ran for %.2fm' % ((end_time - start_time) / 60.)))
+    results.set_final_observation(valid_metrics[1],
+            test_metrics[1],
+            checkpointer.best_epoch + 1)
+
+    if member_number is not None:
+        results.member_number = member_number
+
+    if return_results:
+        return model, results
+    else:
+        return model
+
+#------------------------------------------------------------------------------------------        
+# code to update later:  
+        # def default_online_transform_param(name,default):
+            # if name in params.online_transform:
+                # return params.online_transform[name]
+            # else:
+                # return default
+
+        # datagen = keras.preprocessing.image.ImageDataGenerator(
+            # featurewise_center=default_online_transform_param('featurewise_center',False),
+            # samplewise_center=default_online_transform_param('samplewise_center',False),
+            # featurewise_std_normalization=default_online_transform_param('featurewise_std_normalization',False),
+            # samplewise_std_normalization=default_online_transform_param('samplewise_std_normalization',False),
+            # zca_whitening=default_online_transform_param('zca_whitening',False),
+            # rotation_range=default_online_transform_param('rotation_range',0),
+            # width_shift_range=default_online_transform_param('width_shift',0),
+            # height_shift_range=default_online_transform_param('height_shift',0),
+            # horizontal_flip=default_online_transform_param('horizontal_flip',False),
+            # vertical_flip=default_online_transform_param('vertical_flip',False),
+            # elastic_transform=default_online_transform_param('elastic_transform',None),
+            # pad=default_online_transform_param('pad',None),
+            # crop=default_online_transform_param('crop',None)
+        # )
+        # datagen.fit(data_holder.train_set_x, rounds=1)
+        # pre_epochs = default_online_transform_param("after_epoch", 0)
+        # pre_lr = default_online_transform_param("pre_lr", params.optimizer['config']['lr'])
+
+        # TODO: this does not work, the network is reset at every fit() call
+        # if pre_epochs > 0:
+            # print("Pre-training without transformations...")
+            # pre_hist = model.fit(data_holder.train_set_x, data_holder.train_set_y,
+                  # batch_size = params.batch_size,
+                  # epochs = pre_epochs,
+                  # validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
+                  # test_data = (data_holder.test_set_x, data_holder.test_set_y),
+                  # callbacks = callbacks_with_lr_scheduler({0: pre_lr}, model, callbacks),
+                  # shuffle = params.shuffle_dataset,
+                  # sample_weight = sample_weight)
+        # print("Training with transformations...")
+        # if lr_schedule is not None:
+            # callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
+        # if params.test_at_each_epoch:
+            # test_data = (data_holder.test_set_x, data_holder.test_set_y)
+        # else:
+            # test_data = None
+        # hist = model.fit_generator(
+                            # datagen.flow(
+                                # data_holder.train_set_x,
+                                # data_holder.train_set_y,
+                                # shuffle = params.shuffle_dataset,
+                                # batch_size = params.batch_size
+                            # ),
+                            # steps_per_epoch = data_holder.train_set_x.shape[0] / params.batch_size,
+                            # epochs = params.n_epochs,
+                            # validation_data = (data_holder.valid_set_x,
+                                # data_holder.valid_set_y),
+                            # test_data = test_data,
+                            # callbacks = callbacks
+                           # )
+        # if pre_epochs > 0:
+            # for k in pre_hist.history:
+                # hist.history[k] = pre_hist.history[k] + hist.history[k]
