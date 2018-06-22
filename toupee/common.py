@@ -86,7 +86,7 @@ def serialize(o):
             else:
                 raise Exception("don't know how to save {0}".format(type(o)))
 
-                
+ 
 #for classification problems:                
 def errors(classifier, test_set_x, test_set_y):
     classification = classifier.predict_classes(test_set_x)
@@ -126,3 +126,72 @@ def relative_distance(predictor, test_set_x, test_set_y):
 
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()
+
+#---------------------------------------------------------------------------------
+# h5 stuff 
+    
+#TODO: implement shuffle for this data holder
+class DataHolderH5:
+    ''' Data holder "generator" [currently it's an iterator, got it's good enough] class for h5 data'''
+    def __init__(self, file, batch_size, sampled_indexes, hold_y = True):
+        self.data_x = file['x']
+        
+        if hold_y:
+            self.data_y = file['y']
+        
+        self.sampled_indexes = sampled_indexes
+        if sampled_indexes is not None:
+            self.num_examples = sampled_indexes.shape[0]
+        else:
+            self.num_examples = self.data_x.shape[0] # Number of examples in the dataset
+        self.batch_size = batch_size
+        self.steps_per_epoch = math.ceil(self.num_examples/self.batch_size)
+        self.current_step = 0
+        
+           
+    # Generator structure requires the __iter__ and a __next__ methods
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        #no stop condition! "fit_generator" assumes an endless generator
+        
+        step = self.current_step % self.steps_per_epoch
+        
+        if self.sampled_indexes is None:
+            #sequential iteration over the data
+            if (step+1) == self.steps_per_epoch:    #<- last epoch
+                batch_indexes = list(range(step*self.batch_size, self.num_examples))
+            else:
+                batch_indexes = list(range(step*self.batch_size, (step+1)*self.batch_size))
+        else:
+            #sequential iteration over the sampled_indexes
+            if (step+1) == self.steps_per_epoch:    #<- last epoch
+                batch_indexes = sampled_indexes[step*self.batch_size : self.num_examples]
+            else:
+                batch_indexes = sampled_indexes[step*self.batch_size : (step+1)*self.batch_size]
+            
+        self.current_step += 1
+        
+        if hold_y:
+            # Return the arrays in the shape that fit_gen uses (data, target)
+            return (self.data_x[batch_indexes,...],
+                    self.data_y[batch_indexes,...])
+        else:
+            # Return the arrays in the shape that predict_generator uses (data)
+            return (self.data_x[batch_indexes,...])
+                
+                
+#for classification problems:                
+def errors_h5(classifier, file_object, batch_size):
+
+    x_generator = DataHolderH5(file_object, batch_size, None, hold_y = False)
+    classification = classifier.predict_classes(x_generator)
+    c = numpy.argmax(file_object['y'], axis=1)        #TODO: check is this works
+    r = numpy.where(classification != c, 1.0, 0.0)
+    return r
+    
+def accuracy_h5(classifier, file_object, batch_size):
+    e = errors_h5(classifier, file_object, batch_size)
+    return 1.0 - (float(e.sum()) / float(file_object['y'].shape[0]))
+    
