@@ -12,6 +12,8 @@ import numpy
 import yaml
 import os
 import collections
+import math
+import numpy as np
 
 numpy.set_printoptions(threshold=numpy.inf)
 
@@ -133,11 +135,15 @@ if 'toupee_global_instance' not in locals():
 #TODO: implement shuffle for this data holder
 class DataHolderH5:
     ''' Data holder "generator" [currently it's an iterator, got it's good enough] class for h5 data'''
-    def __init__(self, file, batch_size, sampled_indexes, hold_y = True):
+    def __init__(self, file, batch_size, sampled_indexes, hold_y = True, to_one_hot = False):
         self.data_x = file['x']
         
+        self.hold_y = hold_y
+        self.to_one_hot = to_one_hot
         if hold_y:
             self.data_y = file['y']
+            if to_one_hot:
+                self.n_classes = self.data_y[:].max() + 1
         
         self.sampled_indexes = sampled_indexes
         if sampled_indexes is not None:
@@ -147,6 +153,7 @@ class DataHolderH5:
         self.batch_size = batch_size
         self.steps_per_epoch = math.ceil(self.num_examples/self.batch_size)
         self.current_step = 0
+        
         
            
     # Generator structure requires the __iter__ and a __next__ methods
@@ -173,25 +180,36 @@ class DataHolderH5:
             
         self.current_step += 1
         
-        if hold_y:
+        if self.hold_y:
             # Return the arrays in the shape that fit_gen uses (data, target)
-            return (self.data_x[batch_indexes,...],
-                    self.data_y[batch_indexes,...])
+            if self.to_one_hot:
+                return (self.data_x[batch_indexes,...],
+                        one_hot(self.data_y[batch_indexes,...], self.n_classes))
+            else:
+                return (self.data_x[batch_indexes,...],
+                        self.data_y[batch_indexes,...])
         else:
             # Return the arrays in the shape that predict_generator uses (data)
-            return (self.data_x[batch_indexes,...])
+            return (self.data_x[batch_indexes,...]) 
+        # print("i shouldn't be here :D")
                 
                 
 #for classification problems:                
 def errors_h5(classifier, file_object, batch_size):
 
     x_generator = DataHolderH5(file_object, batch_size, None, hold_y = False)
-    classification = classifier.predict_classes(x_generator)
-    c = numpy.argmax(file_object['y'], axis=1)        #TODO: check is this works
+    classification = classifier.predict_classes(x_generator)                        #<------------------------------------------------ parei aqui: o classifier é um model do keras, e não há generator para prever as classes
+    c = numpy.argmax( one_hot(file_object['y'], file_object['y'].max()+1) , axis=1)        #TODO: check if this works
     r = numpy.where(classification != c, 1.0, 0.0)
     return r
     
 def accuracy_h5(classifier, file_object, batch_size):
     e = errors_h5(classifier, file_object, batch_size)
     return 1.0 - (float(e.sum()) / float(file_object['y'].shape[0]))
+ 
+#TODO: this is kinda a redefinition of data.py one_hot -> take care of the duplicates!
+def one_hot(data, n_classes):
+    b = np.zeros((data.size, n_classes),dtype='float32')
+    b[np.arange(data.size), data] = 1.
+    return b
     

@@ -325,10 +325,10 @@ def sequential_model_h5(dataset, params, pretraining_set = None,
     #3-4 data holders: (1) sampled train data, (2-3) eval data - train/valid/[test] sets
     sampled_indexes = dataset[0]
     files = dataset[1]
-    train_holder = common.DataHolderH5(files[0], params.batch_size, sampled_indexes)
-    train_eval_holder = common.DataHolderH5(files[0], params.batch_size, None)
-    valid_holder = common.DataHolderH5(files[1], params.batch_size, None)
-    test_holder = common.DataHolderH5(files[2], params.batch_size, None)
+    train_holder = common.DataHolderH5(files[0], params.batch_size, sampled_indexes, to_one_hot = True)
+    train_eval_holder = common.DataHolderH5(files[0], params.batch_size, None, to_one_hot = True)
+    valid_holder = common.DataHolderH5(files[1], params.batch_size, None, to_one_hot = True)
+    test_holder = common.DataHolderH5(files[2], params.batch_size, None, to_one_hot = True)
     
     start_time = time.clock()
     
@@ -365,7 +365,9 @@ def sequential_model_h5(dataset, params, pretraining_set = None,
                   steps_per_epoch = train_holder.steps_per_epoch,
                   epochs = params.n_epochs,
                   validation_data = valid_holder,
+                  validation_steps = valid_holder.steps_per_epoch,
                   test_data = test_holder,
+                  test_steps = test_holder.steps_per_epoch,
                   callbacks = callbacks,
                   sample_weight = sample_weight)
                   

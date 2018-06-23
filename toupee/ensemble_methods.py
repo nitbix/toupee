@@ -720,7 +720,7 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
                     member_number = self.member_number)
                     
             #gets the errors for the train set and updates the weights
-            errors = common.errors_h5(m, h5_files[0], params.batch_size)
+            errors = common.errors_h5(m, h5_files[0], self.params.batch_size)
             
             
         else:
@@ -768,7 +768,7 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
         self.params = params
         self.dataset = dataset
         self.h5_size = h5_size
-        self.resampler = WeightedResampler(dataset, h5_size)
+        self.resampler = WeightedResampler(dataset, h5_size = h5_size)
         self.D = self.resampler.weights
         self.alphas = []
         self.member_number = 0

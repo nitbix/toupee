@@ -126,9 +126,9 @@ def run_ensembles_npz(args, params):
 def run_ensembles_h5(args, params):
 
     #startup: opens the h5 files
-    trainfile = h5py.File(args.trainfile, 'r')
-    validfile = h5py.File(args.validfile, 'r')
-    testfile = h5py.File(args.testfile, 'r')
+    trainfile = h5py.File(os.path.join(params.dataset, args.trainfile), 'r')
+    validfile = h5py.File(os.path.join(params.dataset, args.validfile), 'r')
+    testfile = h5py.File(os.path.join(params.dataset, args.testfile), 'r')
     
     #gets the train size
     train_size = trainfile['y'].shape[0]
