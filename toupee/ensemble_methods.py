@@ -34,7 +34,7 @@ class Aggregator:
     def predict_proba(self, X=None):
         raise NotImplementedException()
 
-    def predict_classes(self, X): #<- with h5 files X must be a generator object!
+    def predict_classes(self, X):
         return np.argmax(self.predict_proba(X), axis = 1)
 
     def predict(self, X):
@@ -707,7 +707,7 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
             if self.member_number > 0:
                 train_indexes = self.resampler.make_new_train(self.params.resample_size)
             else:
-                train_indexes = None
+                train_indexes = [None,None]
             
             #packs the needed data
             dataset = [

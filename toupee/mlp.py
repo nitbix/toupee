@@ -323,7 +323,9 @@ def sequential_model_h5(dataset, params, pretraining_set = None,
     results = common.Results(params)
     
     #3-4 data holders: (1) sampled train data, (2-3) eval data - train/valid/[test] sets
-    sampled_indexes = dataset[0]
+    sampled_indexes = dataset[0][0]
+    if sampled_indexes is not None:
+        sampled_indexes.sort()
     files = dataset[1]
     train_holder = common.DataHolderH5(files[0], params.batch_size, sampled_indexes, to_one_hot = True)
     train_eval_holder = common.DataHolderH5(files[0], params.batch_size, None, to_one_hot = True)

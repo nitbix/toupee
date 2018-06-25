@@ -280,6 +280,10 @@ if __name__ == '__main__':
     #TODO: if any data transform option is true, the h5 version will be incorrect
     is_h5 = check_data_format(args)
     
+    print("DBG MODE - SETTING SHUFFLE OFF", params.shuffle_dataset)
+    params.shuffle_dataset = False
+    print("DBG MODE - SETTING SHUFFLE OFF", params.shuffle_dataset)
+    
     if is_h5 is False: 
         intermediate_scores, final_score = run_ensembles_npz(args, params)
     else:
