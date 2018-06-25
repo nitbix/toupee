@@ -16,13 +16,155 @@ import argparse
 import os
 import re
 import dill
-from toupee.common import accuracy, euclidian_distance, relative_distance
+from toupee.common import accuracy, euclidian_distance, relative_distance, accuracy_h5
 
 from pymongo import MongoClient
 import numpy as np
 import datetime
 import subprocess
+import h5py
 
+
+def check_data_format(args):
+    '''
+    Checks if the input file is a .npz or a h5
+    '''
+    
+    if (args.trainfile[-4:] == '.npz') and (args.validfile[-4:] == '.npz') and (args.testfile[-4:] == '.npz'):
+        is_h5 = False
+        print("\nLoading .npz data - the dataset stays on the RAM\n")
+    elif (args.trainfile[-3:] == '.h5') and (args.validfile[-3:] == '.h5') and (args.testfile[-3:] == '.h5'):
+        is_h5 = True
+        print("\nLoading .h5 data - the dataset stays on the hard drive\n")
+    else:
+        raise ValueError('.npz or .h5 files are required; All sets must have the same format.')
+        
+    return(is_h5)
+    
+    
+def get_scorer(classification, is_h5 = False):
+    
+    scorer = []
+    scorer_name = []
+    if classification:
+        if is_h5:
+            scorer.append(accuracy_h5)
+            scorer_name.append('accuracy')
+        else:
+            scorer.append(accuracy)
+            scorer_name.append('accuracy')
+    else:
+        scorer.append(euclidian_distance)
+        scorer_name.append('euclidian distance')
+        
+        scorer.append(relative_distance)
+        scorer_name.append('relative distance')
+        
+    return (scorer, scorer_name)
+        
+
+
+def run_ensembles_npz(args, params):
+
+    #loads the npz dataset to memory
+    dataset = data.load_data(params.dataset,
+                             pickled = params.pickled,
+                             one_hot_y = params.one_hot,
+                             join_train_and_valid = params.join_train_and_valid,
+                             zca_whitening = params.zca_whitening,
+                             testfile = args.testfile, 
+                             validfile = args.validfile, 
+                             trainfile = args.trainfile)
+
+    method = params.method
+    method.prepare(params, dataset)
+    train_set = method.resampler.get_train()
+    valid_set = method.resampler.get_valid()
+    
+    #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
+    scorer, scorer_name = get_scorer(params.classification)
+    
+    members = []
+    intermediate_scores = []
+    final_score = None
+    for i in range(0,params.ensemble_size):
+        print(('\n\ntraining member {0}'.format(i)))
+        m = method.create_member()
+        members.append(m[:2])
+        ensemble = method.create_aggregator(params,members,train_set,valid_set)
+        test_set_x, test_set_y = method.resampler.get_test()
+        
+        test_score = []
+        for j in range(len(scorer)):
+            test_score.append(scorer[j](ensemble,test_set_x,test_set_y))
+            print(('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j])))
+        
+        intermediate_scores.append(test_score)
+        final_score = test_score
+        if len(m) > 2 and not m[2]: #the ensemble method told us to stop
+            break
+    
+    for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
+    
+    if args.dump_to is not None:
+        dill.dump({'members': members, 'ensemble': ensemble},
+                # open(args.dump_to,"wb"))
+                open(os.path.join(params.dataset, args.dump_to),"wb"))
+    if args.dump_shapes_to is not None:
+        if args.dump_shapes_to == '':
+            dump_shapes_to = args.seed
+        else:
+            dump_shapes_to = args.dump_shapes_to
+        for i in range(len(members)):
+            with open("{0}member-{1}.model".format(dump_shapes_to, i),"w") as f:
+                f.truncate()
+                f.write(members[i][0])
+                
+    return (intermediate_scores, final_score)
+
+    
+def run_ensembles_h5(args, params):
+
+    #startup: opens the h5 files
+    trainfile = h5py.File(os.path.join(params.dataset, args.trainfile), 'r')
+    validfile = h5py.File(os.path.join(params.dataset, args.validfile), 'r')
+    testfile = h5py.File(os.path.join(params.dataset, args.testfile), 'r')
+    
+    #gets the train size
+    train_size = trainfile['y'].shape[0]
+    
+    #initializes the ensemble method for the h5 file
+    method = params.method
+    method.prepare(params, None, h5_size = train_size)
+    
+    #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
+    scorer, scorer_name = get_scorer(params.classification, is_h5 = True)
+    
+    members = []
+    intermediate_scores = []
+    final_score = None
+    for i in range(0,params.ensemble_size):
+        print(('\n\ntraining member {0}'.format(i)))
+        m = method.create_member([trainfile, validfile, testfile])
+        members.append(m[:2])
+        ensemble = method.create_aggregator(params,members,None,None)
+        test_score = []
+        for j in range(len(scorer)):
+            test_score.append(scorer[j](ensemble,trainfile,params.batch_size))
+            print(('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j])))
+        
+        intermediate_scores.append(test_score)
+        final_score = test_score
+        if len(m) > 2 and not m[2]: #the ensemble method told us to stop
+            break
+            
+    #cleanup: closes the h5 files
+    trainfile.close()
+    validfile.close()
+    testfile.close()
+    
+    return (intermediate_scores, final_score)
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a single MLP')
@@ -132,67 +274,21 @@ if __name__ == '__main__':
 
     for arg, param in arg_param_pairings:
         arg_params(arg,param)
-    dataset = data.load_data(params.dataset,
-                             pickled = params.pickled,
-                             one_hot_y = params.one_hot,
-                             join_train_and_valid = params.join_train_and_valid,
-                             zca_whitening = params.zca_whitening,
-                             testfile = args.testfile, 
-                             validfile = args.validfile, 
-                             trainfile = args.trainfile)
-    method = params.method
-    method.prepare(params,dataset)
-    train_set = method.resampler.get_train()
-    valid_set = method.resampler.get_valid()
+        
     
-    #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
-    scorer = []
-    scorer_name = []
-    if params.classification == True:   
-        scorer.append(accuracy)
-        scorer_name.append('accuracy')
+    #Checks for h5/npz data
+    #TODO: if any data transform option is true, the h5 version will be incorrect
+    is_h5 = check_data_format(args)
+    
+    print("DBG MODE - SETTING SHUFFLE OFF", params.shuffle_dataset)
+    params.shuffle_dataset = False
+    print("DBG MODE - SETTING SHUFFLE OFF", params.shuffle_dataset)
+    
+    if is_h5 is False: 
+        intermediate_scores, final_score = run_ensembles_npz(args, params)
     else:
-        scorer.append(euclidian_distance)
-        scorer_name.append('euclidian distance')
+        intermediate_scores, final_score = run_ensembles_h5(args, params)
         
-        scorer.append(relative_distance)
-        scorer_name.append('relative distance')
-    
-    members = []
-    intermediate_scores = []
-    final_score = None
-    for i in range(0,params.ensemble_size):
-        print(('\n\ntraining member {0}'.format(i)))
-        m = method.create_member()
-        members.append(m[:2])
-        ensemble = method.create_aggregator(params,members,train_set,valid_set)
-        test_set_x, test_set_y = method.resampler.get_test()
-        
-        test_score = []
-        for j in range(len(scorer)):
-            test_score.append(scorer[j](ensemble,test_set_x,test_set_y))
-            print(('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j])))
-        
-        intermediate_scores.append(test_score)
-        final_score = test_score
-        if len(m) > 2 and not m[2]: #the ensemble method told us to stop
-            break
-    
-    for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
-    
-    if args.dump_to is not None:
-        dill.dump({'members': members, 'ensemble': ensemble},
-                # open(args.dump_to,"wb"))
-                open(os.path.join(params.dataset, args.dump_to),"wb"))
-    if args.dump_shapes_to is not None:
-        if args.dump_shapes_to == '':
-            dump_shapes_to = args.seed
-        else:
-            dump_shapes_to = args.dump_shapes_to
-        for i in range(len(members)):
-            with open("{0}member-{1}.model".format(dump_shapes_to, i),"w") as f:
-                f.truncate()
-                f.write(members[i][0])
                 
     if 'results_db' in params.__dict__:
         if 'results_host' in params.__dict__:

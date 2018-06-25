@@ -12,6 +12,8 @@ import numpy
 import yaml
 import os
 import collections
+import math
+import numpy as np
 
 numpy.set_printoptions(threshold=numpy.inf)
 
@@ -86,7 +88,7 @@ def serialize(o):
             else:
                 raise Exception("don't know how to save {0}".format(type(o)))
 
-                
+ 
 #for classification problems:                
 def errors(classifier, test_set_x, test_set_y):
     classification = classifier.predict_classes(test_set_x)
@@ -126,3 +128,136 @@ def relative_distance(predictor, test_set_x, test_set_y):
 
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()
+
+#---------------------------------------------------------------------------------
+# h5 stuff 
+    
+#TODO: implement shuffle for this data holder
+class DataHolderH5:
+    ''' Data holder "generator" [currently it's an iterator, got it's good enough] class for h5 data'''
+    def __init__(self, file, batch_size, sampled_indexes, hold_y = True, to_one_hot = False):
+        self.data_x = file['x']
+        
+        self.hold_y = hold_y
+        self.to_one_hot = to_one_hot
+        if hold_y:
+            self.data_y = file['y']
+            if to_one_hot:
+                self.n_classes = self.data_y[:].max() + 1
+        
+        self.sampled_indexes = sampled_indexes
+        if sampled_indexes is not None:
+            self.num_examples = len(sampled_indexes)
+        else:
+            self.num_examples = self.data_x.shape[0] # Number of examples in the dataset
+        self.batch_size = batch_size
+        self.steps_per_epoch = math.ceil(self.num_examples/self.batch_size)
+        self.current_step = 0
+        
+        
+           
+    # Generator structure requires the __iter__ and a __next__ methods
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        #no stop condition! "fit_generator" assumes an endless generator
+        
+        step = self.current_step % self.steps_per_epoch
+        
+        if self.sampled_indexes is None:
+            #sequential iteration over the data
+            if (step+1) == self.steps_per_epoch:    #<- last epoch
+                batch_indexes = list(range(step*self.batch_size, self.num_examples))
+            else:
+                batch_indexes = list(range(step*self.batch_size, (step+1)*self.batch_size))
+                
+            self.current_step += 1
+        
+            if self.hold_y:
+                # Return the arrays in the shape that fit_gen uses (data, target)
+                if self.to_one_hot:
+                    return (self.data_x[batch_indexes, ...],
+                            one_hot(self.data_y[batch_indexes, ...], self.n_classes))
+                else:
+                    return (self.data_x[batch_indexes, ...],
+                            self.data_y[batch_indexes, ...])
+            else:
+                # Return the arrays in the shape that predict_generator uses (data)
+                return (self.data_x[batch_indexes, ...]) 
+        
+        #problem with returning the "sampled_indexes" only:
+        # H5 can only slice given i) a sequencial list of integers or ii) a boolean array
+        # [i.e. there is no pretty slicing, as in numpy]
+        # since ii) might create a giant boolean array, let's do i) and then filter stuff
+        else:
+            
+            if (step+1) == self.steps_per_epoch:    #<- last epoch
+                batch_indexes = self.sampled_indexes[step*self.batch_size : self.num_examples]
+            else:
+                batch_indexes = self.sampled_indexes[step*self.batch_size : (step+1)*self.batch_size]
+                
+            first_index = batch_indexes[0]
+            last_index = batch_indexes[-1] 
+            full_range = list(range(first_index, last_index + 1))
+            
+            batch_indexes = batch_indexes - first_index #subtracts the "offset"
+            data_x = np.asarray(self.data_x[full_range, ...])
+            data_x = data_x[batch_indexes, ...]
+            
+            if self.hold_y:
+                data_y = np.asarray(self.data_y[full_range, ...])
+                data_y = data_y[batch_indexes, ...]
+                
+                if self.to_one_hot:
+                    data_y = one_hot(data_y, self.n_classes)
+                    
+                return(data_x, data_y)
+                
+            else:
+                return(data_x)
+                
+            
+            
+
+                
+                
+#for classification problems: 
+#TODO: pass as argument the number of classes               
+def errors_h5(classifier, file_object, batch_size):
+
+    x_generator = DataHolderH5(file_object, batch_size, None, hold_y = False)
+    
+    # classification_proba = classifier.predict_proba(x_generator)
+    classification_proba = classifier.predict_generator(x_generator, steps = x_generator.steps_per_epoch)
+    
+    if classification_proba.shape[-1] > 1:
+        classification = classification_proba.argmax(axis=-1)
+    else:
+        classification = (classification_proba > 0.5).astype('int32')
+
+    c = numpy.argmax( one_hot(file_object['y'], file_object['y'][:].max()+1) , axis=1)        #TODO: check if this works
+    r = numpy.where(classification != c, 1.0, 0.0)
+    return r
+    
+def accuracy_h5(classifier, file_object, batch_size):
+    
+    x_generator = DataHolderH5(file_object, batch_size, None, hold_y = False)
+    classification_proba = classifier.predict_proba(x_generator)
+    
+    if classification_proba.shape[-1] > 1:
+        classification = classification_proba.argmax(axis=-1)
+    else:
+        classification = (classification_proba > 0.5).astype('int32')
+
+    c = numpy.argmax( one_hot(file_object['y'], file_object['y'][:].max()+1) , axis=1)        #TODO: check if this works
+    e = numpy.where(classification != c, 1.0, 0.0)
+
+    return 1.0 - (float(e.sum()) / float(file_object['y'].shape[0]))
+ 
+#TODO: this is kinda a redefinition of data.py's one_hot -> take care of the duplicates!
+def one_hot(data, n_classes):
+    b = np.zeros((data.size, n_classes),dtype='float32')
+    b[np.arange(data.size), data] = 1.
+    return b
+    
