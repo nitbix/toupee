@@ -375,4 +375,3 @@ def one_hot(dataset):
     b = np.zeros((dataset.size, dataset.max()+1),dtype='float32')
     b[np.arange(dataset.size), dataset] = 1.
     return b
-
