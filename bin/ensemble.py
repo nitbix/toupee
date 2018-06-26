@@ -143,6 +143,27 @@ def run_ensembles(args, params):
         if len(m) > 2 and not m[2]: #the ensemble method told us to stop
             break
             
+    
+    for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
+    
+    
+    #stores the ensemble if needed
+    if args.dump_to is not None:
+        print("Storing the ensemble...")
+        dill.dump({'members': members, 'ensemble': ensemble},
+                # open(args.dump_to,"wb"))
+                open(os.path.join(params.dataset, args.dump_to),"wb"))
+    if args.dump_shapes_to is not None:
+        if args.dump_shapes_to == '':
+            dump_shapes_to = args.seed
+        else:
+            dump_shapes_to = args.dump_shapes_to
+        for i in range(len(members)):
+            with open("{0}member-{1}.model".format(dump_shapes_to, i),"w") as f:
+                f.truncate()
+                f.write(members[i][0])
+    
+    
     #cleanup: closes the files
     trainfile.close()
     validfile.close()
@@ -299,7 +320,6 @@ if __name__ == '__main__':
     
     #Runs the ensemble training
     intermediate_scores, final_score = run_ensembles(args, params)
-    
     
     #Saves the results in the DB            
     store_results(args, params, intermediate_scores, final_score)
