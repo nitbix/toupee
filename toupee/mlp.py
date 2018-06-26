@@ -58,6 +58,9 @@ def initialize_model(params, sample_weight, model_config, model_yaml,
 
     print(("total weight count: {0}".format(total_weights)))
     
+    if frozen_layers is None:
+        frozen_layers = []
+        
     for l in frozen_layers:
         model.layers[l].trainable = False
     
@@ -109,14 +112,15 @@ def print_results(model, train_metrics, valid_metrics, test_metrics):
           
 def sequential_model(dataset, params, pretraining_set = None, 
         model_weights = None, return_results = False, member_number = None, 
-        model_yaml = None, model_config = None, frozen_layers = [], 
+        model_yaml = None, model_config = None, frozen_layers = None, 
         sample_weight = None):
     """
     Initialize the parameters and create the network.
     [GENERATOR DATA VERSION]
     """
 
-    model, total_weights = initialize_model(params, sample_weight, model_config, 
+    #_ was "total_weights" before
+    model, _ = initialize_model(params, sample_weight, model_config, 
                                             model_yaml, model_weights, frozen_layers)
 
     results = common.Results(params)
