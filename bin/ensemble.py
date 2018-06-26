@@ -23,6 +23,7 @@ import numpy as np
 import datetime
 import subprocess
 import h5py
+import time
 
 
 
@@ -106,8 +107,39 @@ def get_scorer(classification):
     return (scorer, scorer_name)
         
 
+def store_ensemble(args, params, members, ensemble):
+
+    if args.dump_to is not None:
+        
+        
+        if args.sweeping_architectures:
+            ensemble_name = 'ensemble_' + str(params.ensemble_id) + '.pkl'
+            
+            if not os.path.exists(os.path.join(params.dataset, 'ensembles/')):
+                os.makedirs(os.path.join(params.dataset, 'ensembles/'))
+            
+            ensemble_location = os.path.join(params.dataset, 'ensembles/' , ensemble_name)
+        else:
+            ensemble_location = os.path.join(params.dataset, args.dump_to)
+        
+        print("\nStoring the ensemble to {0}\n".format(ensemble_location))
+        
+        dill.dump({'members': members, 'ensemble': ensemble},
+                open(ensemble_location,"wb"))
+                
+    if args.dump_shapes_to is not None:
+        if args.dump_shapes_to == '':
+            dump_shapes_to = args.seed
+        else:
+            dump_shapes_to = args.dump_shapes_to
+        for i in range(len(members)):
+            with open("{0}member-{1}.model".format(dump_shapes_to, i),"w") as f:
+                f.truncate()
+                f.write(members[i][0])
+        
     
-def run_ensembles(args, params):
+    
+def run_ensemble(args, params):
 
     #Checks for h5/npz data, and returns the files if successful
     trainfile, validfile, testfile = load_data_files(args, params)
@@ -143,23 +175,8 @@ def run_ensembles(args, params):
     
     for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
     
-    
-    #stores the ensemble if needed
-    if args.dump_to is not None:
-        print("Storing the ensemble...")
-        dill.dump({'members': members, 'ensemble': ensemble},
-                # open(args.dump_to,"wb"))
-                open(os.path.join(params.dataset, args.dump_to),"wb"))
-    if args.dump_shapes_to is not None:
-        if args.dump_shapes_to == '':
-            dump_shapes_to = args.seed
-        else:
-            dump_shapes_to = args.dump_shapes_to
-        for i in range(len(members)):
-            with open("{0}member-{1}.model".format(dump_shapes_to, i),"w") as f:
-                f.truncate()
-                f.write(members[i][0])
-    
+    #stores the ensemble (if needed)
+    store_ensemble(args, params, members, ensemble)
     
     #cleanup: closes the files
     trainfile.close()
@@ -179,7 +196,7 @@ def store_results(args, params, intermediate_scores, final_score):
             host = params.results_host
         else:
             host = None
-        print(("saving results to {0}@{1}".format(params.results_db,host)))
+        print(("\nSaving results to {0}@{1}\n".format(params.results_db,host)))
         conn = MongoClient(host=host)
         db = conn[params.results_db]
         if 'results_table' in params.__dict__: 
@@ -201,6 +218,7 @@ def store_results(args, params, intermediate_scores, final_score):
                     "date": datetime.datetime.utcnow(),
                     "code version": subprocess.check_output(["git", "describe","--always"]).strip(),
                     "dict_number": args.dict_number,
+                    "ensemble ID": params.ensemble_id,
                   }                
         
         #adds the dependency ID
@@ -268,6 +286,8 @@ if __name__ == '__main__':
                         action='store_true')
     parser.add_argument('--remove-tmp-files', help="remove the temporary model files at the end.",
                         action='store_true')
+    parser.add_argument('--sweeping-architectures', help="use while sweeping multiple architectures",
+                        action='store_true')
 
     args = parser.parse_args()
     #this needs to come before all the toupee and theano imports
@@ -290,6 +310,7 @@ if __name__ == '__main__':
         (args.testfile, 'testfile'),
         (args.validfile, 'validfile'),
         (args.trainfile, 'trainfile'),
+        (str(round(time.time())), 'ensemble_id')    #<-- unique ID for this ensemble
     ]
     
     if 'seed' in args.__dict__:
@@ -316,7 +337,7 @@ if __name__ == '__main__':
         
     
     #Runs the ensemble training
-    intermediate_scores, final_score = run_ensembles(args, params)
+    intermediate_scores, final_score = run_ensemble(args, params)
     
     #Saves the results in the DB            
     store_results(args, params, intermediate_scores, final_score)
