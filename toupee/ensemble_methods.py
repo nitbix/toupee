@@ -34,7 +34,7 @@ class Aggregator:
     def predict_proba(self, X=None):
         raise NotImplementedException()
 
-    def predict_classes(self, X): #<- with h5 files X must be a generator object!
+    def predict_classes(self, X):
         return np.argmax(self.predict_proba(X), axis = 1)
 
     def predict(self, X):
@@ -104,14 +104,14 @@ class WeightedAveragingRunner(Aggregator):
         self.weights = weights
         self.is_h5 = is_h5
 
-    def predict_proba(self,X): #<- with h5 files X must be a generator object!
+    def predict_proba(self,X):
         prob = []
         for i in range(len(self.members)):
             m_yaml, m_weights = self.members[i]
             m = keras.models.model_from_yaml(m_yaml)
             m.set_weights(m_weights)
             if self.is_h5:
-                p = m.predict_generator(X, steps = X.steps_per_epoch)
+                p = m.predict_generator(X.generate(), steps = X.steps_per_epoch)
             else:
                 p = m.predict_proba(X, batch_size = self.params.batch_size)
             prob.append(p * self.weights[i])
@@ -707,7 +707,7 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
             if self.member_number > 0:
                 train_indexes = self.resampler.make_new_train(self.params.resample_size)
             else:
-                train_indexes = None
+                train_indexes = [None,None]
             
             #packs the needed data
             dataset = [
@@ -720,7 +720,7 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
                     member_number = self.member_number)
                     
             #gets the errors for the train set and updates the weights
-            errors = common.errors_h5(m, h5_files[0], params.batch_size)
+            errors = common.errors_h5(m, h5_files[0], self.params.batch_size)
             
             
         else:
@@ -768,7 +768,7 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
         self.params = params
         self.dataset = dataset
         self.h5_size = h5_size
-        self.resampler = WeightedResampler(dataset, h5_size)
+        self.resampler = WeightedResampler(dataset, h5_size = h5_size)
         self.D = self.resampler.weights
         self.alphas = []
         self.member_number = 0
@@ -945,3 +945,4 @@ class AdaBoost_Regression(EnsembleMethod):
 #
 #    def serialize(self):
 #        return 'Stacking'
+
