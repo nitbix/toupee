@@ -33,7 +33,8 @@ import keras
 import keras.preprocessing.image
 
 
-def initialize_model(sample_weight, model_config, model_yaml, model_weights):
+def initialize_model(params, sample_weight, model_config, model_yaml, 
+                        model_weights, frozen_layers):
     
     print("loading model...")
     if sample_weight is not None:
@@ -208,7 +209,8 @@ def sequential_model(dataset, params, pretraining_set = None,
     Initialize the parameters and create the network.
     """
 
-    model, total_weights = initialize_model(sample_weight, model_config, model_yaml, model_weights)
+    model, total_weights = initialize_model(params, sample_weight, model_config, 
+                                            model_yaml, model_weights, frozen_layers)
 
     results = common.Results(params)
     
@@ -315,17 +317,20 @@ def sequential_model_h5(dataset, params, pretraining_set = None,
     [H5 DATA VERSION]
     """
 
-    model, total_weights = initialize_model(sample_weight, model_config, model_yaml, model_weights)
+    model, total_weights = initialize_model(params, sample_weight, model_config, 
+                                            model_yaml, model_weights, frozen_layers)
 
     results = common.Results(params)
     
     #3-4 data holders: (1) sampled train data, (2-3) eval data - train/valid/[test] sets
-    sampled_indexes = dataset[0]
+    sampled_indexes = dataset[0][0]
+    if sampled_indexes is not None:
+        sampled_indexes.sort()
     files = dataset[1]
-    train_holder = common.DataHolderH5(files[0], params.batch_size, sampled_indexes)
-    train_eval_holder = common.DataHolderH5(files[0], params.batch_size, None)
-    valid_holder = common.DataHolderH5(files[1], params.batch_size, None)
-    test_holder = common.DataHolderH5(files[2], params.batch_size, None)
+    train_holder = common.DataHolderH5(files[0], params.batch_size, sampled_indexes, to_one_hot = True)
+    train_eval_holder = common.DataHolderH5(files[0], params.batch_size, None, to_one_hot = True)
+    valid_holder = common.DataHolderH5(files[1], params.batch_size, None, to_one_hot = True)
+    test_holder = common.DataHolderH5(files[2], params.batch_size, None, to_one_hot = True)
     
     start_time = time.clock()
     
@@ -358,22 +363,24 @@ def sequential_model_h5(dataset, params, pretraining_set = None,
         if lr_schedule is not None:
             callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
         
-        hist = model.fit_generator(train_holder,
+        hist = model.fit_generator(train_holder.generate(),
                   steps_per_epoch = train_holder.steps_per_epoch,
                   epochs = params.n_epochs,
-                  validation_data = valid_holder,
-                  test_data = test_holder,
+                  validation_data = valid_holder.generate(),
+                  validation_steps = valid_holder.steps_per_epoch,
+                  test_data = test_holder.generate(),
+                  test_steps = test_holder.steps_per_epoch,
                   callbacks = callbacks,
                   sample_weight = sample_weight)
                   
     model.set_weights(checkpointer.best_model)
     
     #evals everything with a generator
-    train_metrics = model.evaluate_generator(train_eval_holder,
+    train_metrics = model.evaluate_generator(train_eval_holder.generate(),
             steps = train_eval_holder.steps_per_epoch)
-    valid_metrics = model.evaluate_generator(valid_holder,
+    valid_metrics = model.evaluate_generator(valid_holder.generate(),
             steps = valid_holder.steps_per_epoch)
-    test_metrics = model.evaluate_generator(test_holder,
+    test_metrics = model.evaluate_generator(test_holder.generate(),
             steps = test_holder.steps_per_epoch)
             
     print_results(model, train_metrics, valid_metrics, test_metrics)

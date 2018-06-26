@@ -25,21 +25,67 @@ import subprocess
 import h5py
 
 
-def check_data_format(args):
+
+def set_file_location(args, params):
     '''
-    Checks if the input file is a .npz or a h5
+    Sets the input file folder
+    '''
+    
+    #Dataset location: hardcoded (@.yaml) < latest-experiment flag < specific dict number
+    
+    folder = None
+
+    if args.latest_experiment or args.dict_number:
+        conn = MongoClient(host=args.results_host)
+        db = conn[args.results_db]
+        table = db[args.results_dep]
+        
+        if args.latest_experiment:
+            #gets the most recent ID
+            latest_entry = table.find().sort("_id", -1).limit(1)
+            if latest_entry.count() == 0:
+                raise ValueError('No DB entries for trained NNs')
+            else:
+                latest_entry = latest_entry[0]
+                
+            latest_entry_location = latest_entry['file_location']
+            folder = latest_entry_location
+            
+        if args.dict_number is not None:
+            #TODO: for now, it assumes it is the local user folder
+            target_root = os.path.expanduser("~/data_tmp")
+            dict_dir = os.path.join(target_root, 'dict_' + str(args.dict_number))
+            
+            if os.path.exists(dict_dir):
+                folder = dict_dir
+            else:
+                print("The desired dict_number doesn't exist!")
+                
+    return folder
+
+
+    
+def load_data_files(args, params):
+    '''
+    Checks if the input file is a .npz or a h5 - and loads those files
     '''
     
     if (args.trainfile[-4:] == '.npz') and (args.validfile[-4:] == '.npz') and (args.testfile[-4:] == '.npz'):
-        is_h5 = False
-        print("\nLoading .npz data - the dataset stays on the RAM\n")
+        print("\nLoading .npz data\n")
+        trainfile = np.load(os.path.join(dataset, trainfile))
+        validfile = np.load(os.path.join(dataset, validfile))
+        testfile = np.load(os.path.join(dataset, testfile))
     elif (args.trainfile[-3:] == '.h5') and (args.validfile[-3:] == '.h5') and (args.testfile[-3:] == '.h5'):
-        is_h5 = True
-        print("\nLoading .h5 data - the dataset stays on the hard drive\n")
+        print("\nLoading .h5 data\n")
+        trainfile = h5py.File(os.path.join(params.dataset, args.trainfile), 'r')
+        validfile = h5py.File(os.path.join(params.dataset, args.validfile), 'r')
+        testfile = h5py.File(os.path.join(params.dataset, args.testfile), 'r')
     else:
         raise ValueError('.npz or .h5 files are required; All sets must have the same format.')
-        
-    return(is_h5)
+    
+    files = [trainfile, validfile, testfile]
+    return(files)
+    
     
     
 def get_scorer(classification, is_h5 = False):
@@ -47,7 +93,7 @@ def get_scorer(classification, is_h5 = False):
     scorer = []
     scorer_name = []
     if classification:
-        if if_h5:
+        if is_h5:
             scorer.append(accuracy_h5)
             scorer_name.append('accuracy')
         else:
@@ -63,72 +109,11 @@ def get_scorer(classification, is_h5 = False):
     return (scorer, scorer_name)
         
 
-
-def run_ensembles_npz(args, params):
-
-    #loads the npz dataset to memory
-    dataset = data.load_data(params.dataset,
-                             pickled = params.pickled,
-                             one_hot_y = params.one_hot,
-                             join_train_and_valid = params.join_train_and_valid,
-                             zca_whitening = params.zca_whitening,
-                             testfile = args.testfile, 
-                             validfile = args.validfile, 
-                             trainfile = args.trainfile)
-
-    method = params.method
-    method.prepare(params, dataset)
-    train_set = method.resampler.get_train()
-    valid_set = method.resampler.get_valid()
     
-    #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
-    scorer, scorer_name = get_scorer(params.classification)
-    
-    members = []
-    intermediate_scores = []
-    final_score = None
-    for i in range(0,params.ensemble_size):
-        print(('\n\ntraining member {0}'.format(i)))
-        m = method.create_member()
-        members.append(m[:2])
-        ensemble = method.create_aggregator(params,members,train_set,valid_set)
-        test_set_x, test_set_y = method.resampler.get_test()
-        
-        test_score = []
-        for j in range(len(scorer)):
-            test_score.append(scorer[j](ensemble,test_set_x,test_set_y))
-            print(('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j])))
-        
-        intermediate_scores.append(test_score)
-        final_score = test_score
-        if len(m) > 2 and not m[2]: #the ensemble method told us to stop
-            break
-    
-    for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
-    
-    if args.dump_to is not None:
-        dill.dump({'members': members, 'ensemble': ensemble},
-                # open(args.dump_to,"wb"))
-                open(os.path.join(params.dataset, args.dump_to),"wb"))
-    if args.dump_shapes_to is not None:
-        if args.dump_shapes_to == '':
-            dump_shapes_to = args.seed
-        else:
-            dump_shapes_to = args.dump_shapes_to
-        for i in range(len(members)):
-            with open("{0}member-{1}.model".format(dump_shapes_to, i),"w") as f:
-                f.truncate()
-                f.write(members[i][0])
-                
-    return (intermediate_scores, final_score)
+def run_ensembles(args, params):
 
-    
-def run_ensembles_h5(args, params):
-
-    #startup: opens the h5 files
-    trainfile = h5py.File(args.trainfile, 'r')
-    validfile = h5py.File(args.validfile, 'r')
-    testfile = h5py.File(args.testfile, 'r')
+    #Checks for h5/npz data, and returns the files if successful
+    trainfile, validfile, testfile = load_data_files(args, params)
     
     #gets the train size
     train_size = trainfile['y'].shape[0]
@@ -158,12 +143,74 @@ def run_ensembles_h5(args, params):
         if len(m) > 2 and not m[2]: #the ensemble method told us to stop
             break
             
-    #cleanup: closes the h5 files
+    #cleanup: closes the files
     trainfile.close()
     validfile.close()
     testfile.close()
     
     return (intermediate_scores, final_score)
+    
+    
+def store_results(args, params, intermediate_scores, final_score):
+    '''
+    Stores the results in the DB
+    '''
+    
+    if 'results_db' in params.__dict__:
+        if 'results_host' in params.__dict__:
+            host = params.results_host
+        else:
+            host = None
+        print(("saving results to {0}@{1}".format(params.results_db,host)))
+        conn = MongoClient(host=host)
+        db = conn[params.results_db]
+        if 'results_table' in params.__dict__: 
+            table_name = params.results_table
+        else:
+            table_name = 'results'
+        table = db[table_name]
+        
+        #removes mongodb-buggy "params" entries
+        params.method = ''
+        
+        results = {
+                    "params_file": args.params_file,
+                    "params": params.__dict__,
+                    "intermediate_test_scores" : intermediate_scores,
+                    "final_test_score" : final_score,
+                    "best_score": np.max(intermediate_scores),
+                    "best_score_after_ensemble_#": np.argmax(intermediate_scores).item(),   #without "item()", defaults to np.int64, which is not supported by mongodb
+                    "date": datetime.datetime.utcnow(),
+                    "code version": subprocess.check_output(["git", "describe","--always"]).strip(),
+                    "dict_number": args.dict_number,
+                  }                
+        
+        #adds the dependency ID
+        if 'results_dep' in params.__dict__:
+            depend_col = db[params.results_dep]
+            if(depend_col.count() > 0): #if the collection exists
+                latest_entry = depend_col.find().sort("_id", -1).limit(1)
+                latest_id = latest_entry[0]['_id']
+            else:
+                latest_id = 'no previous entry!'
+            column_name = params.results_dep + '_id'
+            results[column_name] = latest_id
+        
+        
+        id = table.insert_one(results).inserted_id
+        
+        #prints stuff if needed [for now its on, to help with the dbg]
+        if True:
+            import pprint
+            print("PRINTING DB ENTRY:")
+            print(("DB NAME = ", params.results_db))
+            print(("TABLE NAME = ", table_name))
+            print("TABLE ENRTY:")
+            latest_entry = table.find().sort("_id", -1).limit(1)
+            pprint.pprint(latest_entry[0])
+        
+        print(("\n\nDone. [Results stored in the DB, ID = {0}]".format(id)))
+    
     
 
 if __name__ == '__main__':
@@ -234,40 +281,14 @@ if __name__ == '__main__':
     from toupee import config 
     from toupee.mlp import sequential_model
 
-    
-    
-    #Dataset location: hardcoded (@.yaml) < latest-experiment flag < specific dict number
-    
+    #sets the ensemble parameters
+    #TODO: if any data transform option is true, :poop_emoji:
     params = config.load_parameters(args.params_file)
-
-    if args.latest_experiment or args.dict_number:
-        conn = MongoClient(host=args.results_host)
-        db = conn[args.results_db]
-        table = db[args.results_dep]
-        
-        if args.latest_experiment:
-            #gets the most recent ID
-            latest_entry = table.find().sort("_id", -1).limit(1)
-            if latest_entry.count() == 0:
-                raise ValueError('No DB entries for trained NNs')
-            else:
-                latest_entry = latest_entry[0]
-                
-            latest_entry_location = latest_entry['file_location']
-            params.dataset = latest_entry_location
-            
-        if args.dict_number is not None:
-            #TODO: for now, it assumes it is the local user folder
-            target_root = os.path.expanduser("~/data_tmp")
-            dict_dir = os.path.join(target_root, 'dict_' + str(args.dict_number))
-            
-            if os.path.exists(dict_dir):
-                params.dataset = dict_dir
-            else:
-                print("The desired dict_number doesn't exist!")
-            
-
-
+    
+    data_folder = set_file_location(args, params)
+    if data_folder is not None:
+        params.dataset = data_folder
+    
     def arg_params(arg_value,param):
         if arg_value is not None:
             params.__dict__[param] = arg_value
@@ -276,67 +297,10 @@ if __name__ == '__main__':
         arg_params(arg,param)
         
     
-    #Checks for h5/npz data
-    #TODO: if any data transform option is true, the h5 version will be incorrect
-    is_h5 = check_data_format(args)
+    #Runs the ensemble training
+    intermediate_scores, final_score = run_ensembles(args, params)
     
-    if is_h5 is False: 
-        intermediate_scores, final_score = run_ensembles_npz(args, params)
-    else:
-        intermediate_scores, final_score = run_ensembles_h5(args, params)
-        
-                
-    if 'results_db' in params.__dict__:
-        if 'results_host' in params.__dict__:
-            host = params.results_host
-        else:
-            host = None
-        print(("saving results to {0}@{1}".format(params.results_db,host)))
-        conn = MongoClient(host=host)
-        db = conn[params.results_db]
-        if 'results_table' in params.__dict__: 
-            table_name = params.results_table
-        else:
-            table_name = 'results'
-        table = db[table_name]
-        
-        #removes mongodb-buggy "params" entries
-        params.method = ''
-        
-        results = {
-                    "params_file": args.params_file,
-                    "params": params.__dict__,
-                    "intermediate_test_scores" : intermediate_scores,
-                    "final_test_score" : final_score,
-                    "best_score": np.max(intermediate_scores),
-                    "best_score_after_ensemble_#": np.argmax(intermediate_scores).item(),   #without "item()", defaults to np.int64, which is not supported by mongodb
-                    "date": datetime.datetime.utcnow(),
-                    "code version": subprocess.check_output(["git", "describe","--always"]).strip(),
-                    "dict_number": args.dict_number,
-                  }                
-        
-        #adds the dependency ID
-        if 'results_dep' in params.__dict__:
-            depend_col = db[params.results_dep]
-            if(depend_col.count() > 0): #if the collection exists
-                latest_entry = depend_col.find().sort("_id", -1).limit(1)
-                latest_id = latest_entry[0]['_id']
-            else:
-                latest_id = 'no previous entry!'
-            column_name = params.results_dep + '_id'
-            results[column_name] = latest_id
-        
-        
-        id = table.insert_one(results).inserted_id
-        
-        #prints stuff if needed [for now its on, to help with the dbg]
-        if True:
-            import pprint
-            print("PRINTING DB ENTRY:")
-            print(("DB NAME = ", params.results_db))
-            print(("TABLE NAME = ", table_name))
-            print("TABLE ENRTY:")
-            latest_entry = table.find().sort("_id", -1).limit(1)
-            pprint.pprint(latest_entry[0])
-        
-        print(("\n\nDone. [Results stored in the DB, ID = {0}]".format(id)))
+    
+    #Saves the results in the DB            
+    store_results(args, params, intermediate_scores, final_score)
+    
