@@ -63,12 +63,12 @@ class DataGenerator():
             if self.to_one_hot:
                 return (self.data_x[batch_indexes, ...],
                         one_hot(self.data_y[batch_indexes, ...], self.n_classes))
-            else:
-                return (self.data_x[batch_indexes, ...],
-                        self.data_y[batch_indexes, ...])
-        else:
+            # else:
+            return (self.data_x[batch_indexes, ...],
+                    self.data_y[batch_indexes, ...])
+        # else:
             # Return the arrays in the shape that predict_generator uses (data)
-            return (self.data_x[batch_indexes, ...]) 
+        return (self.data_x[batch_indexes, ...]) 
             
             
     def sliced_batch(self, step):
