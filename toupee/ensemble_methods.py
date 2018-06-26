@@ -98,11 +98,10 @@ class WeightedAveragingRunner(Aggregator):
     """
 
 
-    def __init__(self,members,weights,params, is_h5 = False):
+    def __init__(self,members,weights,params):
         self.params = params
         self.members = members
         self.weights = weights
-        self.is_h5 = is_h5
 
     def predict_proba(self,X):
         prob = []
@@ -110,10 +109,8 @@ class WeightedAveragingRunner(Aggregator):
             m_yaml, m_weights = self.members[i]
             m = keras.models.model_from_yaml(m_yaml)
             m.set_weights(m_weights)
-            if self.is_h5:
-                p = m.predict_generator(X.generate(), steps = X.steps_per_epoch)
-            else:
-                p = m.predict_proba(X, batch_size = self.params.batch_size)
+            p = m.predict_generator(X.generate(), steps = X.steps_per_epoch)
+            # p = m.predict_proba(X, batch_size = self.params.batch_size)   #<--- old non generator version
             prob.append(p * self.weights[i])
         prob_arr = np.array(prob) / np.sum(self.weights)
         a = np.sum(prob_arr,axis=0)
@@ -695,57 +692,29 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
     yaml_tag = '!AdaBoostM1'
 
     def create_aggregator(self,params,members,train_set,valid_set):
-        return WeightedAveragingRunner(members,self.alphas,params, is_h5 = bool(self.h5_size))
+        return WeightedAveragingRunner(members,self.alphas,params)
 
-    def create_member(self, h5_files = None):
-    
-        if self.h5_size > 0:
-            #in the h5 branch, we must have h5 file objects
-            assert h5_files is not None
+    def create_member(self, data_files):
             
-            #gets the training indexes
-            if self.member_number > 0:
-                train_indexes = self.resampler.make_new_train(self.params.resample_size)
-            else:
-                train_indexes = [None,None]
-            
-            #packs the needed data
-            dataset = [
-                train_indexes,
-                h5_files
-            ]
-            
-            #trains the model
-            m = mlp.sequential_model_h5(dataset, self.params,
-                    member_number = self.member_number)
-                    
-            #gets the errors for the train set and updates the weights
-            errors = common.errors_h5(m, h5_files[0], self.params.batch_size)
-            
-            
+        #gets the training indexes
+        if self.member_number > 0:
+            train_indexes = self.resampler.make_new_train(self.params.resample_size)
         else:
-            #gets the training data
-            if self.member_number > 0 :
-                train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
-            else:
-                train_set = self.resampler.get_train()
-            
-            #gets the eval data
-            dataset = [
-                train_set,
-                self.resampler.get_valid(),
-                self.resampler.get_test()
-            ]
-            
-            #trains the model
-            m = mlp.sequential_model(dataset, self.params,
-                    member_number = self.member_number)
-            
-            #gets the errors for the train set and updates the weights
-            orig_train = self.resampler.get_train()
-            errors = common.errors(m, orig_train[0], orig_train[1])
-            
-        #this is the same regardless of the file type
+            train_indexes = [None,None]
+        
+        #packs the needed data
+        dataset = [
+            train_indexes,
+            data_files
+        ]
+        
+        #trains the model
+        m = mlp.sequential_model(dataset, self.params,
+                member_number = self.member_number)
+                
+        #gets the errors for the train set and updates the weights
+        errors = common.errors(m, data_files[0], self.params.batch_size)
+        
         e = np.sum((errors * self.D))
         if e > 0:
             alpha = .5 * math.log((1-e)/e)
@@ -760,15 +729,11 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
         self.member_number += 1
         return (m.to_yaml(), m.get_weights())
 
-    def prepare(self, params, dataset, h5_size = 0):
-    
-        #with the "h5_size" other than 0, there can be no loaded dataset
-        assert bool(h5_size) != bool(dataset)
-    
+        
+    def prepare(self, params, train_size):
         self.params = params
-        self.dataset = dataset
-        self.h5_size = h5_size
-        self.resampler = WeightedResampler(dataset, h5_size = h5_size)
+        self.train_size = train_size
+        self.resampler = WeightedResampler(train_size)
         self.D = self.resampler.weights
         self.alphas = []
         self.member_number = 0
