@@ -109,8 +109,12 @@ class WeightedAveragingRunner(Aggregator):
             m_yaml, m_weights = self.members[i]
             m = keras.models.model_from_yaml(m_yaml)
             m.set_weights(m_weights)
-            p = m.predict_generator(X.generate(), steps = X.steps_per_epoch)
-            # p = m.predict_proba(X, batch_size = self.params.batch_size)   #<--- old non generator version
+            
+            if(type(X) is np.ndarray):  #<--- to test the ensemble with ndarrays
+                p = m.predict_proba(X, batch_size = self.params.batch_size)   
+            else:
+                p = m.predict_generator(X.generate(), steps = X.steps_per_epoch)
+
             prob.append(p * self.weights[i])
         prob_arr = np.array(prob) / np.sum(self.weights)
         a = np.sum(prob_arr,axis=0)
