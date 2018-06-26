@@ -13,7 +13,6 @@ import yaml
 import os
 import collections
 import math
-import numpy as np
 
 numpy.set_printoptions(threshold=numpy.inf)
 
@@ -22,21 +21,21 @@ numpy.set_printoptions(threshold=numpy.inf)
 #TODO: implement shuffle for this data holder
 class DataGenerator():
     ''' Data holder generator class for .npz/.h5 data'''
-    def __init__(self, file, batch_size, sampled_indexes, hold_y = True, 
+    def __init__(self, data_file, batch_size, sampled_indexes, hold_y = True, 
                     to_one_hot = False):
         
         #data variables
-        if 'x' in file:
+        if 'x' in data_file:
             xlabel = 'x'
-        elif 'X' in file:
+        elif 'X' in data_file:
             xlabel = 'X'
         
-        self.data_x = file[xlabel]
+        self.data_x = data_file[xlabel]
         
         self.hold_y = hold_y
         self.to_one_hot = to_one_hot
         if hold_y:
-            self.data_y = file['y']
+            self.data_y = data_file['y']
             if to_one_hot:
                 self.n_classes = self.data_y[:].max() + 1
         
@@ -88,11 +87,11 @@ class DataGenerator():
         full_range = list(range(first_index, last_index + 1))
         
         batch_indexes = batch_indexes - first_index #subtracts the "offset"
-        data_x = np.asarray(self.data_x[full_range, ...])
+        data_x = numpy.asarray(self.data_x[full_range, ...])
         data_x = data_x[batch_indexes, ...]
         
         if self.hold_y:
-            data_y = np.asarray(self.data_y[full_range, ...])
+            data_y = numpy.asarray(self.data_y[full_range, ...])
             data_y = data_y[batch_indexes, ...]
             
             if self.to_one_hot:
@@ -100,8 +99,8 @@ class DataGenerator():
                 
             return(data_x, data_y)
             
-        else:
-            return(data_x)
+        # else:
+        return(data_x)
     
     
     def generate(self):
@@ -230,8 +229,8 @@ def accuracy(classifier, file_object, batch_size):
  
 #TODO: this is kinda a redefinition of data.py's one_hot -> take care of the duplicates!
 def one_hot(data, n_classes):
-    b = np.zeros((data.size, n_classes),dtype='float32')
-    b[np.arange(data.size), data] = 1.
+    b = numpy.zeros((data.size, n_classes),dtype='float32')
+    b[numpy.arange(data.size), data] = 1.
     return b
     
 

@@ -110,7 +110,7 @@ class WeightedAveragingRunner(Aggregator):
             m = keras.models.model_from_yaml(m_yaml)
             m.set_weights(m_weights)
             
-            if(type(X) is np.ndarray):  #<--- to test the ensemble with ndarrays
+            if isinstance(X, np.ndarray): #<--- to test the ensemble with ndarrays 
                 p = m.predict_proba(X, batch_size = self.params.batch_size)   
             else:
                 p = m.predict_generator(X.generate(), steps = X.steps_per_epoch)
@@ -914,4 +914,3 @@ class AdaBoost_Regression(EnsembleMethod):
 #
 #    def serialize(self):
 #        return 'Stacking'
-
