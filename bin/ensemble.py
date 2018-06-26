@@ -218,7 +218,7 @@ def store_results(args, params, intermediate_scores, final_score):
                     "date": datetime.datetime.utcnow(),
                     "code version": subprocess.check_output(["git", "describe","--always"]).strip(),
                     "dict_number": args.dict_number,
-                    "ensemble ID": params.ensemble_id,
+                    "ensemble_ID": params.ensemble_id,
                   }                
         
         #adds the dependency ID
