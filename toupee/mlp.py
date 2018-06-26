@@ -106,215 +106,14 @@ def print_results(model, train_metrics, valid_metrics, test_metrics):
         for i in range(len(metrics)):
             print(("  {0} = {1}".format(model.metrics_names[i], metrics[i])))
 
-    
-#------------------------------------------------------------------------------------------
-# Non-h5 stuff
-
-class DataHolder:
-    """
-    Encapsulate the train/valid/test data to achieve a few things:
-    - no leakage from multiple copies
-    - ensure it is always a SharedVariable
-    """
-
-    def __init__(self,dataset):
-        self.orig_train_set_x = dataset[0][0]
-        self.orig_train_set_y = dataset[0][1]
-        self.orig_valid_set_x = dataset[1][0]
-        self.orig_valid_set_y = dataset[1][1]
-        self.orig_test_set_x = dataset[2][0]
-        self.orig_test_set_y = dataset[2][1]
-        self.train_set_x = self.orig_train_set_x
-        self.train_set_y = self.orig_train_set_y
-        self.valid_set_x = self.orig_valid_set_x
-        self.valid_set_y = self.orig_valid_set_y
-        if len(dataset) > 2:
-            self.test_set_x = self.orig_test_set_x
-            self.test_set_y = self.orig_test_set_y
-        else:
-            self.test_set_x, self.test_set_y = (None,None)
-    
-    def has_test(self):
-        return self.test_set_x is not None
-
-    def reshape_inputs(self,shape):
-        self.train_set_x = self.orig_train_set_x.reshape([self.train_set_x.shape[0]] + shape)
-        self.valid_set_x = self.orig_valid_set_x.reshape([self.valid_set_x.shape[0]] + shape)
-        if self.has_test():
-            self.test_set_x = self.orig_test_set_x.reshape([self.test_set_x.shape[0]] + shape)
-           
-            
-class DataHolderGen:
-    ''' Data holder "generator" [currently it's an iterator, got it's good enough] class'''
-    def __init__(self, dataset, batch_size, shuffle=False, eval_set = False):
-        self.data_x = dataset[0][0]
-        self.data_y = dataset[0][1]
-        
-        self.num_examples = self.data_y.shape[0] # Number of examples in the dataset
-        self.batch_size = batch_size
-        self.steps_per_epoch = math.ceil(self.num_examples/self.batch_size)
-        self.current_step = 0
-        self.shuffle = shuffle
-        
-        #eval sets: valid/test data             <----- no generator for the eval sets (keeps the old structure)
-        if eval_set:
-            self.orig_valid_set_x = dataset[1][0]
-            self.orig_valid_set_y = dataset[1][1]
-            self.orig_test_set_x = dataset[2][0]
-            self.orig_test_set_y = dataset[2][1]
-            self.valid_set_x = self.orig_valid_set_x
-            self.valid_set_y = self.orig_valid_set_y
-            if len(dataset) > 2:
-                self.test_set_x = self.orig_test_set_x
-                self.test_set_y = self.orig_test_set_y
-            else:
-                self.test_set_x, self.test_set_y = (None,None)
-    
-    def has_test(self):
-        return self.test_set_x is not None
-           
-    # Generator structure requires the __iter__ and a __next__ methods
-    def __iter__(self):
-        return self
-    
-    def __next__(self):
-        #no stop condition! "fit_generator" assumes an endless generator
-        
-        if self.shuffle:
-            #TODO: we should be able to select the random seed
-            random.seed(42)            
-            # Create a list of non-repeated random numbers in the range [0,num_examples] of the size of the desired batch
-            batch = random.sample(range(self.num_examples),self.batch_size)
-            batch.sort()
-        else:
-            #sequential iteration over the data
-            step = self.current_step % self.steps_per_epoch
-            if (step+1) == self.steps_per_epoch:
-                batch = list(range(step*self.batch_size, self.num_examples))
-            else:
-                batch = list(range(step*self.batch_size, (step+1)*self.batch_size))
-            self.current_step += 1
-        
-        # Return the arrays in the shape that fit_gen uses (data, target)
-        return (self.data_x[batch,...],
-                self.data_y[batch,...])
-        
-            
-
+          
 def sequential_model(dataset, params, pretraining_set = None, 
         model_weights = None, return_results = False, member_number = None, 
         model_yaml = None, model_config = None, frozen_layers = [], 
         sample_weight = None):
     """
     Initialize the parameters and create the network.
-    """
-
-    model, total_weights = initialize_model(params, sample_weight, model_config, 
-                                            model_yaml, model_weights, frozen_layers)
-
-    results = common.Results(params)
-    
-    #there is a separate generator for the train set evaluation: we don't want to shuffle there, 
-    # since our implementation of shuffle doesn't ensure we'll go through all elements
-    data_holder = DataHolderGen(dataset, params.batch_size, shuffle=params.shuffle_dataset, eval_set = False)
-    eval_holder = DataHolderGen(dataset, params.batch_size, shuffle = False, eval_set = True) 
-    
-    start_time = time.clock()
-    
-    metrics, checkpointer = initialize_metrics(params)
-    callbacks = [checkpointer]
-
-    if params.early_stopping is not None:
-        earlyStopping=keras.callbacks.EarlyStopping(monitor='val_loss',
-            patience=params.early_stopping['patience'], verbose=0, mode='auto')
-        callbacks.append(earlyStopping)
-        
-
-    lr_schedule = None
-    if isinstance(params.optimizer['config']['lr'], dict):
-        lr_schedule = params.optimizer['config']['lr']
-        params.optimizer['config']['lr'] = lr_schedule[0]
-    optimizer = keras.optimizers.deserialize(params.optimizer)
-    model.compile(optimizer = optimizer,
-                  loss = params.cost_function,
-                  metrics = metrics,
-                  update_inputs = params.update_inputs,
-                  update_inputs_lr = params.update_inputs_lr
-
-    )
-
-    
-    #TODO - Joao: I think this if branch needs to be updated with the new data holder
-    if params.online_transform is not None:
-        raise NotImplementedException()
-        #check the bottom of this file for the old code
-
-    else:
-        print("Training without transformations...")
-        if lr_schedule is not None:
-            callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
-        
-        hist = model.fit_generator(data_holder,
-                  steps_per_epoch = data_holder.steps_per_epoch,
-                  epochs = params.n_epochs,
-                  validation_data = (eval_holder.valid_set_x,
-                                eval_holder.valid_set_y),
-                  test_data = (eval_holder.test_set_x, 
-                                eval_holder.test_set_y),
-                  callbacks = callbacks,
-                  sample_weight = sample_weight)
-                  
-    model.set_weights(checkpointer.best_model)
-    
-    #evals the train as a generator, the rest without a generator
-    train_metrics = model.evaluate_generator(eval_holder,
-            steps = eval_holder.steps_per_epoch)
-    valid_metrics = model.evaluate(eval_holder.valid_set_x,
-            eval_holder.valid_set_y, batch_size = params.batch_size)
-    if eval_holder.has_test():
-        test_metrics = model.evaluate(eval_holder.test_set_x,
-                eval_holder.test_set_y, batch_size = params.batch_size)
-    
-    print_results(model, train_metrics, valid_metrics, test_metrics)
-
-    results.set_history(hist)
-    end_time = time.clock()
-    if eval_holder.test_set_x is not None:
-        print((('Optimization complete.\nBest valid: %f \n'
-            'Obtained at epoch: %i\nTest: %f ') %
-              (valid_metrics[1],
-                  checkpointer.best_epoch + 1, test_metrics[1])))
-        print(('The code for ' + os.path.split(__file__)[1] +
-                              ' ran for %.2fm' % ((end_time - start_time) / 60.)))
-        results.set_final_observation(valid_metrics[1],
-                test_metrics[1],
-                checkpointer.best_epoch + 1)
-    else:
-        results.set_final_observation(valid_metrics[1], None,
-                checkpointer.best_epoch + 1)
-        print(('Selection : Best valid score of {0}'.format(
-              valid_metrics[1])))
-
-    if member_number is not None:
-        results.member_number = member_number
-
-    if return_results:
-        return model, results
-    else:
-        return model
-
-        
-#------------------------------------------------------------------------------------------
-# h5 stuff
-
-              
-def sequential_model_h5(dataset, params, pretraining_set = None, 
-        model_weights = None, return_results = False, member_number = None, 
-        model_yaml = None, model_config = None, frozen_layers = [], 
-        sample_weight = None):
-    """
-    Initialize the parameters and create the network.
-    [H5 DATA VERSION]
+    [GENERATOR DATA VERSION]
     """
 
     model, total_weights = initialize_model(params, sample_weight, model_config, 
@@ -327,10 +126,10 @@ def sequential_model_h5(dataset, params, pretraining_set = None,
     if sampled_indexes is not None:
         sampled_indexes.sort()
     files = dataset[1]
-    train_holder = common.DataHolderH5(files[0], params.batch_size, sampled_indexes, to_one_hot = True)
-    train_eval_holder = common.DataHolderH5(files[0], params.batch_size, None, to_one_hot = True)
-    valid_holder = common.DataHolderH5(files[1], params.batch_size, None, to_one_hot = True)
-    test_holder = common.DataHolderH5(files[2], params.batch_size, None, to_one_hot = True)
+    train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes, to_one_hot = True)
+    train_eval_holder = common.DataGenerator(files[0], params.batch_size, None, to_one_hot = True)
+    valid_holder = common.DataGenerator(files[1], params.batch_size, None, to_one_hot = True)
+    test_holder = common.DataGenerator(files[2], params.batch_size, None, to_one_hot = True)
     
     start_time = time.clock()
     

@@ -17,123 +17,10 @@ import numpy as np
 
 numpy.set_printoptions(threshold=numpy.inf)
 
-class Toupee:
-    
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.epoch_hooks = []
-        self.reset_hooks = []
-
-    def add_epoch_hook(self,hook):
-        if hook not in self.epoch_hooks:
-            self.epoch_hooks.append(hook)
-
-    def add_reset_hook(self,hook):
-        if hook not in self.reset_hooks:
-            self.reset_hooks.append(hook)
-
-class Results:
-
-    def __init__(self,params):
-        self.params = params
-
-    def set_history(self,hist):
-        self.history = hist.__dict__
-
-    def set_final_observation(self,valid,test,epoch):
-        self.best_valid = valid
-        if test is not None:
-            self.best_test = test
-        self.best_epoch = epoch
-        self.params = self.params.serialize()
-
-class ConfiguredObject(yaml.YAMLObject):
-
-    def _default_value(self, param_name, value):
-        if param_name not in self.__dict__:
-            self.__dict__[param_name] = value
-
-def yaml_include(loader, node):
-    # Get the path out of the yaml file
-    file_name = os.path.join(os.path.dirname(loader.name), node.value)
-
-    with file(file_name) as inputfile:
-        return yaml.load(inputfile)
-
-yaml.add_constructor("!include", yaml_include)
-
-def read_yaml_file(filename):
-    with open(filename, 'r') as f:
-        model_yaml = yaml.load(f)
-    return yaml.dump(model_yaml)
-
-def serialize(o):
-    if isinstance(o, numpy.float32):
-        return float(o)
-    else:
-        try:
-            return numpy.asfarray(o).tolist()
-        except:
-            if isinstance(o, object):
-                if 'serialize' in dir(o) and isinstance(getattr(o,'serialize'), collections.Callable):
-                    return o.serialize()
-                if 'tolist' in dir(o) and isinstance(getattr(o,'tolist'), collections.Callable):
-                    return o.tolist()
-                try:
-                    return json.loads(json.dumps(o.__dict__,default=serialize))
-                except:
-                    return str(o)
-            else:
-                raise Exception("don't know how to save {0}".format(type(o)))
-
- 
-#for classification problems:                
-def errors(classifier, test_set_x, test_set_y):
-    classification = classifier.predict_classes(test_set_x)
-    c = numpy.argmax(test_set_y, axis=1)
-    r = numpy.where(classification != c, 1.0, 0.0)
-    return r
-
-def accuracy(classifier, test_set_x, test_set_y):
-    e = errors(classifier, test_set_x, test_set_y)
-    return 1.0 - (float(e.sum()) / float(test_set_y.shape[0]))
-    
-    
-    
-#for regression problems:   
-def distance(predictor, test_set_x, test_set_y):
-    #returns the distance squared (=MMSE)
-    prediction = predictor.predict(test_set_x)
-    elementwise_d_squared = numpy.square(prediction - test_set_y)
-    euclidian_distance_squared = numpy.sum(elementwise_d_squared, axis = 1)
-    return euclidian_distance_squared
-
-def euclidian_distance(predictor, test_set_x, test_set_y):
-    #euclidian_distance = sqrt{(y[0]-y_pred[0])^2 + (y[1]-y_pred[1])^2 + ... + (y[n-1]-y_pred[n-1])^2}
-    euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
-    euclidian_distance = numpy.sqrt(euclidian_distance_squared)
-    return(numpy.sum(euclidian_distance) / float(test_set_y.shape[0]))
-    
-def relative_distance(predictor, test_set_x, test_set_y):
-    #relative_distance = distance(y-y_pred) / sqrt(y^2)      [sqrt(y^2) = L2 norm]
-    euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
-    y_squared = numpy.sum(numpy.square(test_set_y), axis = 1)                   #both this and the previous line will need a sqrt, which can be done after the division
-    relative_distance = numpy.sqrt(euclidian_distance_squared / y_squared)
-    return(numpy.sum(relative_distance) / float(test_set_y.shape[0]))
-    
-    
-    
-
-if 'toupee_global_instance' not in locals():
-    toupee_global_instance = Toupee()
 
 
-    
 #TODO: implement shuffle for this data holder
-#TODO: change name to "DataGenerator"
-class DataHolderH5():
+class DataGenerator():
     ''' Data holder generator class for .npz/.h5 data'''
     def __init__(self, file, batch_size, sampled_indexes, hold_y = True, 
                     to_one_hot = False):
@@ -228,18 +115,93 @@ class DataHolderH5():
             else:
                 yield self.sliced_batch(step)
                 
-            self.current_step += 1   
-                
-            
-            
+            self.current_step += 1  
 
-                
+
+
+
+
+class Toupee:
+    
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.epoch_hooks = []
+        self.reset_hooks = []
+
+    def add_epoch_hook(self,hook):
+        if hook not in self.epoch_hooks:
+            self.epoch_hooks.append(hook)
+
+    def add_reset_hook(self,hook):
+        if hook not in self.reset_hooks:
+            self.reset_hooks.append(hook)
+
+class Results:
+
+    def __init__(self,params):
+        self.params = params
+
+    def set_history(self,hist):
+        self.history = hist.__dict__
+
+    def set_final_observation(self,valid,test,epoch):
+        self.best_valid = valid
+        if test is not None:
+            self.best_test = test
+        self.best_epoch = epoch
+        self.params = self.params.serialize()
+
+class ConfiguredObject(yaml.YAMLObject):
+
+    def _default_value(self, param_name, value):
+        if param_name not in self.__dict__:
+            self.__dict__[param_name] = value
+
+def yaml_include(loader, node):
+    # Get the path out of the yaml file
+    file_name = os.path.join(os.path.dirname(loader.name), node.value)
+
+    with file(file_name) as inputfile:
+        return yaml.load(inputfile)
+
+yaml.add_constructor("!include", yaml_include)
+
+def read_yaml_file(filename):
+    with open(filename, 'r') as f:
+        model_yaml = yaml.load(f)
+    return yaml.dump(model_yaml)
+
+def serialize(o):
+    if isinstance(o, numpy.float32):
+        return float(o)
+    else:
+        try:
+            return numpy.asfarray(o).tolist()
+        except:
+            if isinstance(o, object):
+                if 'serialize' in dir(o) and isinstance(getattr(o,'serialize'), collections.Callable):
+                    return o.serialize()
+                if 'tolist' in dir(o) and isinstance(getattr(o,'tolist'), collections.Callable):
+                    return o.tolist()
+                try:
+                    return json.loads(json.dumps(o.__dict__,default=serialize))
+                except:
+                    return str(o)
+            else:
+                raise Exception("don't know how to save {0}".format(type(o)))
+
+
+if 'toupee_global_instance' not in locals():
+    toupee_global_instance = Toupee()
+
                 
 #for classification problems: 
 #TODO: pass as argument the number of classes               
-def errors_h5(classifier, file_object, batch_size):
+def errors(classifier, file_object, batch_size):
 
-    x_holder = DataHolderH5(file_object, batch_size, None, hold_y = False)
+    x_holder = DataGenerator(file_object, batch_size, None, hold_y = False)
     classification_proba = classifier.predict_generator(x_holder.generate(), steps = x_holder.steps_per_epoch)
     
     if classification_proba.shape[-1] > 1:
@@ -251,9 +213,9 @@ def errors_h5(classifier, file_object, batch_size):
     r = numpy.where(classification != c, 1.0, 0.0)
     return r
     
-def accuracy_h5(classifier, file_object, batch_size):
+def accuracy(classifier, file_object, batch_size):
     
-    x_holder = DataHolderH5(file_object, batch_size, None, hold_y = False)
+    x_holder = DataGenerator(file_object, batch_size, None, hold_y = False)
     classification_proba = classifier.predict_proba(x_holder)
     
     if classification_proba.shape[-1] > 1:
@@ -271,4 +233,28 @@ def one_hot(data, n_classes):
     b = np.zeros((data.size, n_classes),dtype='float32')
     b[np.arange(data.size), data] = 1.
     return b
+    
+
+    
+    
+#for regression problems:   
+def distance(predictor, test_set_x, test_set_y):
+    #returns the distance squared (=MMSE)
+    prediction = predictor.predict(test_set_x)
+    elementwise_d_squared = numpy.square(prediction - test_set_y)
+    euclidian_distance_squared = numpy.sum(elementwise_d_squared, axis = 1)
+    return euclidian_distance_squared
+
+def euclidian_distance(predictor, test_set_x, test_set_y):
+    #euclidian_distance = sqrt{(y[0]-y_pred[0])^2 + (y[1]-y_pred[1])^2 + ... + (y[n-1]-y_pred[n-1])^2}
+    euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
+    euclidian_distance = numpy.sqrt(euclidian_distance_squared)
+    return(numpy.sum(euclidian_distance) / float(test_set_y.shape[0]))
+    
+def relative_distance(predictor, test_set_x, test_set_y):
+    #relative_distance = distance(y-y_pred) / sqrt(y^2)      [sqrt(y^2) = L2 norm]
+    euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
+    y_squared = numpy.sum(numpy.square(test_set_y), axis = 1)                   #both this and the previous line will need a sqrt, which can be done after the division
+    relative_distance = numpy.sqrt(euclidian_distance_squared / y_squared)
+    return(numpy.sum(relative_distance) / float(test_set_y.shape[0]))
     

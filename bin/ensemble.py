@@ -16,7 +16,7 @@ import argparse
 import os
 import re
 import dill
-from toupee.common import accuracy, euclidian_distance, relative_distance, accuracy_h5
+from toupee.common import accuracy, euclidian_distance, relative_distance
 
 from pymongo import MongoClient
 import numpy as np
@@ -72,9 +72,9 @@ def load_data_files(args, params):
     
     if (args.trainfile[-4:] == '.npz') and (args.validfile[-4:] == '.npz') and (args.testfile[-4:] == '.npz'):
         print("\nLoading .npz data\n")
-        trainfile = np.load(os.path.join(dataset, trainfile))
-        validfile = np.load(os.path.join(dataset, validfile))
-        testfile = np.load(os.path.join(dataset, testfile))
+        trainfile = np.load(os.path.join(params.dataset, args.trainfile))
+        validfile = np.load(os.path.join(params.dataset, args.validfile))
+        testfile = np.load(os.path.join(params.dataset, args.testfile))
     elif (args.trainfile[-3:] == '.h5') and (args.validfile[-3:] == '.h5') and (args.testfile[-3:] == '.h5'):
         print("\nLoading .h5 data\n")
         trainfile = h5py.File(os.path.join(params.dataset, args.trainfile), 'r')
@@ -88,18 +88,15 @@ def load_data_files(args, params):
     
     
     
-def get_scorer(classification, is_h5 = False):
+def get_scorer(classification):
     
     scorer = []
     scorer_name = []
     if classification:
-        if is_h5:
-            scorer.append(accuracy_h5)
-            scorer_name.append('accuracy')
-        else:
-            scorer.append(accuracy)
-            scorer_name.append('accuracy')
+        scorer.append(accuracy)
+        scorer_name.append('accuracy')
     else:
+        #TODO: these use the old non-generator files
         scorer.append(euclidian_distance)
         scorer_name.append('euclidian distance')
         
@@ -120,10 +117,10 @@ def run_ensembles(args, params):
     
     #initializes the ensemble method for the h5 file
     method = params.method
-    method.prepare(params, None, h5_size = train_size)
+    method.prepare(params, train_size)
     
     #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
-    scorer, scorer_name = get_scorer(params.classification, is_h5 = True)
+    scorer, scorer_name = get_scorer(params.classification)
     
     members = []
     intermediate_scores = []
