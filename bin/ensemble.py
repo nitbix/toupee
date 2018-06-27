@@ -29,7 +29,7 @@ import time
 
 def set_file_location(args, params):
     '''
-    Sets the input file folder
+    Sets the input and model files folder
     '''
     
     #Dataset location: hardcoded (@.yaml) < latest-experiment flag < specific dict number
@@ -53,8 +53,7 @@ def set_file_location(args, params):
             folder = latest_entry_location
             
         if args.dict_number is not None:
-            #TODO: for now, it assumes it is the local user folder
-            target_root = os.path.expanduser("~/data_tmp")
+            target_root = '/datasets/experiments/'
             dict_dir = os.path.join(target_root, 'dict_' + str(args.dict_number))
             
             if os.path.exists(dict_dir):
@@ -327,6 +326,10 @@ if __name__ == '__main__':
     data_folder = set_file_location(args, params)
     if data_folder is not None:
         params.dataset = data_folder
+        if params.model_file is not None:
+            params.model_file = data_folder + '/' + params.model_file
+        else:
+            params.model_file = data_folder + '/dnn.model'
     
     def arg_params(arg_value,param):
         if arg_value is not None:
