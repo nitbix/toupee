@@ -31,6 +31,7 @@ import toupee.utils as utils
 
 import keras
 import keras.preprocessing.image
+from keras import backend as K
 
 
 def initialize_model(params, sample_weight, model_config, model_yaml, 
@@ -81,7 +82,7 @@ def initialize_metrics(params):
     if 'additional_metrics' in params.__dict__:
         metrics = metrics + additional_metrics
 
-    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
+    checkpointer = common.ModelCheckpointInMemory(verbose=1,
             monitor = monitor_type,
             mode = 'max')
             
@@ -93,8 +94,10 @@ def callbacks_with_lr_scheduler(schedule, model, callbacks):
     def scheduler(epoch):
         if epoch in schedule:
             print(("Changing learning rate to {0}".format(schedule[epoch])))
-            model.optimizer.lr.set_value(schedule[epoch])
-        return float(model.optimizer.lr.get_value())
+            # model.optimizer.lr.set_value(schedule[epoch])     #<--- old keras-fork version
+            model.optimizer.lr = K.variable(value = schedule[epoch])
+        # return float(model.optimizer.lr.get_value())          #<--- old keras-fork version
+        return float(schedule[epoch])
     return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]   
     
 
@@ -123,13 +126,15 @@ def sequential_model(dataset, params, pretraining_set = None,
     model, _ = initialize_model(params, sample_weight, model_config, 
                                             model_yaml, model_weights, frozen_layers)
 
-    results = common.Results(params)
+    if return_results:
+        results = common.Results(params)
     
     #3-4 data holders: (1) sampled train data, (2-3) eval data - train/valid/[test] sets
     sampled_indexes = dataset[0][0]
     if sampled_indexes is not None:
         sampled_indexes.sort()
     files = dataset[1]
+    
     train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes, to_one_hot = True)
     train_eval_holder = common.DataGenerator(files[0], params.batch_size, None, to_one_hot = True)
     valid_holder = common.DataGenerator(files[1], params.batch_size, None, to_one_hot = True)
@@ -150,11 +155,14 @@ def sequential_model(dataset, params, pretraining_set = None,
         lr_schedule = params.optimizer['config']['lr']
         params.optimizer['config']['lr'] = lr_schedule[0]
     optimizer = keras.optimizers.deserialize(params.optimizer)
+    
     model.compile(optimizer = optimizer,
                   loss = params.cost_function,
                   metrics = metrics,
-                  update_inputs = params.update_inputs,
-                  update_inputs_lr = params.update_inputs_lr
+                  
+                  #theano stuff:    #<--- old keras-fork version
+                  # update_inputs = params.update_inputs,
+                  # update_inputs_lr = params.update_inputs_lr
     )
 
     #TODO - Joao: I think this if branch needs to be updated with the new data holder
@@ -166,15 +174,22 @@ def sequential_model(dataset, params, pretraining_set = None,
         if lr_schedule is not None:
             callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
         
-        hist = model.fit_generator(train_holder.generate(),
+        if return_results:
+            hist = model.fit_generator(train_holder.generate(),
                   steps_per_epoch = train_holder.steps_per_epoch,
                   epochs = params.n_epochs,
                   validation_data = valid_holder.generate(),
                   validation_steps = valid_holder.steps_per_epoch,
-                  test_data = test_holder.generate(),
-                  test_steps = test_holder.steps_per_epoch,
-                  callbacks = callbacks,
-                  sample_weight = sample_weight)
+                  callbacks = callbacks)
+                  #the old keras-fork version had more parameters here
+        else:
+            model.fit_generator(train_holder.generate(),
+                  steps_per_epoch = train_holder.steps_per_epoch,
+                  epochs = params.n_epochs,
+                  validation_data = valid_holder.generate(),
+                  validation_steps = valid_holder.steps_per_epoch,
+                  callbacks = callbacks)
+                  #the old keras-fork version had more parameters here
                   
     model.set_weights(checkpointer.best_model)
     
@@ -188,7 +203,9 @@ def sequential_model(dataset, params, pretraining_set = None,
             
     print_results(model, train_metrics, valid_metrics, test_metrics)
 
-    results.set_history(hist)
+    if return_results:
+        results.set_history(hist)
+    
     end_time = time.clock()
     
     print((('Optimization complete.\nBest valid: %f \n'
@@ -197,11 +214,13 @@ def sequential_model(dataset, params, pretraining_set = None,
               checkpointer.best_epoch + 1, test_metrics[1])))
     print(('The code for ' + os.path.split(__file__)[1] +
                           ' ran for %.2fm' % ((end_time - start_time) / 60.)))
-    results.set_final_observation(valid_metrics[1],
+    
+    if return_results:
+        results.set_final_observation(valid_metrics[1],
             test_metrics[1],
             checkpointer.best_epoch + 1)
 
-    if member_number is not None:
+    if (member_number is not None) and (return_results):
         results.member_number = member_number
 
     if return_results:
