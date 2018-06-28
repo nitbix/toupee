@@ -97,7 +97,7 @@ def callbacks_with_lr_scheduler(schedule, model, callbacks):
             # model.optimizer.lr.set_value(schedule[epoch])     #<--- old keras-fork version
             model.optimizer.lr = K.variable(value = schedule[epoch])
         # return float(model.optimizer.lr.get_value())          #<--- old keras-fork version
-        return float(schedule[epoch])
+        return float(K.eval(model.optimizer.lr))
     return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]   
     
 
