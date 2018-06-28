@@ -14,17 +14,84 @@ import os
 import collections
 import math
 
+from keras.callbacks import Callback
+
 numpy.set_printoptions(threshold=numpy.inf)
 
 
+#KERAS ADD-ON
+class ModelCheckpointInMemory(Callback):
+    '''Save the model after every epoch in memory.
+    # Arguments
+        monitor: quantity to monitor.
+        verbose: verbosity mode, 0 or 1.
+        mode: one of {auto, min, max}.
+            If `save_best_only=True`, the decision
+            to overwrite the current save file is made
+            based on either the maximization or the
+            minimization of the monitored quantity. For `val_acc`,
+            this should be `max`, for `val_loss` this should
+            be `min`, etc. In `auto` mode, the direction is
+            automatically inferred from the name of the monitored quantity.
+    '''
+    def __init__(self, monitor='val_loss', verbose=0, mode='auto'):
+        super(ModelCheckpointInMemory, self).__init__()
+        self.monitor = monitor
+        self.verbose = verbose
+        import h5py
+        self.best_model = h5py.File("/dev/null", driver = 'core',
+                backing_store = False)
+        self.best_epoch = None
+
+        if mode not in ['auto', 'min', 'max']:
+            warnings.warn('ModelCheckpoint mode %s is unknown, '
+                          'fallback to auto mode.' % (mode),
+                          RuntimeWarning)
+            mode = 'auto'
+
+        if mode == 'min':
+            self.monitor_op = numpy.less
+            self.best = numpy.Inf
+        elif mode == 'max':
+            self.monitor_op = numpy.greater
+            self.best = -numpy.Inf
+        else:
+            if 'acc' in self.monitor:
+                self.monitor_op = numpy.greater
+                self.best = -numpy.Inf
+            else:
+                self.monitor_op = numpy.less
+                self.best = numpy.Inf
+
+    def on_epoch_end(self, epoch, logs={}):
+        current = logs.get(self.monitor)
+        if current is None:
+            warnings.warn('Can save best model only with %s available, '
+                          'skipping.' % (self.monitor), RuntimeWarning)
+        else:
+            if self.monitor_op(current, self.best):
+                if self.verbose > 0:
+                    print('Epoch %05d: %s improved from %0.5f to %0.5f,'
+                          ' saving model'
+                          % (epoch, self.monitor, self.best, current))
+                self.best = current
+                self.best_model = self.model.get_weights()
+                self.best_epoch = epoch
+            else:
+                if self.verbose > 0:
+                    print('Epoch %05d: %s did not improve' %
+                          (epoch, self.monitor))
+                          
+
 
 #TODO: implement shuffle for this data holder
+#TODO: pass n_classes to the class (takes way to long to compute)
 class DataGenerator():
     ''' Data holder generator class for .npz/.h5 data'''
     def __init__(self, data_file, batch_size, sampled_indexes, hold_y = True, 
-                    to_one_hot = False):
+                    to_one_hot = False, n_classes = None):
         
-        #data variables
+        #define x
         if 'x' in data_file:
             xlabel = 'x'
         elif 'X' in data_file:
@@ -32,13 +99,7 @@ class DataGenerator():
         
         self.data_x = data_file[xlabel]
         
-        self.hold_y = hold_y
-        self.to_one_hot = to_one_hot
-        if hold_y:
-            self.data_y = data_file['y']
-            if to_one_hot:
-                self.n_classes = self.data_y[:].max() + 1
-        
+
         #auxiliary variables
         self.sampled_indexes = sampled_indexes
         if sampled_indexes is not None:
@@ -50,6 +111,19 @@ class DataGenerator():
         self.current_step = 0
     
     
+        # define y if needed
+        self.hold_y = hold_y
+        self.to_one_hot = to_one_hot
+        if hold_y:
+            self.data_y = data_file['y']
+            if to_one_hot:
+                if n_classes is None:
+                    self.n_classes = 7 #<-------------------------------------------------------------- this is hardcoded for now, FOR TESTING ONLY
+                else:
+                    self.n_classes = n_classes
+    
+
+
     def sequential_batch(self, step):
         #sequential iteration over the data
         
@@ -208,7 +282,8 @@ def errors(classifier, file_object, batch_size):
     else:
         classification = (classification_proba > 0.5).astype('int32')
 
-    c = numpy.argmax( one_hot(file_object['y'], file_object['y'][:].max()+1) , axis=1)
+    # c = numpy.argmax( one_hot(file_object['y'], file_object['y'][:].max()+1) , axis=1)
+    c = numpy.argmax( one_hot(file_object['y'], 7) , axis=1)                        #<--------------------------- HARDCODED N_CLASSES, FIX THIS
     r = numpy.where(classification != c, 1.0, 0.0)
     return r
     
@@ -222,7 +297,8 @@ def accuracy(classifier, file_object, batch_size):
     else:
         classification = (classification_proba > 0.5).astype('int32')
 
-    c = numpy.argmax( one_hot(file_object['y'], file_object['y'][:].max()+1) , axis=1)
+    # c = numpy.argmax( one_hot(file_object['y'], file_object['y'][:].max()+1) , axis=1)
+    c = numpy.argmax( one_hot(file_object['y'], 7) , axis=1)                        #<--------------------------- HARDCODED N_CLASSES, FIX THIS                    
     e = numpy.where(classification != c, 1.0, 0.0)
 
     return 1.0 - (float(e.sum()) / float(file_object['y'].shape[0]))
