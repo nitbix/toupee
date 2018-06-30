@@ -113,7 +113,7 @@ class WeightedAveragingRunner(Aggregator):
             if isinstance(X, np.ndarray): #<--- to test the ensemble with ndarrays 
                 p = m.predict_proba(X, batch_size = self.params.batch_size)   
             else:
-                p = m.predict_generator(X.generate(), steps = X.steps_per_epoch)
+                p = m.predict_generator(X, max_queue_size=1000)
 
             prob.append(p * self.weights[i])
         prob_arr = np.array(prob) / np.sum(self.weights)
@@ -717,6 +717,7 @@ class AdaBoost_M1(EnsembleMethod):                  #<------------------ This on
                 member_number = self.member_number)
                 
         #gets the errors for the train set and updates the weights
+        print('Getting the train errors and updating the weights')
         errors = common.errors(m, data_files[0], self.params.batch_size)
         
         e = np.sum((errors * self.D))

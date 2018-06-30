@@ -175,31 +175,33 @@ def sequential_model(dataset, params, pretraining_set = None,
             callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
         
         if return_results:
-            hist = model.fit_generator(train_holder.generate(),
-                  steps_per_epoch = train_holder.steps_per_epoch,
+            hist = model.fit_generator(train_holder,
                   epochs = params.n_epochs,
-                  validation_data = valid_holder.generate(),
-                  validation_steps = valid_holder.steps_per_epoch,
-                  callbacks = callbacks)
+                  validation_data = valid_holder,
+                  callbacks = callbacks,
+                  max_queue_size=1000, 
+                  shuffle=False,
+                  use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
                   #the old keras-fork version had more parameters here
         else:
-            model.fit_generator(train_holder.generate(),
-                  steps_per_epoch = train_holder.steps_per_epoch,
+            model.fit_generator(train_holder,
                   epochs = params.n_epochs,
-                  validation_data = valid_holder.generate(),
-                  validation_steps = valid_holder.steps_per_epoch,
-                  callbacks = callbacks)
+                  validation_data = valid_holder,
+                  callbacks = callbacks,
+                  max_queue_size=1000,
+                  shuffle=False,
+                  use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
                   #the old keras-fork version had more parameters here
                   
     model.set_weights(checkpointer.best_model)
     
     #evals everything with a generator
-    train_metrics = model.evaluate_generator(train_eval_holder.generate(),
-            steps = train_eval_holder.steps_per_epoch)
-    valid_metrics = model.evaluate_generator(valid_holder.generate(),
-            steps = valid_holder.steps_per_epoch)
-    test_metrics = model.evaluate_generator(test_holder.generate(),
-            steps = test_holder.steps_per_epoch)
+    print('\nGetting the train metrics...')
+    train_metrics = model.evaluate_generator(train_eval_holder)
+    print('Getting the validation metrics...')
+    valid_metrics = model.evaluate_generator(valid_holder)
+    print('Getting the test metrics...')
+    test_metrics = model.evaluate_generator(test_holder)
             
     print_results(model, train_metrics, valid_metrics, test_metrics)
 
