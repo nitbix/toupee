@@ -13,8 +13,10 @@ import yaml
 import os
 import collections
 import math
+import time
 
 from keras.callbacks import Callback
+from keras.utils import Sequence
 
 numpy.set_printoptions(threshold=numpy.inf)
 
@@ -84,10 +86,17 @@ class ModelCheckpointInMemory(Callback):
                           
 
 
-#TODO: implement shuffle for this data holder
-#TODO: pass n_classes to the class (takes way to long to compute)
-class DataGenerator():
-    ''' Data holder generator class for .npz/.h5 data'''
+#Joao: I tried to prefetch the data from the disk in this class, but it led to
+#       multiple complications (especially with resampled data). 
+#       But it can decrease train&test time - do it in the future!
+#TODO: pass n_classes to the generator (takes way to long to compute)
+class DataGenerator(Sequence):
+    ''' 
+        Data holder generator class for .npz/.h5 data 
+        -- keras Sequence based (for better generator performance)
+            [requires __len__(self) and __getitem__(self, idx)]
+    '''
+    
     def __init__(self, data_file, batch_size, sampled_indexes, hold_y = True, 
                     to_one_hot = False, n_classes = None):
         
@@ -107,8 +116,7 @@ class DataGenerator():
         else:
             self.num_examples = self.data_x.shape[0]
         self.batch_size = batch_size
-        self.steps_per_epoch = math.ceil(self.num_examples/self.batch_size)
-        self.current_step = 0
+        self.number_of_batches = math.ceil(self.num_examples/self.batch_size)
     
     
         # define y if needed
@@ -118,19 +126,20 @@ class DataGenerator():
             self.data_y = data_file['y']
             if to_one_hot:
                 if n_classes is None:
-                    self.n_classes = 7 #<-------------------------------------------------------------- this is hardcoded for now, FOR TESTING ONLY
+                    self.n_classes = 7 #<------------------------------------ this is hardcoded for now, FOR TESTING ONLY
                 else:
                     self.n_classes = n_classes
+
     
-
-
     def sequential_batch(self, step):
         #sequential iteration over the data
         
-        if (step+1) == self.steps_per_epoch:    #<- last epoch
+        #defines the indexes for this batch
+        if (step+1) == self.number_of_batches:    #<- last batch
             batch_indexes = list(range(step*self.batch_size, self.num_examples))
         else:
             batch_indexes = list(range(step*self.batch_size, (step+1)*self.batch_size))
+    
     
         if self.hold_y:
             # Return the arrays in the shape that fit_gen uses (data, target)
@@ -141,7 +150,7 @@ class DataGenerator():
             return (self.data_x[batch_indexes, ...],
                     self.data_y[batch_indexes, ...])
         # else:
-            # Return the arrays in the shape that predict_generator uses (data)
+        # Return the arrays in the shape that predict_generator uses (data)
         return (self.data_x[batch_indexes, ...]) 
             
             
@@ -149,25 +158,44 @@ class DataGenerator():
         #problem with returning the "sampled_indexes" only:
         # H5 can only slice given i) a sequencial list of integers or ii) a boolean array
         # [i.e. there is no fancy slicing, as in numpy]
-        # since ii) might create a giant boolean array, let's do i) and then filter stuff
+        # since ii) might need a giant boolean array, let's do i) and then filter stuff
         
-        if (step+1) == self.steps_per_epoch:    #<- last epoch
-            batch_indexes = self.sampled_indexes[step*self.batch_size : self.num_examples]
+        #gets the desired indexes for this batch
+        if (step+1) == self.number_of_batches:    #<- last batch
+            batch_indexes = (self.sampled_indexes[step*self.batch_size : self.num_examples])
         else:
-            batch_indexes = self.sampled_indexes[step*self.batch_size : (step+1)*self.batch_size]
-            
+            batch_indexes = (self.sampled_indexes[step*self.batch_size : (step+1)*self.batch_size])
+         
         first_index = batch_indexes[0]
-        last_index = batch_indexes[-1] 
-        full_range = list(range(first_index, last_index + 1))
+        last_index = batch_indexes[-1]
         
-        batch_indexes = batch_indexes - first_index #subtracts the "offset"
-        data_x = numpy.asarray(self.data_x[full_range, ...])
-        data_x = data_x[batch_indexes, ...]
-        
-        if self.hold_y:
-            data_y = numpy.asarray(self.data_y[full_range, ...])
-            data_y = data_y[batch_indexes, ...]
+        #if the samples are too far appart, loads one by one
+        if last_index - first_index > 4096:   #<---- magic number
             
+            data_x = []
+            for i in batch_indexes:
+                data_x.append(self.data_x[i, ...])  
+            data_x = numpy.asarray(data_x)
+            
+            if self.hold_y:
+                data_y = []
+                for i in batch_indexes:
+                    data_y.append(self.data_y[i, ...])  
+                data_y = numpy.asarray(data_y)
+
+        #otherwise, loads the interval and ther filters
+        else:
+            batch_indexes = batch_indexes - first_index
+            
+            data_x = self.data_x[first_index:last_index+1, ...]
+            data_x = data_x[batch_indexes, ...]
+            
+            if self.hold_y:
+                data_y = self.data_y[first_index:last_index+1, ...]
+                data_y = data_y[batch_indexes, ...]
+                
+            
+        if self.hold_y:    
             if self.to_one_hot:
                 data_y = one_hot(data_y, self.n_classes)
                 
@@ -177,19 +205,19 @@ class DataGenerator():
         return(data_x)
     
     
-    def generate(self):
+    def __len__(self):
+        #returns the dataset length
+        return self.number_of_batches
     
-        while 1:
+    
+    def __getitem__(self, step):
+        #gets a batch
         
-            step = self.current_step % self.steps_per_epoch
+        if self.sampled_indexes is None:
+            return self.sequential_batch(step)
+        else:
+            return self.sliced_batch(step)
             
-            if self.sampled_indexes is None:
-                yield self.sequential_batch(step)
-            else:
-                yield self.sliced_batch(step)
-                
-            self.current_step += 1  
-
 
 
 
@@ -271,37 +299,49 @@ if 'toupee_global_instance' not in locals():
 
                 
 #for classification problems: 
+
 #TODO: pass as argument the number of classes               
 def errors(classifier, file_object, batch_size):
 
     x_holder = DataGenerator(file_object, batch_size, None, hold_y = False)
-    classification_proba = classifier.predict_generator(x_holder.generate(), steps = x_holder.steps_per_epoch)
     
+    #applies the correct method, depending on the classifier class
+    if hasattr(classifier, 'predict_generator'):
+        classification_proba = classifier.predict_generator(x_holder,
+                                                            max_queue_size=1000)
+    else:
+        classification_proba = classifier.predict_proba(x_holder)
+
+    
+    #converts to the predicted class (integer)
     if classification_proba.shape[-1] > 1:
         classification = classification_proba.argmax(axis=-1)
     else:
         classification = (classification_proba > 0.5).astype('int32')
 
-    # c = numpy.argmax( one_hot(file_object['y'], file_object['y'][:].max()+1) , axis=1)
-    c = numpy.argmax( one_hot(file_object['y'], 7) , axis=1)                        #<--------------------------- HARDCODED N_CLASSES, FIX THIS
-    r = numpy.where(classification != c, 1.0, 0.0)
+    #TODO: if y is a one-hot vector, changes are needed!
+    #gets the result (iterativelly, to avoid running out of memory)
+    end = 0
+    r = numpy.empty(x_holder.num_examples)
+    while end < (x_holder.__len__() * batch_size):
+        
+        start = end
+        end += 131072  # magic number, power of 2 :D
+        if end > x_holder.__len__() * batch_size:
+            end = x_holder.__len__() * batch_size
+        
+        data_y = numpy.asarray(file_object['y'][start:end])
+        r[start:end] = (classification[start:end] - data_y).astype(bool).astype('int32')
+
     return r
+    
     
 def accuracy(classifier, file_object, batch_size):
     
-    x_holder = DataGenerator(file_object, batch_size, None, hold_y = False)
-    classification_proba = classifier.predict_proba(x_holder)
+    e = errors(classifier, file_object, batch_size)
     
-    if classification_proba.shape[-1] > 1:
-        classification = classification_proba.argmax(axis=-1)
-    else:
-        classification = (classification_proba > 0.5).astype('int32')
-
-    # c = numpy.argmax( one_hot(file_object['y'], file_object['y'][:].max()+1) , axis=1)
-    c = numpy.argmax( one_hot(file_object['y'], 7) , axis=1)                        #<--------------------------- HARDCODED N_CLASSES, FIX THIS                    
-    e = numpy.where(classification != c, 1.0, 0.0)
-
     return 1.0 - (float(e.sum()) / float(file_object['y'].shape[0]))
+ 
  
 #TODO: this is kinda a redefinition of data.py's one_hot -> take care of the duplicates!
 def one_hot(data, n_classes):
