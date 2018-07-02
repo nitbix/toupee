@@ -59,7 +59,7 @@ def set_file_location(args, params):
             if os.path.exists(dict_dir):
                 folder = dict_dir
             else:
-                print("The desired dict_number doesn't exist!")
+                raise ValueError("The desired dict_number doesn't exist!")
                 
     return folder
 
