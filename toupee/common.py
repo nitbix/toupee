@@ -14,6 +14,7 @@ import os
 import collections
 import math
 import time
+import h5py
 
 from keras.callbacks import Callback
 from keras.utils import Sequence
@@ -40,7 +41,7 @@ class ModelCheckpointInMemory(Callback):
         super(ModelCheckpointInMemory, self).__init__()
         self.monitor = monitor
         self.verbose = verbose
-        import h5py
+        
         self.best_model = h5py.File("/dev/null", driver = 'core',
                 backing_store = False)
         self.best_epoch = None
