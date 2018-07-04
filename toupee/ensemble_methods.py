@@ -221,7 +221,7 @@ class AdaBoost_M1(EnsembleMethod):
         errors = common.errors(m, data_files[0], self.params.batch_size)
         
         e = np.sum((errors * self.D))
-        if e > 0:
+        if e > 0 and e < 0.5:       # e > 0.5 -> alpha becomes negative!
             alpha = .5 * math.log((1-e)/e)
             w = np.where(errors == 1,
                 self.D * math.exp(alpha),
