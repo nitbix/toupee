@@ -230,9 +230,8 @@ class Resampler:
                                        high=self.train_size,
                                        size=sample_size)
         else:
-            values = (list(range(len(distribution))),distribution)
-            d = scipy.stats.rv_discrete(a=0,b=len(distribution),values=values)
-            sample = d.rvs(size=sample_size)
+            sample = np.random.choice(len(distribution), size = sample_size, 
+                                        p = distribution)
             
         #sets the selected weights
         if distribution is not None:
