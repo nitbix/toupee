@@ -221,8 +221,12 @@ class AdaBoost_M1(EnsembleMethod):
         errors = common.errors(m, data_files[0], self.params.batch_size)
         
         e = np.sum((errors * self.D))
-        if e > 0 and e < 0.5:       # e > 0.5 -> alpha becomes negative!
-            alpha = .5 * math.log((1-e)/e)
+        if e > 0:
+            alpha = .5 * (math.log((1-e)/e) + math.log(7-1)) #<---- TODO: 7 <- params.n_classes
+            if alpha <= 0.0:
+                #By setting to 0 (instead of crashing), we should avoid cicleci problems
+                print("\nWARNING - NEGATIVE ALPHA (setting to 0.0)\n")
+                alpha = 0.0
             w = np.where(errors == 1,
                 self.D * math.exp(alpha),
                 self.D * math.exp(-alpha))
