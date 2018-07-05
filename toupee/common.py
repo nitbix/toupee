@@ -184,7 +184,7 @@ class DataGenerator(Sequence):
                     data_y.append(self.data_y[i, ...])  
                 data_y = numpy.asarray(data_y)
 
-        #otherwise, loads the interval and ther filters
+        #otherwise, loads the interval and then filters
         else:
             batch_indexes = batch_indexes - first_index
             
