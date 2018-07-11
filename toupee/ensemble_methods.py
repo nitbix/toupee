@@ -222,7 +222,8 @@ class AdaBoost_M1(EnsembleMethod):
         
         e = np.sum((errors * self.D))
         if e > 0:
-            alpha = .5 * (math.log((1-e)/e) + math.log(7-1)) #<---- TODO: 7 <- params.n_classes
+            n_classes = data_files[0]['y'].shape[1]
+            alpha = .5 * (math.log((1-e)/e) + math.log(n_classes-1))
             if alpha <= 0.0:
                 #By setting to 0 (instead of crashing), we should avoid cicleci problems
                 print("\nWARNING - NEGATIVE ALPHA (setting to 0.0)\n")
