@@ -87,10 +87,9 @@ class ModelCheckpointInMemory(Callback):
                           
 
 
-#Joao: I tried to prefetch the data from the disk in this class, but it led to
+#Joao: I tried to prefetch the data from the disk in this generator, but it led to
 #       multiple complications (especially with resampled data). 
 #       But it can decrease train&test time - do it in the future!
-#TODO: pass n_classes to the generator (takes way to long to compute)
 class DataGenerator(Sequence):
     ''' 
         Data holder generator class for .npz/.h5 data 
@@ -98,8 +97,7 @@ class DataGenerator(Sequence):
             [requires __len__(self) and __getitem__(self, idx)]
     '''
     
-    def __init__(self, data_file, batch_size, sampled_indexes, hold_y = True, 
-                    to_one_hot = False, n_classes = None):
+    def __init__(self, data_file, batch_size, sampled_indexes, hold_y = True):
         
         #define x
         if 'x' in data_file:
@@ -122,14 +120,12 @@ class DataGenerator(Sequence):
     
         # define y if needed
         self.hold_y = hold_y
-        self.to_one_hot = to_one_hot
         if hold_y:
+            #Todo: classification problem  -for now it assumes that 
+            #       y is a one-hot thing, which might not be always true!
+            self.n_classes = data_file['y'].shape[1]
+            assert self.n_classes > 1
             self.data_y = data_file['y']
-            if to_one_hot:
-                if n_classes is None:
-                    self.n_classes = 7 #<------------------------------------ this is hardcoded for now, FOR TESTING ONLY
-                else:
-                    self.n_classes = n_classes
 
     
     def sequential_batch(self, step):
@@ -144,10 +140,6 @@ class DataGenerator(Sequence):
     
         if self.hold_y:
             # Return the arrays in the shape that fit_gen uses (data, target)
-            if self.to_one_hot:
-                return (self.data_x[batch_indexes, ...],
-                        one_hot(self.data_y[batch_indexes, ...], self.n_classes))
-            # else:
             return (self.data_x[batch_indexes, ...],
                     self.data_y[batch_indexes, ...])
         # else:
@@ -197,9 +189,6 @@ class DataGenerator(Sequence):
                 
             
         if self.hold_y:    
-            if self.to_one_hot:
-                data_y = one_hot(data_y, self.n_classes)
-                
             return(data_x, data_y)
             
         # else:
@@ -213,7 +202,6 @@ class DataGenerator(Sequence):
     
     def __getitem__(self, step):
         #gets a batch
-        
         if self.sampled_indexes is None:
             return self.sequential_batch(step)
         else:
@@ -331,7 +319,7 @@ def errors(classifier, file_object, batch_size):
         if end > x_holder.__len__() * batch_size:
             end = x_holder.__len__() * batch_size
         
-        data_y = numpy.asarray(file_object['y'][start:end])
+        data_y = numpy.asarray(file_object['y'][start:end]).argmax(axis=-1)
         r[start:end] = (classification[start:end] - data_y).astype(bool).astype('int32')
 
     return r
