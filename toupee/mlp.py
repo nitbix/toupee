@@ -135,10 +135,10 @@ def sequential_model(dataset, params, pretraining_set = None,
         sampled_indexes.sort()
     files = dataset[1]
     
-    train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes, to_one_hot = True)
-    train_eval_holder = common.DataGenerator(files[0], params.batch_size, None, to_one_hot = True)
-    valid_holder = common.DataGenerator(files[1], params.batch_size, None, to_one_hot = True)
-    test_holder = common.DataGenerator(files[2], params.batch_size, None, to_one_hot = True)
+    train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes)
+    train_eval_holder = common.DataGenerator(files[0], params.batch_size, None)
+    valid_holder = common.DataGenerator(files[1], params.batch_size, None)
+    test_holder = common.DataGenerator(files[2], params.batch_size, None)
     
     start_time = time.clock()
     
