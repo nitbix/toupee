@@ -87,8 +87,8 @@ class ModelCheckpointInMemory(Callback):
                           
 
 
-#Joao: I tried to prefetch the data from the disk in this generator, but it led to
-#       multiple complications (especially with resampled data). 
+#Joao: I tried to prefetch the data from the disk in this generator, but it led 
+#       to multiple complications (especially with resampled data). 
 #       But it can decrease train&test time - do it in the future!
 class DataGenerator(Sequence):
     ''' 
@@ -121,7 +121,7 @@ class DataGenerator(Sequence):
         # define y if needed
         self.hold_y = hold_y
         if hold_y:
-            #Todo: classification problem  -for now it assumes that 
+            #TODO: classification problem  -for now it assumes that 
             #       y is a one-hot thing, which might not be always true!
             self.n_classes = data_file['y'].shape[1]
             assert self.n_classes > 1
@@ -133,9 +133,11 @@ class DataGenerator(Sequence):
         
         #defines the indexes for this batch
         if (step+1) == self.number_of_batches:    #<- last batch
-            batch_indexes = list(range(step*self.batch_size, self.num_examples))
+            batch_indexes = list(range(step*self.batch_size, 
+                self.num_examples))
         else:
-            batch_indexes = list(range(step*self.batch_size, (step+1)*self.batch_size))
+            batch_indexes = list(range(step*self.batch_size, 
+                (step+1)*self.batch_size))
     
     
         if self.hold_y:
@@ -149,21 +151,24 @@ class DataGenerator(Sequence):
             
     def sliced_batch(self, step):
         #problem with returning the "sampled_indexes" only:
-        # H5 can only slice given i) a sequencial list of integers or ii) a boolean array
-        # [i.e. there is no fancy slicing, as in numpy]
-        # since ii) might need a giant boolean array, let's do i) and then filter stuff
+        # H5 can only slice given i) a sequencial list of integers or ii) a 
+        # boolean array [i.e. there is no fancy slicing, as in numpy]
+        # since ii) might need a giant boolean array, let's do i) and then 
+        # filter stuff
         
         #gets the desired indexes for this batch
         if (step+1) == self.number_of_batches:    #<- last batch
-            batch_indexes = (self.sampled_indexes[step*self.batch_size : self.num_examples])
+            batch_indexes = (self.sampled_indexes[step*self.batch_size : 
+                self.num_examples])
         else:
-            batch_indexes = (self.sampled_indexes[step*self.batch_size : (step+1)*self.batch_size])
+            batch_indexes = (self.sampled_indexes[step*self.batch_size : 
+                (step+1)*self.batch_size])
          
         first_index = batch_indexes[0]
         last_index = batch_indexes[-1]
         
         #if the samples are too far appart, loads one by one
-        if last_index - first_index > 4096:   #<---- magic number
+        if last_index - first_index > 4096:   #<- magic number
             
             data_x = []
             for i in batch_indexes:
@@ -271,9 +276,11 @@ def serialize(o):
             return numpy.asfarray(o).tolist()
         except:
             if isinstance(o, object):
-                if 'serialize' in dir(o) and isinstance(getattr(o,'serialize'), collections.Callable):
+                if 'serialize' in dir(o) and isinstance(getattr(o,'serialize'), 
+                        collections.Callable):
                     return o.serialize()
-                if 'tolist' in dir(o) and isinstance(getattr(o,'tolist'), collections.Callable):
+                if 'tolist' in dir(o) and isinstance(getattr(o,'tolist'), 
+                        collections.Callable):
                     return o.tolist()
                 try:
                     return json.loads(json.dumps(o.__dict__,default=serialize))
@@ -286,42 +293,55 @@ def serialize(o):
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()
 
-                
+#----------------------------------------------------------               
 #for classification problems: 
-
-#TODO: pass as argument the number of classes               
-def errors(classifier, file_object, batch_size):
-
+def get_probabilities(classifier, file_object, batch_size)
+    """
+    Predicts the train set using the trained model
+    """
+    
     x_holder = DataGenerator(file_object, batch_size, None, hold_y = False)
     
     #applies the correct method, depending on the classifier class
     if hasattr(classifier, 'predict_generator'):
-        classification_proba = classifier.predict_generator(x_holder,
-                                                            max_queue_size=1000)
+        class_proba = classifier.predict_generator(x_holder,
+                                                   max_queue_size=1000)
     else:
-        classification_proba = classifier.predict_proba(x_holder)
+        class_proba = classifier.predict_proba(x_holder)
+        
+    return class_proba
 
-    
+           
+def errors(classifier, file_object, batch_size):
+    """
+    Gets the model's binary error status for each sample
+    """
+
+    class_proba = get_probabilities(classifier, file_object, batch_size)
+    n_samples = file_object['y'].shape[0]
+
     #converts to the predicted class (integer)
-    if classification_proba.shape[-1] > 1:
-        classification = classification_proba.argmax(axis=-1)
+    if class_proba.shape[-1] > 1:
+        classification = class_proba.argmax(axis=-1)
     else:
-        classification = (classification_proba > 0.5).astype('int32')
+        classification = (class_proba > 0.5).astype('int32')
 
-    #TODO: if y is a one-hot vector, changes are needed!
     #gets the result (iterativelly, to avoid running out of memory)
     end = 0
-    r = numpy.empty(x_holder.num_examples)
-    while end < (x_holder.__len__() * batch_size):
+    r = numpy.empty(n_samples)
+    while end < n_samples:
         
         start = end
         end += 131072  # magic number, power of 2 :D
-        if end > x_holder.__len__() * batch_size:
-            end = x_holder.__len__() * batch_size
-        
-        data_y = numpy.asarray(file_object['y'][start:end]).argmax(axis=-1)
-        r[start:end] = (classification[start:end] - data_y).astype(bool).astype('int32')
+        if end > n_samples:
+            end = n_samples
 
+        #checks if the most likely label is the true one
+        data_y = numpy.asarray(file_object['y'][start:end]).argmax(axis=-1)
+        r[start:end] = (classification[start:end] - data_y).astype(bool)
+        #converts that result to 0/1
+        r[start:end] = r[start:end].astype('int32')
+   
     return r
     
     
@@ -332,33 +352,74 @@ def accuracy(classifier, file_object, batch_size):
     return 1.0 - (float(e.sum()) / float(file_object['y'].shape[0]))
  
  
-#TODO: this is kinda a redefinition of data.py's one_hot -> take care of the duplicates!
+#TODO: this is kinda a redefinition of data.py's one_hot
+# -> take care of the duplicates!
 def one_hot(data, n_classes):
     b = numpy.zeros((data.size, n_classes),dtype='float32')
     b[numpy.arange(data.size), data] = 1.
     return b
     
-
+    
+def count_classes(file_object):
+    """Counts the number of entries on each class"""
+    n_classes, n_samples = file_object['y'].shape
+    sample_count = numpy.asarray([0]*n_classes)
+    
+    end = 0
+    while end < n_samples:
+        start = end
+        end += 131072  # magic number, power of 2 :D
+        if end > n_samples:
+            end = n_samples
+            
+        data_y = numpy.asarray(file_object['y'][start:end])
+        sample_count += numpy.sum(data_y, axis = 0)
+    
+    return sample_count
+ 
+ 
+def confidence(classifier, file_object, batch_size):
+    """
+    Returns the model's confidence for the true label
+    """
+    
+    class_proba = get_probabilities(classifier, file_object, batch_size)
+    n_samples = file_object['y'].shape[0]
+    
+    end = 0
+    h = numpy.empty(n_samples)
+    while end < n_samples:
+        start = end
+        end += 131072  # magic number, power of 2 :D
+        if end > n_samples:
+            end = n_samples
+            
+        data_y = numpy.asarray(file_object['y'][start:end]).argmax(axis=-1)
+        h[start:end] = class_proba[data_y]
+    
+    return h
     
     
+#----------------------------------------------------------
 #for regression problems:   
-def distance(predictor, test_set_x, test_set_y):
-    #returns the distance squared (=MMSE)
-    prediction = predictor.predict(test_set_x)
-    elementwise_d_squared = numpy.square(prediction - test_set_y)
-    euclidian_distance_squared = numpy.sum(elementwise_d_squared, axis = 1)
-    return euclidian_distance_squared
+#Regressions = not a priority for now  
+# def distance(predictor, test_set_x, test_set_y):
+    # returns the distance squared (=MMSE)
+    # prediction = predictor.predict(test_set_x)
+    # elementwise_d_squared = numpy.square(prediction - test_set_y)
+    # euclidian_distance_squared = numpy.sum(elementwise_d_squared, axis = 1)
+    # return euclidian_distance_squared
 
-def euclidian_distance(predictor, test_set_x, test_set_y):
-    #euclidian_distance = sqrt{(y[0]-y_pred[0])^2 + (y[1]-y_pred[1])^2 + ... + (y[n-1]-y_pred[n-1])^2}
-    euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
-    euclidian_distance = numpy.sqrt(euclidian_distance_squared)
-    return(numpy.sum(euclidian_distance) / float(test_set_y.shape[0]))
+# def euclidian_distance(predictor, test_set_x, test_set_y):
+    # euclidian_distance = sqrt{(y[0]-y_pred[0])^2 + (y[1]-y_pred[1])^2 + ... + (y[n-1]-y_pred[n-1])^2}
+    # euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
+    # euclidian_distance = numpy.sqrt(euclidian_distance_squared)
+    # return(numpy.sum(euclidian_distance) / float(test_set_y.shape[0]))
     
-def relative_distance(predictor, test_set_x, test_set_y):
-    #relative_distance = distance(y-y_pred) / sqrt(y^2)      [sqrt(y^2) = L2 norm]
-    euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
-    y_squared = numpy.sum(numpy.square(test_set_y), axis = 1)                   #both this and the previous line will need a sqrt, which can be done after the division
-    relative_distance = numpy.sqrt(euclidian_distance_squared / y_squared)
-    return(numpy.sum(relative_distance) / float(test_set_y.shape[0]))
+# def relative_distance(predictor, test_set_x, test_set_y):
+    # relative_distance = distance(y-y_pred) / sqrt(y^2)      [sqrt(y^2) = L2 norm]
+    # euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
+    # y_squared = numpy.sum(numpy.square(test_set_y), axis = 1)                   #both this and the previous line will need a sqrt, which can be done after the division
+    # relative_distance = numpy.sqrt(euclidian_distance_squared / y_squared)
+    # return(numpy.sum(relative_distance) / float(test_set_y.shape[0]))
     
