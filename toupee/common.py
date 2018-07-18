@@ -87,6 +87,7 @@ class ModelCheckpointInMemory(Callback):
                           
 
 
+
 #Joao: I tried to prefetch the data from the disk in this generator, but it led 
 #       to multiple complications (especially with resampled data). 
 #       But it can decrease train&test time - do it in the future!
@@ -341,7 +342,7 @@ def errors(classifier, file_object, batch_size):
         r[start:end] = (classification[start:end] - data_y).astype(bool)
         #converts that result to 0/1
         r[start:end] = r[start:end].astype('int32')
-   
+
     return r
     
     
