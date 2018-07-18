@@ -207,6 +207,7 @@ def store_results(args, params, intermediate_scores, final_score):
         #removes mongodb-buggy "params" entries
         params.method = ''
         
+        this_file_dir = os.path.dirname(os.path.realpath(__file__))
         results = {
                     "params_file": args.params_file,
                     "params": params.__dict__,
@@ -215,7 +216,8 @@ def store_results(args, params, intermediate_scores, final_score):
                     "best_score": np.max(intermediate_scores),
                     "best_score_after_ensemble_#": np.argmax(intermediate_scores).item(),   #without "item()", defaults to np.int64, which is not supported by mongodb
                     "date": datetime.datetime.utcnow(),
-                    "code version": subprocess.check_output(["git", "describe","--always"]).strip(),
+                    "code version": subprocess.check_output(["/usr/bin/git", 
+                        "describe","--always"], cwd = this_file_dir).strip(),
                     "dict_number": args.dict_number,
                     "ensemble_ID": params.ensemble_id,
                   }                
