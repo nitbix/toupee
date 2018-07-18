@@ -295,7 +295,7 @@ if 'toupee_global_instance' not in locals():
 
 #----------------------------------------------------------               
 #for classification problems: 
-def get_probabilities(classifier, file_object, batch_size)
+def get_probabilities(classifier, file_object, batch_size):
     """
     Predicts the train set using the trained model
     """
@@ -362,7 +362,7 @@ def one_hot(data, n_classes):
     
 def count_classes(file_object):
     """Counts the number of entries on each class"""
-    n_classes, n_samples = file_object['y'].shape
+    n_samples, n_classes = file_object['y'].shape
     sample_count = numpy.asarray([0]*n_classes)
     
     end = 0
@@ -395,7 +395,9 @@ def confidence(classifier, file_object, batch_size):
             end = n_samples
             
         data_y = numpy.asarray(file_object['y'][start:end]).argmax(axis=-1)
-        h[start:end] = class_proba[data_y]
+        
+        for i in range(end - start):
+            h[start + i] = class_proba[start + i][data_y[i]]
     
     return h
     

@@ -289,7 +289,7 @@ class AdaBoost_MA(EnsembleMethod):
         #Packs the needed data
         dataset = [
             train_indexes,
-            data_filess
+            data_files
         ]
         
         #Trains the model
@@ -324,6 +324,7 @@ class AdaBoost_MA(EnsembleMethod):
         self.params = params
         self.train_size = train_size
         self.resampler = WeightedResampler(train_size)
+        self.D = self.resampler.weights
         self.alphas = []
         self.member_number = 0
 
