@@ -50,7 +50,7 @@ def set_file_location(args, params):
                 latest_entry = latest_entry[0]
                 
             latest_entry_location = latest_entry['file_location']
-            folder = latest_entry_location
+            model_dir = latest_entry_location
             
         if args.model_dir is not None:
             target_root = '/datasets/experiments/'
