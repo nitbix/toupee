@@ -32,11 +32,11 @@ def set_file_location(args, params):
     Sets the input and model files folder
     '''
     
-    #Dataset location: hardcoded (@.yaml) < latest-experiment flag < specific dict number
+    #Dataset location: hardcoded (@.yaml) < latest-experiment flag < specific model_dir
     
     folder = None
 
-    if args.latest_experiment or args.dict_number:
+    if args.latest_experiment or args.model_dir:
         conn = MongoClient(host=args.results_host)
         db = conn[args.results_db]
         table = db[args.results_dep]
@@ -52,16 +52,14 @@ def set_file_location(args, params):
             latest_entry_location = latest_entry['file_location']
             folder = latest_entry_location
             
-        if args.dict_number is not None:
+        if args.model_dir is not None:
             target_root = '/datasets/experiments/'
-            dict_dir = os.path.join(target_root, 'dict_' + str(args.dict_number))
+            model_dir = os.path.join(target_root, args.model_dir)
             
-            if os.path.exists(dict_dir):
-                folder = dict_dir
-            else:
-                raise ValueError("The desired dict_number doesn't exist!")
+            if not os.path.exists(model_dir):
+                raise ValueError("model_dir {0} doesn't exist!".format(model_dir))
                 
-    return folder
+    return model_dir
 
 
     
@@ -218,7 +216,7 @@ def store_results(args, params, intermediate_scores, final_score):
                     "date": datetime.datetime.utcnow(),
                     "code version": subprocess.check_output(["/usr/bin/git", 
                         "describe","--always"], cwd = this_file_dir).strip(),
-                    "dict_number": args.dict_number,
+                    "model_dir": args.model_dir,
                     "ensemble_ID": params.ensemble_id,
                   }                
         
@@ -281,7 +279,7 @@ if __name__ == '__main__':
                         help='valid set npz file name')
     parser.add_argument('--trainfile', default='train.npz',
                         help='training set npz file name')
-    parser.add_argument('--dict-number', help="dict_number to use (= dataset location)",
+    parser.add_argument('--model-dir', help="directory name containing the dataset",
                         default=None)
     parser.add_argument('--latest-experiment', help="uses the latest experiment",
                         action='store_true')
@@ -329,9 +327,9 @@ if __name__ == '__main__':
     if data_folder is not None:
         params.dataset = data_folder
         if params.model_file is not None:
-            params.model_file = data_folder + '/' + params.model_file
+            params.model_file = os.path.join(data_folder, params.model_file)
         else:
-            params.model_file = data_folder + '/dnn.model'
+            params.model_file = os.path.join(data_folder, 'dnn.model')
     
     def arg_params(arg_value,param):
         if arg_value is not None:
