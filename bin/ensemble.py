@@ -34,7 +34,7 @@ def set_file_location(args, params):
     
     #Dataset location: hardcoded (@.yaml) < latest-experiment flag < specific model_dir
     
-    folder = None
+    model_dir = None
 
     if args.latest_experiment or args.model_dir:
         conn = MongoClient(host=args.results_host)
