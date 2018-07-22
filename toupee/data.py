@@ -81,7 +81,7 @@ def load_single_file(filename, resize_to = None, center_and_normalise = False,
 
   if one_hot_y:
       data = (data[0], one_hot(data[1]))
-  return data
+  return {'x': data[0], 'y': data[1]}
 
 def load_data(dataset, resize_to = None, pickled = True,
               center_and_normalise = False, join_train_and_valid = False,
@@ -197,6 +197,9 @@ def load_data(dataset, resize_to = None, pickled = True,
       train_set = (train_set[0], one_hot(train_set[1]))
       valid_set = (valid_set[0], one_hot(valid_set[1]))
       test_set = (test_set[0], one_hot(test_set[1]))
+  train_set = {'x': train_set[0], 'y': train_set[1]}
+  valid_set = {'x': valid_set[0], 'y': valid_set[1]}
+  test_set = {'x': test_set[0], 'y': test_set[1]}
   return (train_set, valid_set, test_set)
 
 def make_pretraining_set(datasets,mode):

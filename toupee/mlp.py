@@ -135,10 +135,13 @@ def sequential_model(dataset, params, pretraining_set = None,
         sampled_indexes.sort()
     files = dataset[1]
     
-    train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes)
-    train_eval_holder = common.DataGenerator(files[0], params.batch_size, None)
-    valid_holder = common.DataGenerator(files[1], params.batch_size, None)
-    test_holder = common.DataGenerator(files[2], params.batch_size, None)
+    train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes, shuffle=params.shuffle_dataset)
+    train_eval_holder = common.DataGenerator(files[0], params.batch_size, None,
+            shuffle=False)
+    valid_holder = common.DataGenerator(files[1], params.batch_size, None,
+            shuffle=False)
+    test_holder = common.DataGenerator(files[2], params.batch_size, None,
+            shuffle=False)
     
     start_time = time.clock()
     
@@ -180,7 +183,7 @@ def sequential_model(dataset, params, pretraining_set = None,
                   validation_data = valid_holder,
                   callbacks = callbacks,
                   max_queue_size=1000, 
-                  shuffle=False,
+                  shuffle = params.shuffle_dataset,
                   use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
                   #the old keras-fork version had more parameters here
         else:
@@ -189,7 +192,7 @@ def sequential_model(dataset, params, pretraining_set = None,
                   validation_data = valid_holder,
                   callbacks = callbacks,
                   max_queue_size=1000,
-                  shuffle=False,
+                  shuffle = params.shuffle_dataset,
                   use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
                   #the old keras-fork version had more parameters here
                   

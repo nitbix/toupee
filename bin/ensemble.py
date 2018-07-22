@@ -61,18 +61,18 @@ def set_file_location(args, params):
                 
     return model_dir
 
-
     
 def load_data_files(args, params):
     '''
     Checks if the input file is a .npz or a h5 - and loads those files
     '''
-    
     if (args.trainfile[-4:] == '.npz') and (args.validfile[-4:] == '.npz') and (args.testfile[-4:] == '.npz'):
         print("\nLoading .npz data\n")
-        trainfile = np.load(os.path.join(params.dataset, args.trainfile))
-        validfile = np.load(os.path.join(params.dataset, args.validfile))
-        testfile = np.load(os.path.join(params.dataset, args.testfile))
+        trainfile, validfile, testfile = data.load_data(params.dataset,
+                             pickled = params.pickled,
+                             one_hot_y = params.one_hot,
+                             join_train_and_valid = params.join_train_and_valid,
+                             zca_whitening = params.zca_whitening)
     elif (args.trainfile[-3:] == '.h5') and (args.validfile[-3:] == '.h5') and (args.testfile[-3:] == '.h5'):
         print("\nLoading .h5 data\n")
         trainfile = h5py.File(os.path.join(params.dataset, args.trainfile), 'r')
@@ -80,10 +80,8 @@ def load_data_files(args, params):
         testfile = h5py.File(os.path.join(params.dataset, args.testfile), 'r')
     else:
         raise ValueError('.npz or .h5 files are required; All sets must have the same format.')
-    
     files = [trainfile, validfile, testfile]
     return(files)
-    
     
     
 def get_scorer(classification):

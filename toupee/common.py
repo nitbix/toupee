@@ -15,6 +15,7 @@ import collections
 import math
 import time
 import h5py
+import random
 
 from keras.callbacks import Callback
 from keras.utils import Sequence
@@ -97,16 +98,15 @@ class DataGenerator(Sequence):
             [requires __len__(self) and __getitem__(self, idx)]
     '''
     
-    def __init__(self, data_file, batch_size, sampled_indexes, hold_y = True):
+    def __init__(self, data_file, batch_size, sampled_indexes, hold_y = True,
+            shuffle = False):
         
         #define x
         if 'x' in data_file:
             xlabel = 'x'
         elif 'X' in data_file:
             xlabel = 'X'
-        
         self.data_x = data_file[xlabel]
-        
 
         #auxiliary variables
         self.sampled_indexes = sampled_indexes
@@ -116,7 +116,7 @@ class DataGenerator(Sequence):
             self.num_examples = self.data_x.shape[0]
         self.batch_size = batch_size
         self.number_of_batches = math.ceil(self.num_examples/self.batch_size)
-    
+        self.shuffle = shuffle
     
         # define y if needed
         self.hold_y = hold_y
@@ -126,17 +126,19 @@ class DataGenerator(Sequence):
             self.n_classes = data_file['y'].shape[1]
             assert self.n_classes > 1
             self.data_y = data_file['y']
+        self.step_mapping = list(range(0, self.number_of_batches))
 
-    
     def sequential_batch(self, step):
         #sequential iteration over the data
         
         #defines the indexes for this batch
+        if self.shuffle and step == 0:
+            random.shuffle(self.step_mapping)
+        step = self.step_mapping[step]
         if (step+1) == self.number_of_batches:    #<- last batch
             batch_indexes = list(range(step*self.batch_size, self.num_examples))
         else:
             batch_indexes = list(range(step*self.batch_size, (step+1)*self.batch_size))
-    
     
         if self.hold_y:
             # Return the arrays in the shape that fit_gen uses (data, target)
@@ -153,7 +155,12 @@ class DataGenerator(Sequence):
         # [i.e. there is no fancy slicing, as in numpy]
         # since ii) might need a giant boolean array, let's do i) and then filter stuff
         
-        #gets the desired indexes for this batch
+        #gets the desired indices for this batch
+        step = step % self.number_of_batches
+        if self.shuffle and step == 0:
+            random.shuffle(self.step_mapping)
+        step = self.step_mapping[step]
+        print(step)
         if (step+1) == self.number_of_batches:    #<- last batch
             batch_indexes = (self.sampled_indexes[step*self.batch_size : self.num_examples])
         else:
