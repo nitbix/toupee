@@ -188,6 +188,7 @@ def load_data(dataset, resize_to = None, pickled = True,
       print("Done")
 
   if one_hot_y:
+      print('setting Y to one-hot')
       train_set = (train_set[0], one_hot(train_set[1]))
       valid_set = (valid_set[0], one_hot(valid_set[1]))
       test_set = (test_set[0], one_hot(test_set[1]))

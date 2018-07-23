@@ -14,12 +14,10 @@ import os
 import collections
 import h5py
 
-numpy.set_printoptions(threshold=numpy.inf)
+#numpy.set_printoptions(threshold=numpy.inf)
 
 from keras.callbacks import Callback
 from keras.utils import Sequence
-
-numpy.set_printoptions(threshold=numpy.inf)
 
 
 #KERAS ADD-ON

@@ -216,7 +216,6 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
 
                   epochs = params.n_epochs,
                   validation_data = (data_holder.valid_set_x, data_holder.valid_set_y),
-                  test_data = (data_holder.test_set_x, data_holder.test_set_y),
                   callbacks = callbacks,
                   shuffle = params.shuffle_dataset,
                   sample_weight = sample_weight)
