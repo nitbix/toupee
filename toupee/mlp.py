@@ -94,9 +94,7 @@ def callbacks_with_lr_scheduler(schedule, model, callbacks):
     def scheduler(epoch):
         if epoch in schedule:
             print(("Changing learning rate to {0}".format(schedule[epoch])))
-            # model.optimizer.lr.set_value(schedule[epoch])     #<--- old keras-fork version
-            model.optimizer.lr = K.variable(value = schedule[epoch])
-        # return float(model.optimizer.lr.get_value())          #<--- old keras-fork version
+            model.optimizer.lr.set_value(schedule[epoch])     #<--- old keras-fork version
         return float(K.eval(model.optimizer.lr))
     return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]   
     
@@ -135,9 +133,8 @@ def sequential_model(dataset, params, pretraining_set = None,
         sampled_indexes.sort()
     files = dataset[1]
     
-    train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes, shuffle=params.shuffle_dataset)
-    train_eval_holder = common.DataGenerator(files[0], params.batch_size, None,
-            shuffle=False)
+    train_holder = common.DataGenerator(files[0], params.batch_size,
+            sampled_indexes, shuffle=params.shuffle_dataset)
     valid_holder = common.DataGenerator(files[1], params.batch_size, None,
             shuffle=False)
     test_holder = common.DataGenerator(files[2], params.batch_size, None,
@@ -183,7 +180,7 @@ def sequential_model(dataset, params, pretraining_set = None,
                   validation_data = valid_holder,
                   callbacks = callbacks,
                   max_queue_size=1000, 
-                  shuffle = params.shuffle_dataset,
+                  shuffle = False,
                   use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
                   #the old keras-fork version had more parameters here
         else:
@@ -192,15 +189,13 @@ def sequential_model(dataset, params, pretraining_set = None,
                   validation_data = valid_holder,
                   callbacks = callbacks,
                   max_queue_size=1000,
-                  shuffle = params.shuffle_dataset,
+                  shuffle = False,
                   use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
                   #the old keras-fork version had more parameters here
                   
     model.set_weights(checkpointer.best_model)
     
     #evals everything with a generator
-    print('\nGetting the train metrics...')
-    train_metrics = model.evaluate_generator(train_eval_holder)
     print('Getting the validation metrics...')
     valid_metrics = model.evaluate_generator(valid_holder)
     print('Getting the test metrics...')

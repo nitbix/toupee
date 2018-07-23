@@ -123,8 +123,13 @@ class DataGenerator(Sequence):
         if hold_y:
             #Todo: classification problem  -for now it assumes that 
             #       y is a one-hot thing, which might not be always true!
-            self.n_classes = data_file['y'].shape[1]
-            assert self.n_classes > 1
+            if len(data_file['y'].shape) > 1:
+                self.n_classes = data_file['y'].shape[1]
+                self.one_hot = False
+            else:
+                print('Automatically detected one hot conversion')
+                self.n_classes = data_file['y'].max() + 1
+                self.one_hot = True
             self.data_y = data_file['y']
         self.step_mapping = list(range(0, self.number_of_batches))
 
@@ -142,12 +147,13 @@ class DataGenerator(Sequence):
     
         if self.hold_y:
             # Return the arrays in the shape that fit_gen uses (data, target)
-            return (self.data_x[batch_indexes, ...],
-                    self.data_y[batch_indexes, ...])
+            data_y = self.data_y[batch_indexes, ...]
+            if self.one_hot:
+                data_y = one_hot(data_y, self.n_classes)
+            return (self.data_x[batch_indexes, ...], data_y)
         # else:
         # Return the arrays in the shape that predict_generator uses (data)
         return (self.data_x[batch_indexes, ...]) 
-            
             
     def sliced_batch(self, step):
         #problem with returning the "sampled_indexes" only:
@@ -160,7 +166,6 @@ class DataGenerator(Sequence):
         if self.shuffle and step == 0:
             random.shuffle(self.step_mapping)
         step = self.step_mapping[step]
-        print(step)
         if (step+1) == self.number_of_batches:    #<- last batch
             batch_indexes = (self.sampled_indexes[step*self.batch_size : self.num_examples])
         else:
@@ -193,19 +198,18 @@ class DataGenerator(Sequence):
             if self.hold_y:
                 data_y = self.data_y[first_index:last_index+1, ...]
                 data_y = data_y[batch_indexes, ...]
-                
             
-        if self.hold_y:    
+        if self.hold_y:
+            if self.one_hot:
+                data_y = one_hot(data_y)
             return(data_x, data_y)
             
         # else:
         return(data_x)
     
-    
     def __len__(self):
         #returns the dataset length
         return self.number_of_batches
-    
     
     def __getitem__(self, step):
         #gets a batch
@@ -213,9 +217,6 @@ class DataGenerator(Sequence):
             return self.sequential_batch(step)
         else:
             return self.sliced_batch(step)
-            
-
-
 
 
 class Toupee:
