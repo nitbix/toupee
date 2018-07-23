@@ -141,8 +141,8 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     model.compile(optimizer = optimizer,
                   loss = params.cost_function,
                   metrics = metrics,
-                  update_inputs = params.update_inputs,
-                  update_inputs_lr = params.update_inputs_lr
+                  #update_inputs = params.update_inputs,
+                  #update_inputs_lr = params.update_inputs_lr
 
     )
 
