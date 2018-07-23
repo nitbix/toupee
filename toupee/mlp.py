@@ -114,7 +114,7 @@ def sequential_model(dataset, params, pretraining_set = None, model_weights = No
     for l in frozen_layers:
         model.layers[l].trainable = False
 
-    checkpointer = keras.callbacks.ModelCheckpointInMemory(verbose=1,
+    checkpointer = common.ModelCheckpointInMemory(verbose=1,
             monitor = monitor_type,
             mode = 'max')
     callbacks = [checkpointer]
