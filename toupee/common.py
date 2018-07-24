@@ -405,7 +405,6 @@ def confidence(classifier, file_object, batch_size):
     
 #----------------------------------------------------------
 #for regression problems:   
-#Regressions = not a priority for now  
 # def distance(predictor, test_set_x, test_set_y):
     # returns the distance squared (=MMSE)
     # prediction = predictor.predict(test_set_x)
