@@ -125,7 +125,7 @@ def yaml_include(loader, node):
     # Get the path out of the yaml file
     file_name = os.path.join(os.path.dirname(loader.name), node.value)
 
-    with file(file_name) as inputfile:
+    with open(file_name) as inputfile:
         return yaml.load(inputfile)
 
 yaml.add_constructor("!include", yaml_include)
