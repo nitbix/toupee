@@ -134,7 +134,6 @@ class WeightedAveragingRunner(Aggregator):
         return a
         
         
-#Regressions = not a priority for now
 # class WeightedAveragingRunner_Regression(Aggregator):
     # """
     # Take an Ensemble and produce a weighted average, usually done in AdaBoost 
@@ -906,9 +905,6 @@ BARN {{
 
      
 
-
-     
-#Regressions = not a priority for now
 # class AdaBoost_Regression(EnsembleMethod):
     # """
     # Create an AdaBoost Ensemble from parameters 
