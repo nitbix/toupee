@@ -4,3 +4,5 @@ sklearn
 theano
 scikit-image
 pymongo
+keras
+pyyaml
