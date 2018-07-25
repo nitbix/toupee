@@ -3,3 +3,4 @@ dill
 sklearn
 theano
 scikit-image
+pymongo
