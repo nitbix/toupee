@@ -46,7 +46,7 @@ jobs:
           name: Test Common Datasets
           command: |
             . venv/bin/activate
-            KERAS_BACKEND=theano python3 /bin/ensemble.py tmp_mnist/AdaBoost.yaml
+            KERAS_BACKEND=theano python3 bin/ensemble.py tmp_mnist/AdaBoost.yaml
 
       - store_artifacts:
           path: test-reports

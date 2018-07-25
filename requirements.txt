@@ -6,3 +6,4 @@ scikit-image
 pymongo
 keras
 pyyaml
+tensorflow
