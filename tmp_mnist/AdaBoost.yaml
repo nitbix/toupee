@@ -1,0 +1,17 @@
+---
+dataset: /home/joao/mnist_th/
+model_file: mnist.model
+optimizer:
+  class_name: ADAM
+  config:
+    lr: 0.001
+    #decay: 1e-4
+n_epochs: 4 #max number of training epochs
+batch_size: 128
+cost_function: categorical_crossentropy
+shuffle_dataset: true
+
+## Ensemble Parameters ##
+resample_size: 60000
+method: !AdaBoostM1 { }
+ensemble_size: 1
