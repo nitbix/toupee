@@ -1,5 +1,5 @@
 ---
-dataset: /home/joao/mnist_th/
+dataset: mnist_th/
 model_file: mnist.model
 optimizer:
   class_name: ADAM
