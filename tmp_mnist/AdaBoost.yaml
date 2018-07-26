@@ -6,8 +6,8 @@ optimizer:
   config:
     lr: 0.001
     #decay: 1e-4
-n_epochs: 4 #max number of training epochs
-batch_size: 128
+n_epochs: 5 #max number of training epochs
+batch_size: 32
 cost_function: categorical_crossentropy
 shuffle_dataset: true
 
