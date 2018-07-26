@@ -15,7 +15,7 @@ config:
     data_format: channels_first
     dilation_rate: [1, 1]
     dtype: float32
-    filters: 64
+    filters: 32
     kernel_constraint: null
     kernel_initializer:
       class_name: VarianceScaling
