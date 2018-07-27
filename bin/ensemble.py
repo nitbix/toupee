@@ -49,6 +49,8 @@ if __name__ == '__main__':
                         help='location where to save the shape of the ensemble members. Pass \'\' to use the same number as --seed')
     parser.add_argument('--dump-to', type=str, nargs='?', default='ensemble.pkl',
                         help='location where to save the ensemble')
+    parser.add_argument('--no-dump', help="Overrides dump-shapes-to and dump-to, resulting in no stored data",
+                        action='store_true')
     parser.add_argument('--testfile', default='test.npz',
                         help='test set npz file name')
     parser.add_argument('--validfile', default='valid.npz',
@@ -62,8 +64,9 @@ if __name__ == '__main__':
     parser.add_argument('--remove-tmp-files', help="remove the temporary model files at the end.",
                         action='store_true')
     parser.add_argument('--test-mnist', help="[Test Mode] checks the accuracy for mnist",
-                        action='store_true')                    
-
+                        action='store_true')
+    parser.add_argument('--test-tin200', help="[Test Mode] checks the accuracy for tiny_imagenet_200",
+                        action='store_true')
     args = parser.parse_args()
     #this needs to come before all the toupee and theano imports
     #because theano starts up with gpu0 and never lets you change it
@@ -182,11 +185,11 @@ if __name__ == '__main__':
     
     for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
     
-    if args.dump_to is not None:
+    if (args.dump_to is not None) and (not args.no_dump):
         dill.dump({'members': members, 'ensemble': ensemble},
                 # open(args.dump_to,"wb"))
                 open(os.path.join(params.dataset, args.dump_to),"wb"))
-    if args.dump_shapes_to is not None:
+    if (args.dump_shapes_to is not None) and (not args.no_dump):
         if args.dump_shapes_to == '':
             dump_shapes_to = args.seed
         else:
@@ -198,9 +201,13 @@ if __name__ == '__main__':
     
     
     if args.test_mnist:
-        assert final_score[0] > 0.99
+        assert final_score[0] > 0.990
         print("\n\n\nMNIST test completed successfully!\n\n\n")
 
+    if args.test_tin200:
+        assert final_score[0] > 0.138
+        print("\n\n\nTiny Imagenet 200 test completed successfully!\n\n\n")
+    
     
     if 'results_db' in params.__dict__:
         if 'results_host' in params.__dict__:
