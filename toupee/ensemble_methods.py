@@ -16,7 +16,7 @@ import toupee.common as common
 import math
 import keras
 from toupee.common import read_yaml_file
-from keras.layers import Input, Convolution2D, merge
+from keras.layers import Input, Convolution2D, add
 from keras.models import Model
 from pprint import pprint
 import copy
@@ -435,7 +435,7 @@ class BRN(EnsembleMethod):
                                      name="shortcut_BRN_{0}".format(member_number))(input_layer)
 
         #make merge
-        merge_layer = merge([real_layers,shortcut], mode="sum", name = "merge_BRN_{0}".format(member_number))
+        merge_layer = add([real_layers,shortcut], name = "merge_BRN_{0}".format(member_number))
         #make model
         model = Model(inputs=[input_layer],outputs=[merge_layer],
                 name="Model_BRN_{0}".format(member_number))
@@ -610,7 +610,7 @@ class BARN(EnsembleMethod):
                                      name="shortcut_BARN_{0}".format(member_number))(input_layer)
 
         #make merge
-        merge_layer = merge([real_layers,shortcut], mode="sum", name = "merge_BARN_{0}".format(member_number))
+        merge_layer = add([real_layers,shortcut], name = "merge_BARN_{0}".format(member_number))
         #make model
         model = Model(input=input_layer,output=merge_layer,
                 name="Model_BARN_{0}".format(member_number))
