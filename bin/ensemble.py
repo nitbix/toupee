@@ -61,7 +61,7 @@ if __name__ == '__main__':
                         action='store_true')
     parser.add_argument('--remove-tmp-files', help="remove the temporary model files at the end.",
                         action='store_true')
-    parser.add_argument('--test-mode', help="[Test Mode] checks the accuracy for mnist",
+    parser.add_argument('--test-mnist', help="[Test Mode] checks the accuracy for mnist",
                         action='store_true')                    
 
     args = parser.parse_args()
@@ -197,9 +197,9 @@ if __name__ == '__main__':
                 f.write(members[i][0])
     
     
-    if args.test_mode:
-        assert final_score > 0.985
-        print("\n\n\nMNIST test completed successfully")
+    if args.test_mnist:
+        assert final_score[0] > 0.99
+        print("\n\n\nMNIST test completed successfully!\n\n\n")
 
     
     if 'results_db' in params.__dict__:
