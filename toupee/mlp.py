@@ -40,6 +40,12 @@ class DataHolder:
     def __init__(self,dataset):
         self.orig_train_set_x = dataset[0][0]
         self.orig_train_set_y = dataset[0][1]
+        
+        print("DEBUGING SHUFFLE - SHUFFLING THE TRAINING SET")
+        from sklearn.utils import shuffle
+        self.orig_train_set_x, self.orig_train_set_y = shuffle(self.orig_train_set_x, self.orig_train_set_y)
+        
+        
         self.orig_valid_set_x = dataset[1][0]
         self.orig_valid_set_y = dataset[1][1]
         self.orig_test_set_x = dataset[2][0]
