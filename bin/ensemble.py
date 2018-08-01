@@ -15,7 +15,7 @@ import argparse
 import os
 import re
 import dill
-from toupee.common import accuracy, euclidian_distance, relative_distance
+from toupee.common import accuracy
 
 from pymongo import MongoClient
 from sklearn.utils import shuffle
