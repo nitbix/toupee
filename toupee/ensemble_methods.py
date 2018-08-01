@@ -177,12 +177,12 @@ class EnsembleMethod(common.ConfiguredObject):
         self.members = []
         self.weights = []
         raise "needs fixing"
-        for w in weights:
-            rng = numpy.random.RandomState(self.params.random_seed)
-            m = mlp.MLP(params=self.params, rng=rng, input=x, index=index, x=x, y=y)
-            m.set_weights(w)
-            self.members.append(m)
-        return self.members
+        # for w in weights:
+            # rng = numpy.random.RandomState(self.params.random_seed)
+            # m = mlp.MLP(params=self.params, rng=rng, input=x, index=index, x=x, y=y)
+            # m.set_weights(w)
+            # self.members.append(m)
+        # return self.members
 
     def serialize(self):
         return 'UnknownEnsemble'
@@ -267,8 +267,8 @@ class Bagging(EnsembleMethod):
         if 'voting' in self.__dict__ and self.voting:
             #TODO: update this one too
             return MajorityVotingRunner(members,params) 
-        else:
-            return AveragingRunner(members,params)
+        # else:
+        return AveragingRunner(members,params)
 
     def create_member(self, data_files):
     
@@ -434,8 +434,8 @@ class BRN(EnsembleMethod):
     def create_aggregator(self,params,members,train_set,valid_set):
         if self.real:
             return AveragingRunner(members, params, self._samme_proba)
-        else:
-            return WeightedAveragingRunner(members, self.alphas, params)
+        # else:
+        return WeightedAveragingRunner(members, self.alphas, params)
 
     def _samme_proba(self, proba):
         proba[proba < np.finfo(proba.dtype).eps] = np.finfo(proba.dtype).eps

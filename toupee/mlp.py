@@ -54,8 +54,8 @@ def initialize_model(params, sample_weight, model_config, model_yaml,
         total_weights += numpy.prod(w.shape)
 
     if model_weights is not None:
-        for i in range(len(model_weights)):
-            model.layers[i].set_weights(model_weights[i])
+        for i, model_weights_i in enumerate(model_weights):
+            model.layers[i].set_weights(model_weights_i)
 
     print(("total weight count: {0}".format(total_weights)))
     
@@ -71,7 +71,7 @@ def initialize_model(params, sample_weight, model_config, model_yaml,
 
 def initialize_metrics(params):
     
-    if params.classification == True:   
+    if params.classification:   
         scorer_name = 'accuracy'
         monitor_type = 'val_acc'
     else:
@@ -107,8 +107,8 @@ def print_results(model, train_metrics, valid_metrics, test_metrics):
             ('test', test_metrics)
         ):
         print(("{0}:".format(metrics_name)))
-        for i in range(len(metrics)):
-            print(("  {0} = {1}".format(model.metrics_names[i], metrics[i])))
+        for i, metrics_i in enumerate(metrics):
+            print(("  {0} = {1}".format(model.metrics_names[i], metrics_i)))
 
           
 def sequential_model(dataset, params, pretraining_set = None, 
@@ -227,8 +227,8 @@ def sequential_model(dataset, params, pretraining_set = None,
 
     if return_results:
         return model, results
-    else:
-        return model
+    # else:
+    return model
 
 #------------------------------------------------------------------------------------------        
 # code to update later:  

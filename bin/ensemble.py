@@ -24,6 +24,7 @@ import datetime
 import subprocess
 import h5py
 import time
+import pprint
 
 
 
@@ -129,10 +130,10 @@ def store_ensemble(args, params, members, ensemble):
             dump_shapes_to = args.seed
         else:
             dump_shapes_to = args.dump_shapes_to
-        for i in range(len(members)):
+        for i, members_i in enumerate(members):
             with open("{0}member-{1}.model".format(dump_shapes_to, i),"w") as f:
                 f.truncate()
-                f.write(members[i][0])
+                f.write(members_i[0])
         
 
 def shuffle_dataset(trainfile):
@@ -228,8 +229,8 @@ def run_ensemble(args, params):
         members.append(m[:2])
         ensemble = method.create_aggregator(params,members,None,None)
         test_score = []
-        for j in range(len(scorer)):
-            test_score.append(scorer[j](ensemble,trainfile,params.batch_size))
+        for j, scorer_j in enumerate(scorer):
+            test_score.append(scorer_j(ensemble,trainfile,params.batch_size))
             print(('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j])))
         
         intermediate_scores.append(test_score)
@@ -238,7 +239,8 @@ def run_ensemble(args, params):
             break
             
     
-    for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
+    for j, _ in enumerate(scorer): 
+        print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
     
     #stores the ensemble (if needed)
     if not args.no_dump:
@@ -315,19 +317,17 @@ def store_results(args, params, intermediate_scores, final_score):
             results[column_name] = latest_id
         
         
-        id = table.insert_one(results).inserted_id
+        this_id = table.insert_one(results).inserted_id
         
         #prints stuff if needed [for now its on, to help with the dbg]
-        if True:
-            import pprint
-            print("PRINTING DB ENTRY:")
-            print(("DB NAME = ", params.results_db))
-            print(("TABLE NAME = ", table_name))
-            print("TABLE ENRTY:")
-            latest_entry = table.find().sort("_id", -1).limit(1)
-            pprint.pprint(latest_entry[0])
+        print("PRINTING DB ENTRY:")
+        print(("DB NAME = ", params.results_db))
+        print(("TABLE NAME = ", table_name))
+        print("TABLE ENRTY:")
+        latest_entry = table.find().sort("_id", -1).limit(1)
+        pprint.pprint(latest_entry[0])
         
-        print(("\n\nDone. [Results stored in the DB, ID = {0}]".format(id)))
+        print(("\n\nDone. [Results stored in the DB, ID = {0}]".format(this_id)))
     
     
 

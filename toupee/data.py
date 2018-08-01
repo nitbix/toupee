@@ -203,9 +203,9 @@ def load_data(dataset, resize_to = None, pickled = True,
   return (train_set, valid_set, test_set)
 
 def make_pretraining_set(datasets,mode):
-  if mode is not None:
-    return (datasets[0][0],datasets[0][1])
-  else:
+    if mode is not None:
+        return (datasets[0][0],datasets[0][1])
+  # else:
     return None
 
     
