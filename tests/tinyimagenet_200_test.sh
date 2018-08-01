@@ -22,5 +22,4 @@ if [ ! -d "$TIN200_FOLDER" ]; then
     aws s3 cp s3://public-datasets.nplan.io/tinyimagenet_200/AdaBoost.yaml $TIN200_FOLDER
 fi
 
-#KERAS_BACKEND=theano THEANO_FLAGS=device=cuda7 python3 ../bin/ensemble.py $TIN200_FOLDER/AdaBoost.yaml --test-tin200 --no-dump
-KERAS_BACKEND=theano THEANO_FLAGS=device=cuda7 python3 ../bin/ensemble.py $TIN200_FOLDER/AdaBoost.yaml
+KERAS_BACKEND=theano THEANO_FLAGS=device=cuda7 python3 ../bin/ensemble.py $TIN200_FOLDER/AdaBoost.yaml --test-tin200 --no-dump

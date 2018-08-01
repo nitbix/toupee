@@ -18,13 +18,12 @@ import dill
 from toupee.common import accuracy, euclidian_distance, relative_distance
 
 from pymongo import MongoClient
+from sklearn.utils import shuffle
 import numpy as np
 import datetime
 import subprocess
 import h5py
 import time
-import sklearn
-import random
 
 
 
@@ -67,6 +66,7 @@ def load_data_files(args, params):
     '''
     Checks if the input file is a .npz or a h5 - and loads those files
     '''
+    is_h5 = False
     if (args.trainfile[-4:] == '.npz') and (args.validfile[-4:] == '.npz') and (args.testfile[-4:] == '.npz'):
         print("\nLoading .npz data\n")
         trainfile, validfile, testfile = data.load_data(params.dataset,
@@ -76,13 +76,14 @@ def load_data_files(args, params):
                              zca_whitening = params.zca_whitening)
     elif (args.trainfile[-3:] == '.h5') and (args.validfile[-3:] == '.h5') and (args.testfile[-3:] == '.h5'):
         print("\nLoading .h5 data\n")
+        is_h5 = True
         trainfile = h5py.File(os.path.join(params.dataset, args.trainfile), 'r')
         validfile = h5py.File(os.path.join(params.dataset, args.validfile), 'r')
         testfile = h5py.File(os.path.join(params.dataset, args.testfile), 'r')
     else:
         raise ValueError('.npz or .h5 files are required; All sets must have the same format.')
-    files = [trainfile, validfile, testfile]
-    return(files)
+
+    return trainfile, validfile, testfile, is_h5
     
     
 def get_scorer(classification):
@@ -137,7 +138,7 @@ def store_ensemble(args, params, members, ensemble):
 def shuffle_dataset(trainfile):
     
     #DBG H5
-    # trainfile = h5py.File('/datasets/tinyimagenet_200/test.h5', 'r')
+    trainfile = h5py.File('/datasets/tinyimagenet_200/test.h5', 'r')
     
     #define x
     if 'x' in trainfile:
@@ -152,9 +153,9 @@ def shuffle_dataset(trainfile):
     #shuffle NPZ
     if isinstance(data_x, np.ndarray):
         
-        print("Shuffling the training set (NPZ file)...")
+        print("Shuffling the training set (npz file)...")
         
-        data_x, data_y = sklearn.utils.shuffle(data_x, data_y)
+        data_x, data_y = shuffle(data_x, data_y)
     
         new_trainfile = {
             xlabel: data_x,
@@ -163,28 +164,36 @@ def shuffle_dataset(trainfile):
     #-----------------------------------------
     #shuffle H5
     else:
-        print("Shuffling the training set (H5 file - this might"
-            " take a while)...")
-    
-        n_samples = data_y.shape[0]
-        data_order = list(range(n_samples))
-        random.shuffle(data_order)
+        print("Shuffling the training set (h5 file)...")
         
         h5_filename = trainfile.filename[:-3] + "_shuffled.h5"
         
         #if the "shuffled" version already exists, don't bother
         if not os.path.exists(h5_filename):
-            with h5py.File(h5_filename, 'w-') as hf:
-                hf.create_dataset(xlabel, data=data_x, maxshape=(data_x.shape))
-                hf.create_dataset('y', data=data_y, maxshape=(data_y.shape))
-                for i in range(n_samples):
-                    if i % (n_samples/100) == 0:
-                        print("{0} out of {1}".format(i, n_samples))
-                    hf[xlabel][i,...] = data_x[data_order[i],...]
-                    hf['y'][i,...] = data_y[data_order[i]]
-        else:
-            print("Already shuffled - let's not waste time on this.")
+            try:
+                print("    [shuf] Loading h5 to RAM...")
+                data_x_ram = np.asarray(data_x[:])
+                data_y_ram = np.asarray(data_y[:])
                 
+                print("    [shuf] Shuffling...")
+                data_x_ram, data_y_ram = shuffle(data_x_ram, data_y_ram)
+                
+                print("    [shuf] Storing shuffled data into a new h5...")
+                with h5py.File(h5_filename, 'w-') as hf:
+                    hf.create_dataset(xlabel, data=data_x_ram, 
+                        maxshape=(data_x.shape))
+                    hf.create_dataset('y', data=data_y_ram, 
+                        maxshape=(data_y.shape))
+                
+            except MemoryError:
+                print("Not enough RAM to shuffle efficiently, please use "
+                    "h5repack")
+                print("e.g.: h5repack -i test.h5 -o test_shuffled.h5 -f SHUF")
+                raise SystemExit
+        else:
+            print("Using the shuffled h5 file that was found")
+            
+        trainfile.close()
         new_trainfile = h5py.File(h5_filename, 'r')
     #-----------------------------------------       
     return(new_trainfile)
@@ -194,7 +203,7 @@ def shuffle_dataset(trainfile):
 def run_ensemble(args, params):
 
     #Checks for h5/npz data, and returns the files if successful
-    trainfile, validfile, testfile = load_data_files(args, params)
+    trainfile, validfile, testfile, is_h5 = load_data_files(args, params)
     
     #Shuffles the training set
     if params.shuffle_dataset:
@@ -232,15 +241,30 @@ def run_ensemble(args, params):
     for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
     
     #stores the ensemble (if needed)
-    store_ensemble(args, params, members, ensemble)
+    if not args.no_dump:
+        store_ensemble(args, params, members, ensemble)
     
     #cleanup: closes the files
-    trainfile.close()
-    validfile.close()
-    testfile.close()
+    if is_h5:
+        trainfile.close()
+        validfile.close()
+        testfile.close()
     
     return (intermediate_scores, final_score)
     
+
+def check_tests(args, final_score):
+    '''
+    Checks the final_score, it it's a test
+    '''
+    if args.test_mnist:
+        assert final_score[0] > 0.990
+        print("\n\n\nMNIST test completed successfully!\n\n\n")
+
+    if args.test_tin200:
+        assert final_score[0] > 0.138
+        print("\n\n\nTiny Imagenet 200 test completed successfully!\n\n\n")
+
     
 def store_results(args, params, intermediate_scores, final_score):
     '''
@@ -332,6 +356,8 @@ if __name__ == '__main__':
                         help='location where to save the shape of the ensemble members. Pass \'\' to use the same number as --seed')
     parser.add_argument('--dump-to', type=str, nargs='?', default='ensemble.pkl',
                         help='location where to save the ensemble')
+    parser.add_argument('--no-dump', help="Overrides dump-shapes-to and dump-to, resulting in no stored data",
+                        action='store_true')
     parser.add_argument('--testfile', default='test.npz',
                         help='test set npz file name')
     parser.add_argument('--validfile', default='valid.npz',
@@ -345,6 +371,10 @@ if __name__ == '__main__':
     parser.add_argument('--remove-tmp-files', help="remove the temporary model files at the end.",
                         action='store_true')
     parser.add_argument('--sweeping-architectures', help="use while sweeping multiple architectures",
+                        action='store_true')
+    parser.add_argument('--test-mnist', help="[Test Mode] checks the accuracy for mnist",
+                        action='store_true')
+    parser.add_argument('--test-tin200', help="[Test Mode] checks the accuracy for tiny_imagenet_200",
                         action='store_true')
 
     args = parser.parse_args()
@@ -400,6 +430,7 @@ if __name__ == '__main__':
     
     #Runs the ensemble training
     intermediate_scores, final_score = run_ensemble(args, params)
+    check_tests(args, final_score)
     
     #Saves the results in the DB            
     store_results(args, params, intermediate_scores, final_score)
