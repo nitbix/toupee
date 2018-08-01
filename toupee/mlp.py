@@ -196,6 +196,8 @@ def sequential_model(dataset, params, pretraining_set = None,
     model.set_weights(checkpointer.best_model)
     
     #evals everything with a generator
+    print('\nGetting the train metrics...')
+    train_metrics = model.evaluate_generator(train_holder)
     print('Getting the validation metrics...')
     valid_metrics = model.evaluate_generator(valid_holder)
     print('Getting the test metrics...')

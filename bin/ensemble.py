@@ -11,7 +11,6 @@ All code released under GPLv2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 
-import numpy
 import argparse
 import os
 import re
@@ -24,6 +23,8 @@ import datetime
 import subprocess
 import h5py
 import time
+import sklearn
+import random
 
 
 
@@ -132,12 +133,72 @@ def store_ensemble(args, params, members, ensemble):
                 f.truncate()
                 f.write(members[i][0])
         
+
+def shuffle_dataset(trainfile):
     
+    #DBG H5
+    # trainfile = h5py.File('/datasets/tinyimagenet_200/test.h5', 'r')
+    
+    #define x
+    if 'x' in trainfile:
+        xlabel = 'x'
+    elif 'X' in trainfile:
+        xlabel = 'X'
+    
+    data_x = trainfile[xlabel]
+    data_y = trainfile['y']
+    
+    #-----------------------------------------
+    #shuffle NPZ
+    if isinstance(data_x, np.ndarray):
+        
+        print("Shuffling the training set (NPZ file)...")
+        
+        data_x, data_y = sklearn.utils.shuffle(data_x, data_y)
+    
+        new_trainfile = {
+            xlabel: data_x,
+            'y': data_y
+            }
+    #-----------------------------------------
+    #shuffle H5
+    else:
+        print("Shuffling the training set (H5 file - this might"
+            " take a while)...")
+    
+        n_samples = data_y.shape[0]
+        data_order = list(range(n_samples))
+        random.shuffle(data_order)
+        
+        h5_filename = trainfile.filename[:-3] + "_shuffled.h5"
+        
+        #if the "shuffled" version already exists, don't bother
+        if not os.path.exists(h5_filename):
+            with h5py.File(h5_filename, 'w-') as hf:
+                hf.create_dataset(xlabel, data=data_x, maxshape=(data_x.shape))
+                hf.create_dataset('y', data=data_y, maxshape=(data_y.shape))
+                for i in range(n_samples):
+                    if i % (n_samples/100) == 0:
+                        print("{0} out of {1}".format(i, n_samples))
+                    hf[xlabel][i,...] = data_x[data_order[i],...]
+                    hf['y'][i,...] = data_y[data_order[i]]
+        else:
+            print("Already shuffled - let's not waste time on this.")
+                
+        new_trainfile = h5py.File(h5_filename, 'r')
+    #-----------------------------------------       
+    return(new_trainfile)
+        
+        
     
 def run_ensemble(args, params):
 
     #Checks for h5/npz data, and returns the files if successful
     trainfile, validfile, testfile = load_data_files(args, params)
+    
+    #Shuffles the training set
+    if params.shuffle_dataset:
+        trainfile = shuffle_dataset(trainfile)
     
     #gets the train size
     train_size = trainfile['y'].shape[0]
@@ -312,7 +373,7 @@ if __name__ == '__main__':
     
     if 'seed' in args.__dict__:
         print(("setting random seed to: {0}".format(args.seed)))
-        numpy.random.seed(args.seed)
+        np.random.seed(args.seed)
     from toupee import data
     from toupee import config 
     from toupee.mlp import sequential_model
