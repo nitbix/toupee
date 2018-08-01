@@ -227,7 +227,6 @@ def sequential_model(dataset, params, pretraining_set = None,
 
     if return_results:
         return model, results
-    # else:
     return model
 
 #------------------------------------------------------------------------------------------        

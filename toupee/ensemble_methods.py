@@ -344,7 +344,6 @@ class Bagging(EnsembleMethod):
     def create_aggregator(self,params,members,train_set,valid_set):
         if 'voting' in self.__dict__ and self.voting:
             return MajorityVotingRunner(members,params) 
-        # else:
         return AveragingRunner(members,params)
 
     def create_member(self, data_files):
@@ -511,7 +510,6 @@ class BRN(EnsembleMethod):
     def create_aggregator(self,params,members,train_set,valid_set):
         if self.real:
             return AveragingRunner(members, params, self._samme_proba)
-        # else:
         return WeightedAveragingRunner(members, self.alphas, params)
 
     def _samme_proba(self, proba):

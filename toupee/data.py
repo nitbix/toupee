@@ -205,7 +205,6 @@ def load_data(dataset, resize_to = None, pickled = True,
 def make_pretraining_set(datasets,mode):
     if mode is not None:
         return (datasets[0][0],datasets[0][1])
-  # else:
     return None
 
     
