@@ -22,6 +22,7 @@ import pickle
 import math
 from skimage import transform as tf
 import multiprocessing
+import h5py
 
 def corrupt(data,p):
     return mask(1-p,data.shape,dtype=floatX) * data
@@ -89,7 +90,7 @@ def load_data(dataset, resize_to = None, pickled = True,
   ''' Loads the dataset
 
   :type dataset: string
-  :param dataset: the path to the dataset (here MNIST)
+  :param dataset: the path to the dataset (.npz)
   '''
 
   data_dir, data_file = os.path.split(dataset)
@@ -103,9 +104,14 @@ def load_data(dataset, resize_to = None, pickled = True,
     train_set, valid_set, test_set = pickle.load(f)
     f.close()
   else:
-    tr = np.load(os.path.join(dataset, trainfile))
-    v = np.load(os.path.join(dataset, validfile))
-    te = np.load(os.path.join(dataset, testfile))
+    #loads the .npz
+    if (trainfile[-4:] == '.npz') and (validfile[-4:] == '.npz') and (testfile[-4:] == '.npz'):
+        tr = np.load(os.path.join(dataset, trainfile))
+        v = np.load(os.path.join(dataset, validfile))
+        te = np.load(os.path.join(dataset, testfile))
+    else:
+        raise ValueError('.npz files are required here; All sets must have the same format.')
+        
     if 'x' in tr and 'x' in v and 'x' in te:
         xlabel = 'x'
     elif 'X' in tr and 'X' in v and 'X' in te:
@@ -199,72 +205,52 @@ def make_pretraining_set(datasets,mode):
   else:
     return None
 
-
+    
 class Resampler:
     """
     Resample a dataset either uniformly or with a given probability
     distribution
     """
 
-    def __init__(self, dataset, seed = 42):
-        self.train,self.valid,self.test = dataset
-        self.train_x, self.train_y = self.train
-        self.valid_x, self.valid_y = self.valid
-        self.test_x, self.test_y = self.test
-        self.train_size = len(self.train_x)
+    def __init__(self, train_size, seed = 42):
+        
         self.r_train = None
         np.random.seed(seed)
-        
-        #to avoid ending up with 1D arrays
-        self.train_y = self.train_y.reshape(self.train_y.shape[0],-1)
-        self.valid_y = self.valid_y.reshape(self.valid_y.shape[0],-1)
-        self.test_y = self.test_y.reshape(self.test_y.shape[0],-1)
-        
-        self.train = [self.train_x, self.train_y]
-        self.valid = [self.valid_x, self.valid_y]
-        self.test = [self.test_x, self.test_y]
-        
+        self.train_size = train_size
         
     def make_new_train(self,sample_size,distribution=None):
+        
+        #with returns the indexes, not the samples themselves
+        
         weights = []
+        
+        #gets the sample indexes
         if distribution is None:
             sample = np.random.randint(low=0,
                                        high=self.train_size,
                                        size=sample_size)
         else:
-            values = (list(range(len(distribution))),distribution)
-            d = scipy.stats.rv_discrete(a=0,b=len(distribution),values=values)
-            sample = d.rvs(size=sample_size)
-        sampled_x = []
-        sampled_y = []
-        for s in sample:
-            sampled_x.append(self.train_x[s])
-            sampled_y.append(self.train_y[s])
+            sample = np.random.choice(len(distribution), size = sample_size, 
+                                        p = distribution)
+            
+        #sets the selected weights
         if distribution is not None:
             for s in sample:
                 weights.append(distribution[s])
             weights = numpy.asarray(weights)
         else:
             weights = None
-        sampled_x = numpy.asarray(sampled_x)
-        sampled_y = numpy.asarray(sampled_y)
-        self.r_train = (sampled_x,sampled_y)
+         
+        self.r_train = sample
+       
+        #returns the indexes/samples, depending on the case
         return self.r_train, weights
-
-    def get_train(self):
-        return self.train
-
-    def get_valid(self):
-        return self.valid
-
-    def get_test(self):
-        return self.test
 
 
 class WeightedResampler(Resampler):
 
-    def __init__(self, dataset, seed = 42):
-        Resampler.__init__(self, dataset, seed)
+    def __init__(self, train_size, seed = 42):
+        Resampler.__init__(self, train_size, seed = seed)
         self.weights = numpy.repeat([1.0/self.train_size], self.train_size)
 
     def update_weights(self,new_weights):
