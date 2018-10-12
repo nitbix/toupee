@@ -53,8 +53,8 @@ def set_file_location(args, params):
             model_dir = latest_entry_location
             
         if args.model_dir is not None:
-            target_root = '/datasets/experiments/'
-            model_dir = os.path.join(target_root, args.model_dir)
+            #target_root = '/datasets/experiments/'
+            model_dir = args.model_dir
             
             if not os.path.exists(model_dir):
                 raise ValueError("model_dir {0} doesn't exist!".format(model_dir))
