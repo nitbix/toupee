@@ -1,0 +1,135 @@
+#!/usr/bin/python3
+'''
+This binary can be used to perform stratified cross validaton training to avoid bias in the models
+due to data imbalance. This script is meant to be used in GPU because it runs faster.
+'''
+
+import os
+import argparse
+import h5py
+
+import numpy as np
+
+def reduce_data(data, data_limit):
+    '''
+    This function returns random samples of 'data' such that all the classes in the returned array
+    contain <data_limit> examples.
+    Inputs:
+        data (h5 file) -- contains a single key where the class to which each example belongs to is
+                          stored as a one-hot vector. The shape must be (num_examples, num_classes).
+        data_limit (int) -- number of examples per class, this must be smaller or eaqual to the number
+                            of elments in the class that contains less examples.
+
+    Outputs:
+        data_indeces (ndarray) -- the indeces of the random examples that were selected by the
+                                  algorithm.
+    '''
+    data_key = data.keys()
+    if len(data_keys) > 1:
+        raise ValueError('More than one key was provedided')
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+
+    # Data arguments
+    parser.add_argument(
+        '--target-folder',
+        help='Folder where all the required files can be found',
+        required=True,
+        )
+    parser.add_argument(
+        '--model',
+        help='Unique ID for this training.\
+             The results will be saved in <target_folder>/model_<model>',
+        required=True,
+        )
+    parser.add_argument(
+        '--training-data-file',
+        help='Name of the H5 file (in the target model folder) that contains the training data',
+        default='train_set_filtered.h5'
+    )
+    parser.add_argument(
+        '--test-data-file',
+        help='Name of the H5 file (in the target model folder) that contains the test data',
+        default='test_set_filtered.h5'
+    )
+
+    # Cross-validation arguments
+    parser.add_argument(
+        '--k-folds',
+        help='Number of cross-validation folds to perform',
+        type=int,
+        default=10
+    )
+    parser.add_argument(
+        '--n-repeats',
+        help='Number of cross-validation repeats',
+        type=int,
+        default=5
+    )
+    parser.add_argument(
+        '--keep-model',
+        help='How to keep the cross validation models for testing: best (keep the model that has
+              best x-val test accuracy), vote (use a vote of all the cross-validated models for
+              testing)'
+        default='best'
+    )
+
+    # Model arguments
+    parser.add_argument(
+        '--hidden-neurons',
+        help='Number of hidden neurons per layer of the MLP',
+        type=int,
+        default=2048
+    )
+    parser.add_argument(
+        '--hidden-layers',
+        help='Number of hidden layers of the MLP',
+        type=int,
+        default=1
+    )
+    parser.add_argument(
+        '--reg-coeff',
+        help='Regularisation coefficient',
+        type=float,
+        default=0.0001
+    )
+    parser.add_argument(
+        '--dropout',
+        help='Dropout probability',
+        type=float,
+        default=0.4261
+    )
+    args = parser.parse_args()
+
+    # Build data paths and verify that they exist
+    target_folder = os.path.join(args.target_folder, 'model_'+args.model)
+
+    if not os.path.exists(target_folder):
+        raise ValueError('The folder {0} does not exist'.format(target_folder))
+
+    train_data_file = os.path.join(target_folder, args.training_data_file)
+    if not os.path.exists(train_data_file):
+        raise ValueError('The file {0} does not exist'.format(train_data_file))
+
+    test_data_file = os.path.join(target_folder, args.test_data_file)
+    if not os.path.exists(test_data_file):
+        raise ValueError('The file {0} does not exist'.format(test_data_file))
+
+    # Load data and find number of examples to use per class
+    train_data = h5py.File(train_data_file, 'r')
+    test_data = h5py.File(test_data_file, 'r')
+
+    data_per_class = np.count_nonzero(train_data['y'], axis=0)
+    data_limit = data_per_class.min()
+    print('The current data distribution is {0}.'.format(data_per_class))
+    print('Performing cross-validation runs with {0} examples per class'.format(data_limit))
+
+
+    for _ in range(args.n_repeats):
+        cross_val_data = reduce_dataset(data=train_data, data_limit=data_limit)
+
+
+    train_data.close()
+    test_data.close()
