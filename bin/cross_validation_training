@@ -7,26 +7,62 @@ due to data imbalance. This script is meant to be used in GPU because it runs fa
 import os
 import argparse
 import h5py
+import keras
+import pdb
 
 import numpy as np
 
-def reduce_data(data, data_limit):
+def reduce_dataset(data, data_key, data_limit):
     '''
     This function returns random samples of 'data' such that all the classes in the returned array
     contain <data_limit> examples.
     Inputs:
-        data (h5 file) -- contains a single key where the class to which each example belongs to is
-                          stored as a one-hot vector. The shape must be (num_examples, num_classes).
-        data_limit (int) -- number of examples per class, this must be smaller or eaqual to the number
-                            of elments in the class that contains less examples.
-
+        data (h5 file) -- File where the data to be reduced is stored. There must be a dataset in
+                          the file that contains the target classes to which each example belongs
+                          to. The shape of this dataset must be (num_examples, num_classes).
+        data_key (string) -- The key to use to access the class dataset.
+        data_limit (int) -- Number of examples per class, this must be smaller or eaqual to the
+                            number of elements in the class that contains less examples.
     Outputs:
         data_indeces (ndarray) -- the indeces of the random examples that were selected by the
                                   algorithm.
     '''
-    data_key = data.keys()
-    if len(data_keys) > 1:
-        raise ValueError('More than one key was provedided')
+    num_classes = data[data_key].shape[1]
+    data_indeces = np.array([], dtype=int)
+    for data_class in range(num_classes):
+        class_indeces = np.nonzero(data[data_key][:,data_class].flatten())[0]
+        data_indeces = np.concatenate((data_indeces, np.random.choice(a=class_indeces,
+                                                                      size=data_limit,
+                                                                      replace=False)
+                                    ))
+
+    return data_indeces
+
+def make_cross_validation_sets(data_indeces, k_folds=10):
+    '''
+    Given a numpy array containing indeces, returns a list of subsets that can be used to train a
+    model using k-fold cross-validation.
+    Inputs:
+        data_indices (ndarray) -- numpy array containing the indeces of the data that will be used
+                                  for the k-fold cross-validation
+        k_fold (int) -- number of subsets to create (Default 10)
+    Output:
+        cross_validation_sets (list of ndarray) -- list pof length k_fold, where each element is a
+                                                   set of indices.
+    '''
+    cross_validation_sets = []
+    set_size = int(np.floor(data_indeces.size/k_folds))
+    for _ in range(k_folds-1):
+        random_samples = np.random.choice(a=np.arange(data_indeces.size),
+                                          size=set_size,
+                                          replace=False)
+        cross_validation_sets += [data_indeces[random_samples]]
+        data_indeces = np.delete(data_indeces, random_samples)
+
+    cross_validation_sets += [data_indeces]
+
+    return cross_validation_sets
+
 
 if __name__ == '__main__':
 
@@ -39,11 +75,16 @@ if __name__ == '__main__':
         required=True,
         )
     parser.add_argument(
-        '--model',
+        '--model-id',
         help='Unique ID for this training.\
              The results will be saved in <target_folder>/model_<model>',
         required=True,
         )
+    parser.add_argument(
+        '--model-name',
+        help='Filename that contains the model that will be trained',
+        default='dnn.model'
+    )
     parser.add_argument(
         '--training-data-file',
         help='Name of the H5 file (in the target model folder) that contains the training data',
@@ -70,9 +111,9 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--keep-model',
-        help='How to keep the cross validation models for testing: best (keep the model that has
-              best x-val test accuracy), vote (use a vote of all the cross-validated models for
-              testing)'
+        help='How to keep the cross validation models for testing: best (keep the model that has\
+              best x-val test accuracy), vote (use a vote of all the cross-validated models for\
+              testing)',
         default='best'
     )
 
@@ -104,10 +145,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Build data paths and verify that they exist
-    target_folder = os.path.join(args.target_folder, 'model_'+args.model)
-
+    target_folder = os.path.join(args.target_folder, 'model_'+args.model_id)
     if not os.path.exists(target_folder):
         raise ValueError('The folder {0} does not exist'.format(target_folder))
+
+    model_file = os.path.join(target_folder, args.model_name)
+    if not os.path.exists(model_file):
+        raise ValueError('The file {0} does not exist'.format(model_file))
 
     train_data_file = os.path.join(target_folder, args.training_data_file)
     if not os.path.exists(train_data_file):
@@ -121,15 +165,44 @@ if __name__ == '__main__':
     train_data = h5py.File(train_data_file, 'r')
     test_data = h5py.File(test_data_file, 'r')
 
+    print('Assessing data distribution')
     data_per_class = np.count_nonzero(train_data['y'], axis=0)
     data_limit = data_per_class.min()
     print('The current data distribution is {0}.'.format(data_per_class))
     print('Performing cross-validation runs with {0} examples per class'.format(data_limit))
 
+    print('Model structure from YAML file')
+    with open(model_file, 'r') as yaml_string:
+        model = keras.models.model_from_yaml(yaml_string)
+    model.summary()
 
-    for _ in range(args.n_repeats):
-        cross_val_data = reduce_dataset(data=train_data, data_limit=data_limit)
+    models = []
+    for n_repeat in range(args.n_repeats):
+        print('Performing cross-validation repeat {0}/{1}'.format(n_repeat,args.n_repeats))
 
+        # Load the pre-saved model structure
+        with open(model_file, 'r') as yaml_string:
+            model = keras.models.model_from_yaml(yaml_string)
+
+        print('Reducing dataset')
+        cross_val_data_indeces = reduce_dataset(data=train_data,
+                                                data_key='y',
+                                                data_limit=data_limit)
+        print('Creating cross-validation sets')
+        cross_val_sets = make_cross_validation_sets(data_indeces=cross_val_data_indeces,
+                                                    k_folds=args.k_folds)
+
+        print('Class distribution in this cross-validation repeat:')
+        for index_set in cross_val_sets:
+            class_distribution = np.count_nonzero(train_data['y'][index_set], axis=0)
+            print('Class distribution in set {0}: {1}'.format(index_set, class_distribution))
+        # Do k-fold cross-validation
+
+
+        trained_model_folder = os.path.join(target_folder, 'trained_model_'+str(n_repeat))
+        pdb.set_trace()
+        print('Saving cross-validated model to {0}'.format(trained_model_folder))
+#        model.save(trained_model_folder)
 
     train_data.close()
     test_data.close()
