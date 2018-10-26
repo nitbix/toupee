@@ -344,28 +344,31 @@ if __name__ == '__main__':
                     best_f1 = this_f1
 
             delete_required_keys(cross_val_data)
-        # Evaluate all the trained models
-        print('Evaluating best models on {0}'.format(test_data_file))
-        with h5py.File(test_data_file, 'r') as test_data:
-            eval_f1 = []
-            performance_summary = []
-            for model in models:
-                y_predictions = np.around(model.predict(x=test_data[FEAT_KEY]))
-                eval_f1 += [f1_score(y_true=test_data[TARGET_KEY],
-                                     y_pred=y_predictions,
-                                     average='weighted',
-                                    )]
-                performance_summary += [precision_recall_fscore_support(
-                                                                     y_true=test_data[TARGET_KEY],
-                                                                     y_pred=y_predictions,
-                                                                      )]
-        for summary, n_repeat in zip(performance_summary, range(n_repeats)):
-            print('Performance summary per class for model {0}'.format(n_repeat))
-            print('P={0}'.format(summary[0]))
-            print('R={0}'.format(summary[1]))
-            print('F={0}'.format(summary[2]))
-            print('Support: {0}'.format(summary[3]))
-        print('Averaged F1-score per model:', eval_f1)
+
+    # Evaluate all the trained models
+    print('Evaluating best models on {0}'.format(test_data_file))
+    with h5py.File(test_data_file, 'r') as test_data:
+        eval_f1 = []
+        performance_summary = []
+        for model in models:
+            y_predictions = np.around(model.predict(x=test_data[FEAT_KEY]))
+            eval_f1 += [f1_score(y_true=test_data[TARGET_KEY],
+                                 y_pred=y_predictions,
+                                 average='weighted',
+                                )]
+            performance_summary += [precision_recall_fscore_support(
+                                                                 y_true=test_data[TARGET_KEY],
+                                                                 y_pred=y_predictions,
+                                                                  )]
+    for summary, n_repeat in zip(performance_summary, range(n_repeats)):
+        print('Performance summary per class for model {0}'.format(n_repeat))
+        print('P={0}'.format(summary[0]))
+        print('R={0}'.format(summary[1]))
+        print('F={0}'.format(summary[2]))
+        print('Support: {0}'.format(summary[3]))
+    print('Averaged F1-score per model:', eval_f1)
+
+    for n_repeat in range(n_repeats):
         trained_model_folder = os.path.join(target_folder, 'trained_model_'+str(n_repeat)+'.h5')
         print('Saving cross-validated model to {0}'.format(trained_model_folder))
         models[n_repeat].save(trained_model_folder)
