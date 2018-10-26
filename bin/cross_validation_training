@@ -12,14 +12,14 @@ import pdb
 
 import numpy as np
 
-from sklearn.metrics import f1_score, confusion_matrix
+from sklearn.metrics import f1_score, precision_recall_fscore_support
 
 FEAT_KEY = 'X'
 TARGET_KEY = 'y'
-FEAT_TRAIN_SET_NAME = 'train_set_X'
-FEAT_EVAL_SET_NAME = 'test_set_X'
-TARGET_TRAIN_SET_NAME = 'train_set_y'
-TARGET_EVAL_SET_NAME = 'test_set_y'
+FEAT_TRAIN_SET_NAME = '_train_set_X'
+FEAT_EVAL_SET_NAME = '_test_set_X'
+TARGET_TRAIN_SET_NAME = '_train_set_y'
+TARGET_EVAL_SET_NAME = '_test_set_y'
 
 def create_cross_val_folder(target_folder,
                             train_data_file,
@@ -49,13 +49,13 @@ def create_cross_val_folder(target_folder,
 
     for n_repeat in range(n_repeats):
         print('Preparing cross-validation dataset {0}/{1}'.format(n_repeat,n_repeats-1))
-        cross_val_data_file = reduce_dataset(data=train_data,
-                                              feature_key=FEAT_KEY,
-                                              target_key=TARGET_KEY,
-                                              data_folder=cross_val_folder,
-                                              data_limit=data_limit,
-                                              out_filename='cross_val_{0}.h5'.format(n_repeat)
-                                             )
+        _ = reduce_dataset(data=train_data,
+                           feature_key=FEAT_KEY,
+                           target_key=TARGET_KEY,
+                           data_folder=cross_val_folder,
+                           data_limit=data_limit,
+                           out_filename='cross_val_{0}.h5'.format(n_repeat)
+                          )
 
     train_data.close()
     test_data.close()
@@ -77,12 +77,8 @@ def reduce_dataset(data,
         data (h5 file) -- File where the data to be reduced is stored. There must be a dataset in
                           the file that contains the target classes to which each example belongs
                           to. The shape of this dataset must be (num_examples, num_classes).
-        data_key (string) -- The key to use to access the class dataset.
-        data_limit (int) -- Number of examples per class, this must be smaller or eaqual to the
-                            number of elements in the class that contains less examples.
+                           number of elements in the class that contains less examples.
     Outputs:
-        data_indeces (ndarray) -- the indeces of the random examples that were selected by the
-                                  algorithm.
     '''
     num_classes = data[target_key].shape[1]
     file_names = []
@@ -128,11 +124,13 @@ def make_cross_validation_dataset(cross_val_data,
     '''
     Creates a training and a test set within the h5 file proided ()
     '''
-    num_examples = cross_val_data[target_key].shape[0]
-    num_features = cross_val_data[feat_key].shape[1]
-    num_classes = cross_val_data[target_key].shape[1]
-    X_dtype = cross_val_data[feat_key].dtype
-    y_dtype = cross_val_data[target_key].dtype
+    X_features = cross_val_data[feat_key]
+    y_targets = cross_val_data[target_key]
+    num_examples = X_features.shape[0]
+    num_features = X_features.shape[1]
+    num_classes = y_targets.shape[1]
+    X_dtype = X_features.dtype
+    y_dtype = y_targets.dtype
     eval_set_X = cross_val_data.create_dataset(
                                         eval_set_feat_key,
                                         data=X_features[eval_set_start:eval_set_end,:],
@@ -149,13 +147,27 @@ def make_cross_validation_dataset(cross_val_data,
                                                )
     train_set_y = cross_val_data.create_dataset(
                                         train_set_target_key,
-                                        (num_examples-eval_set_size, num_features),
+                                        (num_examples-eval_set_size, num_classes),
                                         dtype=y_dtype
                                                )
-    train_set_X[:,eval_set_start,:] = cross_val_data[feat_key][:eval_set_start,:]
-    train_set_X[eval_set_start:,:] = cross_val_data[feat_key][eval_set_end:,:]
-    train_set_y[:,eval_set_start,:] = cross_val_data[target_key][:eval_set_start,:]
-    train_set_y[eval_set_start:,:] = cross_val_data[target_key][eval_set_end:,:]
+    train_set_X[:eval_set_start,:] = X_features[:eval_set_start,:]
+    train_set_X[eval_set_start:,:] = X_features[eval_set_end:,:]
+    train_set_y[:eval_set_start,:] = y_targets[:eval_set_start,:]
+    train_set_y[eval_set_start:,:] = y_targets[eval_set_end:,:]
+
+def delete_required_keys(h5file):
+    '''
+    Deletes from the h5 files the keys required to run the cross validation
+    '''
+    # Clear datasets for the next iteration
+    if FEAT_EVAL_SET_NAME in h5file.keys():
+        del cross_val_data[FEAT_EVAL_SET_NAME]
+    if TARGET_EVAL_SET_NAME in h5file.keys():
+        del cross_val_data[TARGET_EVAL_SET_NAME]
+    if FEAT_TRAIN_SET_NAME in h5file.keys():
+        del cross_val_data[FEAT_TRAIN_SET_NAME]
+    if TARGET_TRAIN_SET_NAME in h5file.keys():
+        del cross_val_data[TARGET_TRAIN_SET_NAME]
 
 
 if __name__ == '__main__':
@@ -279,14 +291,14 @@ if __name__ == '__main__':
                                 for cross_val_file in os.listdir(cross_val_folder)]
     n_reapeats = len(cross_val_files)
     models = [None] * n_repeats
-    pdb.set_trace()
     for n_repeat, cross_val_file in enumerate(cross_val_files):
-        print('Performing cross-validation repeat {0}/{1}'.format(n_repeat, n_repeats-1))
+        print('Performing cross-validation repeat {0}/{1}'.format(n_repeat+1, n_repeats))
         best_f1 = -1.0
         # Do k-fold cross-validation
-        with h5py.File(cross_val_file, 'r') as cross_val_data:
+        with h5py.File(cross_val_file, 'r+') as cross_val_data:
             num_examples = cross_val_data[TARGET_KEY].shape[0]
             for k_fold in range(k_folds):
+                print('Running fold {0} of {1}'.format(k_fold+1, k_folds))
                 # Observe that the last evaluation set may be smaller than the rest
                 if k_fold != k_folds-1:
                     eval_set_start = int(np.floor(k_fold*num_examples/k_folds))
@@ -294,6 +306,7 @@ if __name__ == '__main__':
                 else:
                     eval_set_start = int(np.floor((k_folds-1)*num_examples/k_folds))
                     eval_set_end = num_examples
+                delete_required_keys(cross_val_data)
                 make_cross_validation_dataset(cross_val_data,
                                   feat_key=FEAT_KEY,
                                   target_key=TARGET_KEY,
@@ -309,49 +322,51 @@ if __name__ == '__main__':
 
                 model.compile(keras.optimizers.Adam(),
                       loss=keras.losses.categorical_crossentropy,
-                      metrics=keras.metrics.categorical_accuracy,
+                      metrics=[keras.metrics.categorical_accuracy],
                             )
 
-                model.fit(x=cross_val_file[FEAT_TRAIN_SET_NAME],
-                                 y=cross_val_file[TARGET_TRAIN_SET_NAME],
+                model.fit(x=cross_val_data[FEAT_TRAIN_SET_NAME],
+                                 y=cross_val_data[TARGET_TRAIN_SET_NAME],
                                  epochs=epochs,
                                  batch_size=batch_size,
-                                 verbose=2,
-                                 validation_split=0.2,
+                                 verbose=0,
+                                 shuffle='batch'
                                 )
-                y_predictions = model_buffer.predict(cross_val_file[FEAT_EVAL_SET_NAME])
-                this_f1 = f1_score(y_true=cross_file[TARGET_EVAL_SET_NAME],
+                y_predictions = np.around(model.predict(cross_val_data[FEAT_EVAL_SET_NAME]))
+                this_f1 = f1_score(y_true=cross_val_data[TARGET_EVAL_SET_NAME],
                                    y_pred=y_predictions,
-                                   average=weighted)
-                if this_f1 > best_f1:
-                    models[n_repeat] = model_buffer
+                                   average='weighted')
 
+                print('F1 score in fold {0}: {1:.2%}'.format(k_fold+1, this_f1))
+                if this_f1 > best_f1:
+                    print('Overwritting model for this x-val repeat')
+                    models[n_repeat] = model
+                    best_f1 = this_f1
+
+            delete_required_keys(cross_val_data)
         # Evaluate all the trained models
+        print('Evaluating best models on {0}'.format(test_data_file))
         with h5py.File(test_data_file, 'r') as test_data:
             eval_f1 = []
-            eval_f1_per_class = []
-            eval_confusion_matrix = []
+            performance_summary = []
             for model in models:
-                y_predictions = model.predict(x=test_data[FEAT_KEY])
+                y_predictions = np.around(model.predict(x=test_data[FEAT_KEY]))
                 eval_f1 += [f1_score(y_true=test_data[TARGET_KEY],
                                      y_pred=y_predictions,
                                      average='weighted',
                                     )]
-                eval_f1_per_class += [f1_score(y_true=test_data[TARGET_KEY],
-                                               y_pred=y_predictions,
-                                              )]
-                eval_confusion_matrix += [confusion_matrix(y_true=test_data[TARGET_KEY],
-                                                           y_pred=y_predictions,
-                                                          )]
-
-        for f1_per_class, conf_matrix, n_repeat in\
-                                   zip(eval_f1_per_class, eval_confusion_matrix, range(n_repeats)):
-            print('F1_per_class for model {0}:'.format(n_repeat))
-            print(f1_per_class)
-            print('Confusion matrix for model {0}'.format(n_repeat))
+                performance_summary += [precision_recall_fscore_support(
+                                                                     y_true=test_data[TARGET_KEY],
+                                                                     y_pred=y_predictions,
+                                                                      )]
+        for summary, n_repeat in zip(performance_summary, range(n_repeats)):
+            print('Performance summary per class for model {0}'.format(n_repeat))
+            print('P={0}'.format(summary[0]))
+            print('R={0}'.format(summary[1]))
+            print('F={0}'.format(summary[2]))
+            print('Support: {0}'.format(summary[3]))
         print('Averaged F1-score per model:', eval_f1)
         trained_model_folder = os.path.join(target_folder, 'trained_model_'+str(n_repeat))
-        pdb.set_trace()
         print('Saving cross-validated model to {0}'.format(trained_model_folder))
         models[n_repeat].save(trained_model_folder)
 
