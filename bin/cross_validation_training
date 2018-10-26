@@ -366,7 +366,7 @@ if __name__ == '__main__':
             print('F={0}'.format(summary[2]))
             print('Support: {0}'.format(summary[3]))
         print('Averaged F1-score per model:', eval_f1)
-        trained_model_folder = os.path.join(target_folder, 'trained_model_'+str(n_repeat))
+        trained_model_folder = os.path.join(target_folder, 'trained_model_'+str(n_repeat)+'.h5')
         print('Saving cross-validated model to {0}'.format(trained_model_folder))
         models[n_repeat].save(trained_model_folder)
 
