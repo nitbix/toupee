@@ -200,6 +200,12 @@ if __name__ == '__main__':
         default=None,
     )
     parser.add_argument(
+        '--single-cross-val-file',
+        help='Absolute path to a single file to be used for cross-validation. If this argument is\
+              given then n-repeats will automatically be set to one.',
+        default=None,
+    )
+    parser.add_argument(
         '--training-data-file',
         help='Name of the H5 file (in the target model folder) that contains the training data.\
               If a x-val folder is given this argument is overridden.',
@@ -237,6 +243,12 @@ if __name__ == '__main__':
         default=128
     )
     parser.add_argument(
+        '--learning-rate',
+        help='Learning rate',
+        type=float,
+        default=10**-6,
+    )
+    parser.add_argument(
         '--max-class-data',
         help='Specifies the number of examples to keep per target class. If empty, the number of\
               examples in the class with least data is used. If a x-val folder is given, this\
@@ -266,10 +278,18 @@ if __name__ == '__main__':
     if not os.path.exists(test_data_file):
         raise ValueError('The file {0} does not exist'.format(test_data_file))
 
-    if args.cross_val_folder is not None:
+    if args.single_cross_val_file is not None:
+        if os.path.exists(args.single_cross_val_file):
+            cross_val_files = [args.single_cross_val_file]
+            n_repeats = 1
+
+    elif args.cross_val_folder is not None:
         cross_val_folder = args.cross_val_folder
         if os.path.exists(cross_val_folder):
-            n_repeats = len(os.listdir(cross_val_folder))
+            cross_val_files = [os.path.join(target_folder, cross_val_folder, cross_val_file)
+                                for cross_val_file in os.listdir(cross_val_folder)]
+
+            n_repeats = len(cross_val_files)
         else:
             raise ValueError('The folder {0} does not exist'.format(cross_val_folder))
     else:
@@ -283,13 +303,14 @@ if __name__ == '__main__':
                                                    max_class_data=args.max_class_data,
                                                    n_repeats=args.n_repeats,
                                                   )
+        cross_val_files = [os.path.join(target_folder, cross_val_folder, cross_val_file)
+                                for cross_val_file in os.listdir(cross_val_folder)]
+
+        n_repeats = len(cross_val_files)
+
     epochs = args.epochs
     batch_size = args.batch_size
     k_folds = args.k_folds
-
-    cross_val_files = [os.path.join(target_folder, cross_val_folder, cross_val_file)
-                                for cross_val_file in os.listdir(cross_val_folder)]
-    n_reapeats = len(cross_val_files)
     models = [None] * n_repeats
     for n_repeat, cross_val_file in enumerate(cross_val_files):
         print('Performing cross-validation repeat {0}/{1}'.format(n_repeat+1, n_repeats))
@@ -319,8 +340,8 @@ if __name__ == '__main__':
                                  )
                 with open(model_file, 'r') as yaml_string:
                     model = keras.models.model_from_yaml(yaml_string)
-
-                model.compile(keras.optimizers.Adam(),
+                model.compile(keras.optimizers.Adam(lr=args.learning_rate,
+                                                    amsgrad=True),
                       loss=keras.losses.categorical_crossentropy,
                       metrics=[keras.metrics.categorical_accuracy],
                             )
@@ -337,7 +358,7 @@ if __name__ == '__main__':
                                    y_pred=y_predictions,
                                    average='weighted')
 
-                print('F1 score in fold {0}: {1:.2%}'.format(k_fold+1, this_f1))
+                print('F1 score in fold {0}: {1:.4}'.format(k_fold+1, this_f1))
                 if this_f1 > best_f1:
                     print('Overwritting model for this x-val repeat')
                     models[n_repeat] = model
@@ -369,7 +390,8 @@ if __name__ == '__main__':
     print('Averaged F1-score per model:', eval_f1)
 
     for n_repeat in range(n_repeats):
-        trained_model_folder = os.path.join(target_folder, 'trained_model_'+str(n_repeat)+'.h5')
+        model_tag = cross_val_files[n_repeat][-4:]
+        trained_model_folder = os.path.join(target_folder, 'trained_model_'+model_tag)
         print('Saving cross-validated model to {0}'.format(trained_model_folder))
         models[n_repeat].save(trained_model_folder)
 
