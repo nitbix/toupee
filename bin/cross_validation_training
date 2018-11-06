@@ -181,7 +181,7 @@ if __name__ == '__main__':
         required=True,
         )
     parser.add_argument(
-        '--model-id',
+        '--model',
         help='Unique ID for this training.\
              The results will be saved in <target_folder>/model_<model>',
         required=True,
@@ -266,7 +266,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Build absolute data paths and verify that they exist
-    target_folder = os.path.join(args.target_folder, 'model_'+args.model_id)
+    target_folder = os.path.join(args.target_folder, 'model_'+args.model)
     if not os.path.exists(target_folder):
         raise ValueError('The folder {0} does not exist'.format(target_folder))
 
