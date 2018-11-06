@@ -53,8 +53,7 @@ def set_file_location(args, params):
             model_dir = latest_entry_location
             
         if args.model_dir is not None:
-            target_root = '/datasets/experiments/'
-            model_dir = os.path.join(target_root, args.model_dir)
+            model_dir = args.model_dir
             
             if not os.path.exists(model_dir):
                 raise ValueError("model_dir {0} doesn't exist!".format(model_dir))
@@ -150,7 +149,6 @@ def run_ensemble(args, params):
     
     #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
     scorer, scorer_name = get_scorer(params.classification)
-    
     members = []
     intermediate_scores = []
     final_score = None
@@ -287,6 +285,8 @@ if __name__ == '__main__':
                         action='store_true')
     parser.add_argument('--sweeping-architectures', help="use while sweeping multiple architectures",
                         action='store_true')
+    parser.add_argument('--verbose', help="Verbosity level 0, 1 (default) or 2 as specified\
+                     by Keras", type=int, default=1)
 
     args = parser.parse_args()
     #this needs to come before all the toupee and theano imports
@@ -309,6 +309,7 @@ if __name__ == '__main__':
         (args.testfile, 'testfile'),
         (args.validfile, 'validfile'),
         (args.trainfile, 'trainfile'),
+        (args.verbose, 'verbose'),
         (str(round(time.time())), 'ensemble_id')    #<-- unique ID for this ensemble
     ]
     
@@ -322,7 +323,6 @@ if __name__ == '__main__':
     #sets the ensemble parameters
     #TODO: if any data transform option is true, :poop_emoji:
     params = config.load_parameters(args.params_file)
-    
     data_folder = set_file_location(args, params)
     if data_folder is not None:
         params.dataset = data_folder
@@ -338,7 +338,6 @@ if __name__ == '__main__':
     for arg, param in arg_param_pairings:
         arg_params(arg,param)
         
-    
     #Runs the ensemble training
     intermediate_scores, final_score = run_ensemble(args, params)
     

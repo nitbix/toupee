@@ -1,0 +1,9 @@
+pytest
+dill
+sklearn
+theano
+scikit-image
+pymongo
+keras
+pyyaml
+tensorflow
