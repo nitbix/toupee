@@ -113,10 +113,17 @@ def print_results(model, train_metrics, valid_metrics, test_metrics):
             print(("  {0} = {1}".format(model.metrics_names[i], metrics[i])))
 
           
-def sequential_model(dataset, params, pretraining_set = None, 
-        model_weights = None, return_results = False, member_number = None, 
-        model_yaml = None, model_config = None, frozen_layers = None, 
-        sample_weight = None):
+def sequential_model(dataset,
+                     params,
+                     pretraining_set = None,
+                     model_weights = None,
+                     return_results = False,
+                     member_number = None,
+                     model_yaml = None,
+                     model_config = None,
+                     frozen_layers = None,
+                     sample_weight = None,
+                     ):
     """
     Initialize the parameters and create the network.
     [GENERATOR DATA VERSION]
@@ -171,25 +178,28 @@ def sequential_model(dataset, params, pretraining_set = None,
         #check the bottom of this file for the old code
     else:
         print("Training without transformations...")
+        print('Verbosity level:', params.verbose)
         if lr_schedule is not None:
             callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
-        
         if return_results:
             hist = model.fit_generator(train_holder,
                   epochs = params.n_epochs,
                   validation_data = valid_holder,
                   callbacks = callbacks,
-                  max_queue_size=1000, 
+                  max_queue_size=1000,
                   shuffle=False,
+                  verbose=params.verbose,
                   use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
                   #the old keras-fork version had more parameters here
         else:
+            print('Verbosity level:', params.verbose)
             model.fit_generator(train_holder,
                   epochs = params.n_epochs,
                   validation_data = valid_holder,
                   callbacks = callbacks,
                   max_queue_size=1000,
                   shuffle=False,
+                  verbose=params.verbose,
                   use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
                   #the old keras-fork version had more parameters here
                   
