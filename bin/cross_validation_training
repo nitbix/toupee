@@ -1,0 +1,397 @@
+#!/usr/bin/python3
+'''
+This binary can be used to perform stratified cross validaton training to avoid bias in the models
+due to data imbalance. This script is meant to be used in GPU because it runs faster.
+'''
+
+import os
+import argparse
+import h5py
+import keras
+import pdb
+
+import numpy as np
+
+from sklearn.metrics import f1_score, precision_recall_fscore_support
+
+FEAT_KEY = 'X'
+TARGET_KEY = 'y'
+FEAT_TRAIN_SET_NAME = '_train_set_X'
+FEAT_EVAL_SET_NAME = '_test_set_X'
+TARGET_TRAIN_SET_NAME = '_train_set_y'
+TARGET_EVAL_SET_NAME = '_test_set_y'
+
+def create_cross_val_folder(target_folder,
+                            train_data_file,
+                            test_data_file,
+                            max_class_data,
+                            n_repeats,
+                            ):
+    '''
+    Creates a folder in the target directory containing the cross validation data. Note that this
+    takes a long time, so these files should be created in a separate place of the pipeline so they
+    can be re-used.
+    '''
+    cross_val_folder = os.path.join(target_folder, 'cross_val_data')
+    if not os.path.exists(cross_val_folder):
+        os.mkdir(cross_val_folder)
+
+   # Load data and find number of examples to use per class
+    train_data = h5py.File(train_data_file, 'r')
+    test_data = h5py.File(test_data_file, 'r')
+    if max_class_data is None:
+        print('Assessing data distribution')
+        data_per_class = np.count_nonzero(train_data['y'], axis=0)
+        data_limit = data_per_class.min()
+        print('The current data distribution is {0}.'.format(data_per_class))
+    else:
+        data_limit = max_class_data
+
+    for n_repeat in range(n_repeats):
+        print('Preparing cross-validation dataset {0}/{1}'.format(n_repeat,n_repeats-1))
+        _ = reduce_dataset(data=train_data,
+                           feature_key=FEAT_KEY,
+                           target_key=TARGET_KEY,
+                           data_folder=cross_val_folder,
+                           data_limit=data_limit,
+                           out_filename='cross_val_{0}.h5'.format(n_repeat)
+                          )
+
+    train_data.close()
+    test_data.close()
+
+    return cross_val_folder
+
+
+def reduce_dataset(data,
+                   feature_key,
+                   target_key,
+                   data_limit,
+                   data_folder,
+                   out_filename,
+                   ):
+    '''
+    This function returns random samples of 'data' such that all the classes in the returned array
+    contain <data_limit> examples.
+    Inputs:
+        data (h5 file) -- File where the data to be reduced is stored. There must be a dataset in
+                          the file that contains the target classes to which each example belongs
+                          to. The shape of this dataset must be (num_examples, num_classes).
+                           number of elements in the class that contains less examples.
+    Outputs:
+    '''
+    num_classes = data[target_key].shape[1]
+    data_indeces = np.array([], dtype=int)
+    file_name = os.path.join(data_folder, out_filename)
+    print('Creating cross-validation file in:', file_name)
+    temp_h5_file = h5py.File(file_name,'w')
+    num_features = data[feature_key].shape[1]
+    X_features = temp_h5_file.create_dataset(feature_key,
+                                            (data_limit*num_classes, num_features),
+                                            dtype=data[feature_key].dtype,
+                                            )
+    y_targets = temp_h5_file.create_dataset(target_key,
+                                            (data_limit*num_classes, num_classes),
+                                            dtype=data[target_key].dtype
+                                            )
+    for data_class in range(num_classes):
+        print('Getting random indices for class {0}/{1}'.format(data_class, num_classes-1))
+        class_indeces = np.nonzero(data[target_key][:,data_class].flatten())[0]
+        data_indeces = np.concatenate((data_indeces, np.random.choice(a=class_indeces,
+                                                                      size=data_limit,
+                                                                      replace=False)
+                                     ))
+    data_indeces.sort()
+    print('Writing features from the selected examples into cross-validation file')
+    X_features[...] = data[feature_key][data_indeces,:]
+    print('Writing target classes from the selected examples into the cross-validation file')
+    y_targets[...] = data[target_key][data_indeces,:]
+
+    temp_h5_file.close()
+    return file_name
+
+def make_cross_validation_dataset(cross_val_data,
+                                  feat_key,
+                                  target_key,
+                                  eval_set_start,
+                                  eval_set_end,
+                                  eval_set_feat_key,
+                                  eval_set_target_key,
+                                  train_set_feat_key,
+                                  train_set_target_key,
+                                 ):
+    '''
+    Creates a training and a test set within the h5 file provided ()
+    '''
+    X_features = cross_val_data[feat_key]
+    y_targets = cross_val_data[target_key]
+    num_examples = X_features.shape[0]
+    num_features = X_features.shape[1]
+    num_classes = y_targets.shape[1]
+    X_dtype = X_features.dtype
+    y_dtype = y_targets.dtype
+    eval_set_X = cross_val_data.create_dataset(
+                                        eval_set_feat_key,
+                                        data=X_features[eval_set_start:eval_set_end,:],
+                                             )
+    eval_set_y = cross_val_data.create_dataset(
+                                        eval_set_target_key,
+                                        data=y_targets[eval_set_start:eval_set_end,:],
+                                              )
+    eval_set_size = eval_set_y.shape[0]
+    train_set_X = cross_val_data.create_dataset(
+                                        train_set_feat_key,
+                                        (num_examples-eval_set_size, num_features),
+                                        dtype=X_dtype
+                                               )
+    train_set_y = cross_val_data.create_dataset(
+                                        train_set_target_key,
+                                        (num_examples-eval_set_size, num_classes),
+                                        dtype=y_dtype
+                                               )
+    train_set_X[:eval_set_start,:] = X_features[:eval_set_start,:]
+    train_set_X[eval_set_start:,:] = X_features[eval_set_end:,:]
+    train_set_y[:eval_set_start,:] = y_targets[:eval_set_start,:]
+    train_set_y[eval_set_start:,:] = y_targets[eval_set_end:,:]
+
+def delete_required_keys(h5file):
+    '''
+    Deletes from the h5 files the keys required to run the cross validation
+    '''
+    # Clear datasets for the next iteration
+    if FEAT_EVAL_SET_NAME in h5file.keys():
+        del cross_val_data[FEAT_EVAL_SET_NAME]
+    if TARGET_EVAL_SET_NAME in h5file.keys():
+        del cross_val_data[TARGET_EVAL_SET_NAME]
+    if FEAT_TRAIN_SET_NAME in h5file.keys():
+        del cross_val_data[FEAT_TRAIN_SET_NAME]
+    if TARGET_TRAIN_SET_NAME in h5file.keys():
+        del cross_val_data[TARGET_TRAIN_SET_NAME]
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+
+    # Data arguments
+    parser.add_argument(
+        '--target-folder',
+        help='Folder where all the required files can be found',
+        required=True,
+        )
+    parser.add_argument(
+        '--model',
+        help='Unique ID for this training.\
+             The results will be saved in <target_folder>/model_<model>',
+        required=True,
+        )
+    parser.add_argument(
+        '--model-name',
+        help='YAML file containing the structure of the model. The model should be found in\
+              <target_folder>/model_<model_id>/<model_name>',
+        default='dnn.model'
+    )
+    parser.add_argument(
+        '--cross-val-folder',
+        help='Absolute path to the folder containing the pre-built cross-validation files. If \
+              blank, the x-val file will be created in the target directory,\
+              observe that this can take a significant amount of time.',
+        default=None,
+    )
+    parser.add_argument(
+        '--single-cross-val-file',
+        help='Absolute path to a single file to be used for cross-validation. If this argument is\
+              given then n-repeats will automatically be set to one.',
+        default=None,
+    )
+    parser.add_argument(
+        '--training-data-file',
+        help='Name of the H5 file (in the target model folder) that contains the training data.\
+              If a x-val folder is given this argument is overridden.',
+        default='train_set_filtered.h5'
+    )
+    parser.add_argument(
+        '--test-data-file',
+        help='Name of the H5 file (in the target model folder) that contains the test data.',
+        default='test_set_filtered.h5'
+    )
+    # Cross-validation arguments
+    parser.add_argument(
+        '--k-folds',
+        help='Number of cross-validation folds to perform',
+        type=int,
+        default=10
+    )
+    parser.add_argument(
+        '--n-repeats',
+        help='Number of cross-validation repeats, if a x-val folder is given this argument is\
+              overridden',
+        type=int,
+        default=5
+    )
+    parser.add_argument(
+        '--epochs',
+        help='Number of training epochs',
+        type=int,
+        default=10
+    )
+    parser.add_argument(
+        '--batch-size',
+        help='Number of samples per gradient update',
+        type=int,
+        default=128
+    )
+    parser.add_argument(
+        '--learning-rate',
+        help='Learning rate',
+        type=float,
+        default=10**-6,
+    )
+    parser.add_argument(
+        '--max-class-data',
+        help='Specifies the number of examples to keep per target class. If empty, the number of\
+              examples in the class with least data is used. If a x-val folder is given, this\
+              argument is overridden.',
+        type=int,
+        default=None
+    )
+    parser.add_argument(
+        '--keep-model',
+        help='How to keep the cross validation models for testing: best (keep the model that has\
+              best x-val test accuracy), vote (use a vote of all the cross-validated models for\
+              testing)',
+        default='best'
+    )
+    args = parser.parse_args()
+
+    # Build absolute data paths and verify that they exist
+    target_folder = os.path.join(args.target_folder, 'model_'+args.model)
+    if not os.path.exists(target_folder):
+        raise ValueError('The folder {0} does not exist'.format(target_folder))
+
+    model_file = os.path.join(target_folder, args.model_name)
+    if not os.path.exists(model_file):
+        raise ValueError('The file {0} does not exist'.format(model_file))
+
+    test_data_file = os.path.join(target_folder, args.test_data_file)
+    if not os.path.exists(test_data_file):
+        raise ValueError('The file {0} does not exist'.format(test_data_file))
+
+    if args.single_cross_val_file is not None:
+        if os.path.exists(args.single_cross_val_file):
+            cross_val_files = [args.single_cross_val_file]
+            n_repeats = 1
+
+    elif args.cross_val_folder is not None:
+        cross_val_folder = args.cross_val_folder
+        if os.path.exists(cross_val_folder):
+            cross_val_files = [os.path.join(target_folder, cross_val_folder, cross_val_file)
+                                for cross_val_file in os.listdir(cross_val_folder)]
+
+            n_repeats = len(cross_val_files)
+        else:
+            raise ValueError('The folder {0} does not exist'.format(cross_val_folder))
+    else:
+        train_data_file = os.path.join(target_folder, args.training_data_file)
+        if not os.path.exists(train_data_file):
+            raise ValueError('The file {0} does not exist'.format(train_data_file))
+
+        cross_val_folder = create_cross_val_folder(target_folder=target_folder,
+                                                   train_data_file=train_data_file,
+                                                   test_data_file=test_data_file,
+                                                   max_class_data=args.max_class_data,
+                                                   n_repeats=args.n_repeats,
+                                                  )
+        cross_val_files = [os.path.join(target_folder, cross_val_folder, cross_val_file)
+                                for cross_val_file in os.listdir(cross_val_folder)]
+
+        n_repeats = len(cross_val_files)
+
+    epochs = args.epochs
+    batch_size = args.batch_size
+    k_folds = args.k_folds
+    models = [None] * n_repeats
+    for n_repeat, cross_val_file in enumerate(cross_val_files):
+        print('Performing cross-validation repeat {0}/{1}'.format(n_repeat+1, n_repeats))
+        best_f1 = -1.0
+        # Do k-fold cross-validation
+        with h5py.File(cross_val_file, 'r+') as cross_val_data:
+            num_examples = cross_val_data[TARGET_KEY].shape[0]
+            for k_fold in range(k_folds):
+                print('Running fold {0} of {1}'.format(k_fold+1, k_folds))
+                # Observe that the last evaluation set may be smaller than the rest
+                if k_fold != k_folds-1:
+                    eval_set_start = int(np.floor(k_fold*num_examples/k_folds))
+                    eval_set_end = int(np.floor((k_fold+1)*num_examples/k_folds))
+                else:
+                    eval_set_start = int(np.floor((k_folds-1)*num_examples/k_folds))
+                    eval_set_end = num_examples
+                delete_required_keys(cross_val_data)
+                make_cross_validation_dataset(cross_val_data,
+                                  feat_key=FEAT_KEY,
+                                  target_key=TARGET_KEY,
+                                  eval_set_start=eval_set_start,
+                                  eval_set_end=eval_set_end,
+                                  eval_set_feat_key=FEAT_EVAL_SET_NAME,
+                                  eval_set_target_key=TARGET_EVAL_SET_NAME,
+                                  train_set_feat_key=FEAT_TRAIN_SET_NAME,
+                                  train_set_target_key=TARGET_TRAIN_SET_NAME,
+                                 )
+                with open(model_file, 'r') as yaml_string:
+                    model = keras.models.model_from_yaml(yaml_string)
+                model.compile(keras.optimizers.Adam(lr=args.learning_rate,
+                                                    amsgrad=True),
+                      loss=keras.losses.categorical_crossentropy,
+                      metrics=[keras.metrics.categorical_accuracy],
+                            )
+
+                model.fit(x=cross_val_data[FEAT_TRAIN_SET_NAME],
+                                 y=cross_val_data[TARGET_TRAIN_SET_NAME],
+                                 epochs=epochs,
+                                 batch_size=batch_size,
+                                 verbose=0,
+                                 shuffle='batch'
+                                )
+                y_predictions = np.around(model.predict(cross_val_data[FEAT_EVAL_SET_NAME]))
+                this_f1 = f1_score(y_true=cross_val_data[TARGET_EVAL_SET_NAME],
+                                   y_pred=y_predictions,
+                                   average='weighted')
+
+                print('F1 score in fold {0}: {1:.4}'.format(k_fold+1, this_f1))
+                if this_f1 > best_f1:
+                    print('Overwritting model for this x-val repeat')
+                    models[n_repeat] = model
+                    best_f1 = this_f1
+
+            delete_required_keys(cross_val_data)
+
+    # Evaluate all the trained models
+    print('Evaluating best models on {0}'.format(test_data_file))
+    with h5py.File(test_data_file, 'r') as test_data:
+        eval_f1 = []
+        performance_summary = []
+        for model in models:
+            y_predictions = np.around(model.predict(x=test_data[FEAT_KEY]))
+            eval_f1 += [f1_score(y_true=test_data[TARGET_KEY],
+                                 y_pred=y_predictions,
+                                 average='weighted',
+                                )]
+            performance_summary += [precision_recall_fscore_support(
+                                                                 y_true=test_data[TARGET_KEY],
+                                                                 y_pred=y_predictions,
+                                                                  )]
+    for summary, n_repeat in zip(performance_summary, range(n_repeats)):
+        print('Performance summary per class for model {0}'.format(n_repeat))
+        print('P={0}'.format(summary[0]))
+        print('R={0}'.format(summary[1]))
+        print('F={0}'.format(summary[2]))
+        print('Support: {0}'.format(summary[3]))
+    print('Averaged F1-score per model:', eval_f1)
+
+    for n_repeat in range(n_repeats):
+        model_tag = cross_val_files[n_repeat][-4:]
+        trained_model_folder = os.path.join(target_folder, 'trained_model_'+model_tag)
+        print('Saving cross-validated model to {0}'.format(trained_model_folder))
+        models[n_repeat].save(trained_model_folder)
+
+
