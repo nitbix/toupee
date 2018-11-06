@@ -81,7 +81,6 @@ def reduce_dataset(data,
     Outputs:
     '''
     num_classes = data[target_key].shape[1]
-    file_names = []
     data_indeces = np.array([], dtype=int)
     file_name = os.path.join(data_folder, out_filename)
     print('Creating cross-validation file in:', file_name)
@@ -122,7 +121,7 @@ def make_cross_validation_dataset(cross_val_data,
                                   train_set_target_key,
                                  ):
     '''
-    Creates a training and a test set within the h5 file proided ()
+    Creates a training and a test set within the h5 file provided ()
     '''
     X_features = cross_val_data[feat_key]
     y_targets = cross_val_data[target_key]
