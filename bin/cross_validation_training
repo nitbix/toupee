@@ -256,11 +256,9 @@ if __name__ == '__main__':
         default=None
     )
     parser.add_argument(
-        '--keep-model',
-        help='How to keep the cross validation models for testing: best (keep the model that has\
-              best x-val test accuracy), vote (use a vote of all the cross-validated models for\
-              testing)',
-        default='best'
+        '--keep-all-models',
+        help='Instructs the script to keep all the models resulting from the x-val iterations',
+        action='store_true'
     )
     args = parser.parse_args()
 
@@ -357,12 +355,19 @@ if __name__ == '__main__':
                                    y_pred=y_predictions,
                                    average='weighted')
 
+
+
                 print('F1 score in fold {0}: {1:.4}'.format(k_fold+1, this_f1))
                 if this_f1 > best_f1:
                     print('Overwritting model for this x-val repeat')
                     models[n_repeat] = model
                     best_f1 = this_f1
 
+                if args.save_all_models:
+                    this_model_filename = os.path.join(target_folder,
+                                                       'model_fold_'+str(k_fold)+'.h5')
+                    print('Saving model from fold {} in {}'.format(k_fold, this_model_filename))
+                    model.save(this_model_filename)
             delete_required_keys(cross_val_data)
 
     # Evaluate all the trained models
