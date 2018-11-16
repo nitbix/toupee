@@ -365,7 +365,7 @@ if __name__ == '__main__':
 
                 if args.save_all_models:
                     this_model_filename = os.path.join(target_folder,
-                                                       'model_fold_'+str(k_fold)+'.h5')
+                                          'model_repeat_{}_fold_{}.h5'.format(n_repeat, k_fold))
                     print('Saving model from fold {} in {}'.format(k_fold, this_model_filename))
                     model.save(this_model_filename)
             delete_required_keys(cross_val_data)
