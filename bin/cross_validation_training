@@ -363,7 +363,7 @@ if __name__ == '__main__':
                     models[n_repeat] = model
                     best_f1 = this_f1
 
-                if args.save_all_models:
+                if args.keep_all_models:
                     this_model_filename = os.path.join(target_folder,
                                           'model_repeat_{}_fold_{}.h5'.format(n_repeat, k_fold))
                     print('Saving model from fold {} in {}'.format(k_fold, this_model_filename))
