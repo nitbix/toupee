@@ -395,7 +395,7 @@ if __name__ == '__main__':
 
     for n_repeat in range(n_repeats):
         model_tag = cross_val_files[n_repeat][-4:]
-        trained_model_folder = os.path.join(target_folder, 'trained_model_'+model_tag)
+        trained_model_folder = os.path.join(target_folder, 'trained_model_'+n_repeat+'.h5')
         print('Saving cross-validated model to {0}'.format(trained_model_folder))
         models[n_repeat].save(trained_model_folder)
 
