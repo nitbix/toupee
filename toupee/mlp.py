@@ -127,12 +127,6 @@ def sequential_model(dataset,
     if sampled_indexes is not None:
         sampled_indexes.sort()
     files = dataset[1]
-    """
-    train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes)
-    train_eval_holder = common.DataGenerator(files[0], params.batch_size, None)
-    valid_holder = common.DataGenerator(files[1], params.batch_size, None)
-    test_holder = common.DataGenerator(files[2], params.batch_size, None)
-    """
     train_holder = files[0]
     test_holder = files[2]
     start_time = time.clock()
