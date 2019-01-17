@@ -165,6 +165,7 @@ def sequential_model(dataset,
                             batch_size = params.batch_size,
                             shuffle = 'batch',
                             callbacks = callbacks,
+                            verbose = params.verbose,
                             )
         else:
             model.fit(
@@ -174,6 +175,7 @@ def sequential_model(dataset,
                     batch_size = params.batch_size,
                     shuffle = 'batch',
                     callbacks = callbacks,
+                    verbose = params.verbose,
                     )
 
     model.set_weights(checkpointer.best_model)
