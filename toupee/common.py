@@ -41,7 +41,6 @@ class ModelCheckpointInMemory(Callback):
         super(ModelCheckpointInMemory, self).__init__()
         self.monitor = monitor
         self.verbose = verbose
-        
         self.best_model = h5py.File("/dev/null", driver = 'core',
                 backing_store = False)
         self.best_epoch = None
@@ -84,7 +83,6 @@ class ModelCheckpointInMemory(Callback):
                 if self.verbose > 0:
                     print('Epoch %05d: %s did not improve' %
                           (epoch, self.monitor))
-                          
 
 
 
@@ -92,22 +90,18 @@ class ModelCheckpointInMemory(Callback):
 #       to multiple complications (especially with resampled data). 
 #       But it can decrease train&test time - do it in the future!
 class DataGenerator(Sequence):
-    ''' 
+    '''
         Data holder generator class for .npz/.h5 data 
         -- keras Sequence based (for better generator performance)
             [requires __len__(self) and __getitem__(self, idx)]
     '''
-    
     def __init__(self, data_file, batch_size, sampled_indexes, hold_y = True):
-        
         #define x
         if 'x' in data_file:
             xlabel = 'x'
         elif 'X' in data_file:
             xlabel = 'X'
-        
         self.data_x = data_file[xlabel]
-        
 
         #auxiliary variables
         self.sampled_indexes = sampled_indexes
@@ -117,8 +111,6 @@ class DataGenerator(Sequence):
             self.num_examples = self.data_x.shape[0]
         self.batch_size = batch_size
         self.number_of_batches = math.ceil(self.num_examples/self.batch_size)
-    
-    
         # define y if needed
         self.hold_y = hold_y
         if hold_y:
@@ -128,97 +120,75 @@ class DataGenerator(Sequence):
             assert self.n_classes > 1
             self.data_y = data_file['y']
 
-    
     def sequential_batch(self, step):
         #sequential iteration over the data
-        
         #defines the indexes for this batch
         if (step+1) == self.number_of_batches:    #<- last batch
-            batch_indexes = list(range(step*self.batch_size, 
+            batch_indexes = list(range(step*self.batch_size,
                 self.num_examples))
         else:
-            batch_indexes = list(range(step*self.batch_size, 
+            batch_indexes = list(range(step*self.batch_size,
                 (step+1)*self.batch_size))
-    
-    
         if self.hold_y:
             # Return the arrays in the shape that fit_gen uses (data, target)
             return (self.data_x[batch_indexes, ...],
                     self.data_y[batch_indexes, ...])
         # else:
         # Return the arrays in the shape that predict_generator uses (data)
-        return (self.data_x[batch_indexes, ...]) 
-            
-            
+        return (self.data_x[batch_indexes, ...])
+
     def sliced_batch(self, step):
         #problem with returning the "sampled_indexes" only:
         # H5 can only slice given i) a sequencial list of integers or ii) a 
         # boolean array [i.e. there is no fancy slicing, as in numpy]
         # since ii) might need a giant boolean array, let's do i) and then 
         # filter stuff
-        
         #gets the desired indexes for this batch
         if (step+1) == self.number_of_batches:    #<- last batch
-            batch_indexes = (self.sampled_indexes[step*self.batch_size : 
+            batch_indexes = (self.sampled_indexes[step*self.batch_size :
                 self.num_examples])
         else:
-            batch_indexes = (self.sampled_indexes[step*self.batch_size : 
+            batch_indexes = (self.sampled_indexes[step*self.batch_size :
                 (step+1)*self.batch_size])
-         
         first_index = batch_indexes[0]
         last_index = batch_indexes[-1]
-        
         #if the samples are too far appart, loads one by one
         if last_index - first_index > 4096:   #<- magic number
-            
             data_x = []
             for i in batch_indexes:
-                data_x.append(self.data_x[i, ...])  
+                data_x.append(self.data_x[i, ...])
             data_x = numpy.asarray(data_x)
-            
             if self.hold_y:
                 data_y = []
                 for i in batch_indexes:
-                    data_y.append(self.data_y[i, ...])  
+                    data_y.append(self.data_y[i, ...])
                 data_y = numpy.asarray(data_y)
 
         #otherwise, loads the interval and then filters
         else:
             batch_indexes = batch_indexes - first_index
-            
             data_x = self.data_x[first_index:last_index+1, ...]
             data_x = data_x[batch_indexes, ...]
-            
             if self.hold_y:
                 data_y = self.data_y[first_index:last_index+1, ...]
                 data_y = data_y[batch_indexes, ...]
-                
-            
-        if self.hold_y:    
+        if self.hold_y:
             return(data_x, data_y)
-            
         # else:
         return(data_x)
-    
-    
+
     def __len__(self):
         #returns the dataset length
         return self.number_of_batches
-    
-    
+
     def __getitem__(self, step):
         #gets a batch
         if self.sampled_indexes is None:
             return self.sequential_batch(step)
         else:
             return self.sliced_batch(step)
-            
-
-
-
 
 class Toupee:
-    
     def __init__(self):
         self.reset()
 
@@ -300,19 +270,15 @@ def get_probabilities(classifier, file_object, batch_size):
     """
     Predicts the train set using the trained model
     """
-    
     x_holder = DataGenerator(file_object, batch_size, None, hold_y = False)
-    
     #applies the correct method, depending on the classifier class
     if hasattr(classifier, 'predict_generator'):
         class_proba = classifier.predict_generator(x_holder,
                                                    max_queue_size=1000)
     else:
         class_proba = classifier.predict_proba(x_holder)
-        
     return class_proba
 
-           
 def errors(classifier, file_object, batch_size):
     """
     Gets the model's binary error status for each sample
@@ -331,7 +297,6 @@ def errors(classifier, file_object, batch_size):
     end = 0
     r = numpy.empty(n_samples)
     while end < n_samples:
-        
         start = end
         end += 131072  # magic number, power of 2 :D
         if end > n_samples:
@@ -344,49 +309,38 @@ def errors(classifier, file_object, batch_size):
         r[start:end] = r[start:end].astype('int32')
 
     return r
-    
-    
+
 def accuracy(classifier, file_object, batch_size):
-    
     e = errors(classifier, file_object, batch_size)
-    
     return 1.0 - (float(e.sum()) / float(file_object['y'].shape[0]))
- 
- 
+
 #TODO: this is kinda a redefinition of data.py's one_hot
 # -> take care of the duplicates!
 def one_hot(data, n_classes):
     b = numpy.zeros((data.size, n_classes),dtype='float32')
     b[numpy.arange(data.size), data] = 1.
     return b
-    
-    
+
 def count_classes(file_object):
     """Counts the number of entries on each class"""
     n_samples, n_classes = file_object['y'].shape
     sample_count = numpy.asarray([0]*n_classes)
-    
     end = 0
     while end < n_samples:
         start = end
         end += 131072  # magic number, power of 2 :D
         if end > n_samples:
             end = n_samples
-            
         data_y = numpy.asarray(file_object['y'][start:end])
         sample_count += numpy.sum(data_y, axis = 0)
-    
     return sample_count
- 
- 
+
 def confidence(classifier, file_object, batch_size):
     """
     Returns the model's confidence for the true label
     """
-    
     class_proba = get_probabilities(classifier, file_object, batch_size)
     n_samples = file_object['y'].shape[0]
-    
     end = 0
     h = numpy.empty(n_samples)
     while end < n_samples:
@@ -394,15 +348,10 @@ def confidence(classifier, file_object, batch_size):
         end += 131072  # magic number, power of 2 :D
         if end > n_samples:
             end = n_samples
-            
         data_y = numpy.asarray(file_object['y'][start:end]).argmax(axis=-1)
-        
         for i in range(end - start):
             h[start + i] = class_proba[start + i][data_y[i]]
-    
     return h
-    
-    
 #----------------------------------------------------------
 #for regression problems:   
 # def distance(predictor, test_set_x, test_set_y):
@@ -417,11 +366,9 @@ def confidence(classifier, file_object, batch_size):
     # euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
     # euclidian_distance = numpy.sqrt(euclidian_distance_squared)
     # return(numpy.sum(euclidian_distance) / float(test_set_y.shape[0]))
-    
 # def relative_distance(predictor, test_set_x, test_set_y):
     # relative_distance = distance(y-y_pred) / sqrt(y^2)      [sqrt(y^2) = L2 norm]
     # euclidian_distance_squared = distance(predictor, test_set_x, test_set_y)
     # y_squared = numpy.sum(numpy.square(test_set_y), axis = 1)                   #both this and the previous line will need a sqrt, which can be done after the division
     # relative_distance = numpy.sqrt(euclidian_distance_squared / y_squared)
     # return(numpy.sum(relative_distance) / float(test_set_y.shape[0]))
-    
