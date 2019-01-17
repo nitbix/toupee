@@ -91,7 +91,7 @@ class ModelCheckpointInMemory(Callback):
 #       But it can decrease train&test time - do it in the future!
 class DataGenerator(Sequence):
     '''
-        Data holder generator class for .npz/.h5 data 
+        Data holder generator class for .npz/.h5 data
         -- keras Sequence based (for better generator performance)
             [requires __len__(self) and __getitem__(self, idx)]
     '''

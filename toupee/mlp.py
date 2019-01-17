@@ -127,10 +127,14 @@ def sequential_model(dataset,
     if sampled_indexes is not None:
         sampled_indexes.sort()
     files = dataset[1]
+    """
     train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes)
     train_eval_holder = common.DataGenerator(files[0], params.batch_size, None)
     valid_holder = common.DataGenerator(files[1], params.batch_size, None)
     test_holder = common.DataGenerator(files[2], params.batch_size, None)
+    """
+    train_holder = files[0]
+    test_holder = files[2]
     start_time = time.clock()
     metrics, checkpointer = initialize_metrics(params)
     callbacks = [checkpointer]
@@ -148,10 +152,7 @@ def sequential_model(dataset,
     model.compile(optimizer = optimizer,
                   loss = params.cost_function,
                   metrics = metrics,
-                  #theano stuff:    #<--- old keras-fork version
-                  # update_inputs = params.update_inputs,
-                  # update_inputs_lr = params.update_inputs_lr
-    )
+                 )
 
     #TODO - Joao: I think this if branch needs to be updated with the new data holder
     if params.online_transform is not None:
@@ -163,34 +164,41 @@ def sequential_model(dataset,
         if lr_schedule is not None:
             callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
         if return_results:
-            hist = model.fit_generator(train_holder,
-                  epochs = params.n_epochs,
-                  validation_data = valid_holder,
-                  callbacks = callbacks,
-                  max_queue_size=1000,
-                  shuffle=False,
-                  verbose=params.verbose,
-                  use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
-                  #the old keras-fork version had more parameters here
+            hist = model.fit(
+                            x = train_holder['X'],
+                            y = train_holder['y'],
+                            epochs = params.n_epochs,
+                            batch_size = params.batch_size,
+                            shuffle = 'batch',
+                            callbacks = callbacks,
+                            )
         else:
-            print('Verbosity level:', params.verbose)
-            model.fit_generator(train_holder,
-                  epochs = params.n_epochs,
-                  validation_data = valid_holder,
-                  callbacks = callbacks,
-                  max_queue_size=1000,
-                  shuffle=False,
-                  verbose=params.verbose,
-                  use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
-                  #the old keras-fork version had more parameters here
+            model.fit(
+                    x = train_holder['X'],
+                    y = train_holder['y'],
+                    epochs = params.n_epochs,
+                    batch_size = params.batch_size,
+                    shuffle = 'batch',
+                    callbacks = callbacks,
+                    )
+
     model.set_weights(checkpointer.best_model)
     #evals everything with a generator
     print('\nGetting the train metrics...')
-    train_metrics = model.evaluate_generator(train_eval_holder)
+    train_metrics = model.evaluate(
+                                x=train_holder['X'],
+                                y=train_holder['y'],
+                                batch_size=params.batch_size,
+                                  )
     print('Getting the validation metrics...')
-    valid_metrics = model.evaluate_generator(valid_holder)
+    valid_metrics = train_metrics # This is just here until we decide whether to keep a validation
+                                  # dataset 
     print('Getting the test metrics...')
-    test_metrics = model.evaluate_generator(test_holder)
+    test_metrics = model.evaluate(
+                                x=test_holder['X'],
+                                y=test_holder['y'],
+                                batch_size=params.batch_size,
+                                 )
     print_results(model, train_metrics, valid_metrics, test_metrics)
 
     if return_results:
