@@ -38,13 +38,15 @@ class ModelCheckpointInMemory(Callback):
             be `min`, etc. In `auto` mode, the direction is
             automatically inferred from the name of the monitored quantity.
     '''
-    def __init__(self, monitor='val_loss', verbose=0, mode='auto'):
+    def __init__(self, monitor='val_loss', verbose=0, mode='auto',
+            save_best_only=False):
         super(ModelCheckpointInMemory, self).__init__()
         self.monitor = monitor
         self.verbose = verbose
         self.best_model = h5py.File("/dev/null", driver = 'core',
                 backing_store = False)
         self.best_epoch = None
+        self.save_best_only = save_best_only
 
         if mode not in ['auto', 'min', 'max']:
             warnings.warn('ModelCheckpoint mode %s is unknown, '
@@ -72,7 +74,7 @@ class ModelCheckpointInMemory(Callback):
             warnings.warn('Can save best model only with %s available, '
                           'skipping.' % (self.monitor), RuntimeWarning)
         else:
-            if self.monitor_op(current, self.best):
+            if self.monitor_op(current, self.best) or not self.save_best_only:
                 if self.verbose > 0:
                     print('Epoch %05d: %s improved from %0.5f to %0.5f,'
                           ' saving model'
@@ -87,8 +89,8 @@ class ModelCheckpointInMemory(Callback):
 
 
 
-#Joao: I tried to prefetch the data from the disk in this generator, but it led 
-#       to multiple complications (especially with resampled data). 
+#Joao: I tried to prefetch the data from the disk in this generator, but it led
+#       to multiple complications (especially with resampled data).
 #       But it can decrease train&test time - do it in the future!
 class DataGenerator(Sequence):
     '''
@@ -115,7 +117,7 @@ class DataGenerator(Sequence):
         # define y if needed
         self.hold_y = hold_y
         if hold_y:
-            #TODO: classification problem  -for now it assumes that 
+            #TODO: classification problem  -for now it assumes that
             #       y is a one-hot thing, which might not be always true!
             self.n_classes = data_file['y'].shape[1]
             assert self.n_classes > 1
@@ -140,9 +142,9 @@ class DataGenerator(Sequence):
 
     def sliced_batch(self, step):
         #problem with returning the "sampled_indexes" only:
-        # H5 can only slice given i) a sequencial list of integers or ii) a 
+        # H5 can only slice given i) a sequencial list of integers or ii) a
         # boolean array [i.e. there is no fancy slicing, as in numpy]
-        # since ii) might need a giant boolean array, let's do i) and then 
+        # since ii) might need a giant boolean array, let's do i) and then
         # filter stuff
         #gets the desired indexes for this batch
         if (step+1) == self.number_of_batches:    #<- last batch
@@ -248,10 +250,10 @@ def serialize(o):
             return numpy.asfarray(o).tolist()
         except:
             if isinstance(o, object):
-                if 'serialize' in dir(o) and isinstance(getattr(o,'serialize'), 
+                if 'serialize' in dir(o) and isinstance(getattr(o,'serialize'),
                         collections.Callable):
                     return o.serialize()
-                if 'tolist' in dir(o) and isinstance(getattr(o,'tolist'), 
+                if 'tolist' in dir(o) and isinstance(getattr(o,'tolist'),
                         collections.Callable):
                     return o.tolist()
                 try:
@@ -265,8 +267,8 @@ def serialize(o):
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()
 
-#----------------------------------------------------------               
-#for classification problems: 
+#----------------------------------------------------------
+#for classification problems:
 def get_probabilities(classifier, file_object, batch_size):
     """
     Predicts the train set using the trained model
@@ -354,7 +356,7 @@ def confidence(classifier, file_object, batch_size):
             h[start + i] = class_proba[start + i][data_y[i]]
     return h
 #----------------------------------------------------------
-#for regression problems:   
+#for regression problems:
 # def distance(predictor, test_set_x, test_set_y):
     # returns the distance squared (=MMSE)
     # prediction = predictor.predict(test_set_x)

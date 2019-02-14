@@ -80,6 +80,7 @@ def initialize_metrics(params):
             mode = 'max')
     return(metrics, checkpointer)
 
+
 def callbacks_with_lr_scheduler(schedule, model, callbacks):
     def scheduler(epoch):
         if epoch in schedule:
@@ -90,6 +91,7 @@ def callbacks_with_lr_scheduler(schedule, model, callbacks):
         return float(K.eval(model.optimizer.lr))
     return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]
 
+
 def print_results(model, train_metrics, valid_metrics, test_metrics):
     for metrics_name,metrics in (
             ('train', train_metrics),
@@ -99,6 +101,7 @@ def print_results(model, train_metrics, valid_metrics, test_metrics):
         print(("{0}:".format(metrics_name)))
         for i in range(len(metrics)):
             print(("  {0} = {1}".format(model.metrics_names[i], metrics[i])))
+
 
 def sequential_model(dataset,
                      params,
@@ -190,7 +193,7 @@ def sequential_model(dataset,
                                   )
     print('Getting the validation metrics...')
     valid_metrics = train_metrics # This is just here until we decide whether to keep a validation
-                                  # dataset 
+                                  # dataset
     print('Getting the test metrics...')
     test_metrics = model.evaluate(
                                 x=test_holder['X'],
@@ -221,8 +224,8 @@ def sequential_model(dataset,
     else:
         return model
 
-#------------------------------------------------------------------------------------------        
-# code to update later:  
+#------------------------------------------------------------------------------------------
+# code to update later:
         # def default_online_transform_param(name,default):
             # if name in params.online_transform:
                 # return params.online_transform[name]
