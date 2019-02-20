@@ -244,9 +244,9 @@ if __name__ == '__main__':
     parser.add_argument('--trainfile', default='train.npz',
                         help='training set npz file name')
     parser.add_argument('--data-dir', help="directory name containing the dataset",
-                        default='')
+                        default=None)
     parser.add_argument('--model-dir', help="directory name to save the model",
-                        default="")
+                        default=None)
     parser.add_argument('--remove-tmp-files', help="remove the temporary model files at the end.",
                         action='store_true')
     parser.add_argument('--sweeping-architectures', help="use while sweeping multiple architectures",
@@ -291,10 +291,14 @@ if __name__ == '__main__':
     #sets the ensemble parameters
     #TODO: if any data transform option is true, :poop_emoji:
     params = config.load_parameters(args.params_file)
+
+    if args.model_dir is not None:
+        params.model_dir = args.model_dir
+
     if args.data_dir is not None:
         params.dataset = args.data_dir
     elif args.model_dir is not None:
-        params.dataset = args.model_dir
+        params.dataset = params.model_dir
 
     if params.model_file is not None:
         params.model_file = os.path.join(params.model_dir, params.model_file)
