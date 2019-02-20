@@ -75,12 +75,12 @@ def store_ensemble(args, params, members, ensemble):
         if args.sweeping_architectures:
             ensemble_name = 'ensemble_' + str(params.ensemble_id) + '.pkl'
 
-            if not os.path.exists(os.path.join(params.dataset, 'ensembles/')):
-                os.makedirs(os.path.join(params.dataset, 'ensembles/'))
+            if not os.path.exists(os.path.join(params.model_dir, 'ensembles/')):
+                os.makedirs(os.path.join(params.model_dir, 'ensembles/'))
 
-            ensemble_location = os.path.join(params.dataset, 'ensembles/' , ensemble_name)
+            ensemble_location = os.path.join(params.model_dir, 'ensembles/' , ensemble_name)
         else:
-            ensemble_location = os.path.join(params.dataset, args.dump_to)
+            ensemble_location = os.path.join(params.model_dir, args.dump_to)
 
         print("\nStoring the ensemble to {0}\n".format(ensemble_location))
 
