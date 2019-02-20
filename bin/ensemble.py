@@ -292,18 +292,14 @@ if __name__ == '__main__':
     #TODO: if any data transform option is true, :poop_emoji:
     params = config.load_parameters(args.params_file)
     if args.data_dir is not None:
-        data_folder = args.data_dir
+        params.dataset = args.data_dir
     elif args.model_dir is not None:
-        data_folder = args.model_dir
-    else:
-        data_folder = None
+        params.dataset = args.model_dir
 
-    if data_folder is not None:
-        params.dataset = data_folder
-        if params.model_file is not None:
-            params.model_file = os.path.join(data_folder, params.model_file)
-        else:
-            params.model_file = os.path.join(data_folder, args.model_file)
+    if params.model_file is not None:
+        params.model_file = os.path.join(params.model_dir, params.model_file)
+    else:
+        params.model_file = os.path.join(params.model_dir, args.model_file)
 
     def arg_params(arg_value,param):
         if arg_value is not None:
