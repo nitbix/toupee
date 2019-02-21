@@ -34,9 +34,8 @@ import keras.preprocessing.image
 from keras import backend as K
 
 
-def initialize_model(params, sample_weight, model_config, model_yaml, 
+def initialize_model(params, sample_weight, model_config, model_yaml,
                         model_weights, frozen_layers):
-    
     print("loading model...")
     if sample_weight is not None:
         print("using sample weights...")
@@ -58,26 +57,20 @@ def initialize_model(params, sample_weight, model_config, model_yaml,
             model.layers[i].set_weights(model_weights[i])
 
     print(("total weight count: {0}".format(total_weights)))
-    
     if frozen_layers is None:
         frozen_layers = []
-        
     for l in frozen_layers:
         model.layers[l].trainable = False
-    
     return(model, total_weights)
 
-    
 
 def initialize_metrics(params):
-    
-    if params.classification == True:   
+    if params.classification == True:
         scorer_name = 'accuracy'
         monitor_type = 'val_acc'
     else:
         scorer_name = 'mean_squared_error'
         monitor_type = 'val_loss'
-    
     metrics = [scorer_name]
     if 'additional_metrics' in params.__dict__:
         metrics = metrics + additional_metrics
@@ -85,11 +78,8 @@ def initialize_metrics(params):
     checkpointer = common.ModelCheckpointInMemory(verbose=1,
             monitor = monitor_type,
             mode = 'max')
-            
     return(metrics, checkpointer)
 
-    
-    
 def callbacks_with_lr_scheduler(schedule, model, callbacks):
     def scheduler(epoch):
         if epoch in schedule:
@@ -98,11 +88,9 @@ def callbacks_with_lr_scheduler(schedule, model, callbacks):
             model.optimizer.lr = K.variable(value = schedule[epoch])
         # return float(model.optimizer.lr.get_value())          #<--- old keras-fork version
         return float(K.eval(model.optimizer.lr))
-    return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]   
-    
+    return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]
 
 def print_results(model, train_metrics, valid_metrics, test_metrics):
-    
     for metrics_name,metrics in (
             ('train', train_metrics),
             ('valid', valid_metrics),
@@ -112,36 +100,36 @@ def print_results(model, train_metrics, valid_metrics, test_metrics):
         for i in range(len(metrics)):
             print(("  {0} = {1}".format(model.metrics_names[i], metrics[i])))
 
-          
-def sequential_model(dataset, params, pretraining_set = None, 
-        model_weights = None, return_results = False, member_number = None, 
-        model_yaml = None, model_config = None, frozen_layers = None, 
-        sample_weight = None):
+def sequential_model(dataset,
+                     params,
+                     pretraining_set = None,
+                     model_weights = None,
+                     return_results = False,
+                     member_number = None,
+                     model_yaml = None,
+                     model_config = None,
+                     frozen_layers = None,
+                     sample_weight = None,
+                     ):
     """
     Initialize the parameters and create the network.
     [GENERATOR DATA VERSION]
     """
 
     #_ was "total_weights" before
-    model, _ = initialize_model(params, sample_weight, model_config, 
+    model, _ = initialize_model(params, sample_weight, model_config,
                                             model_yaml, model_weights, frozen_layers)
 
     if return_results:
         results = common.Results(params)
-    
     #3-4 data holders: (1) sampled train data, (2-3) eval data - train/valid/[test] sets
     sampled_indexes = dataset[0][0]
     if sampled_indexes is not None:
         sampled_indexes.sort()
     files = dataset[1]
-    
-    train_holder = common.DataGenerator(files[0], params.batch_size, sampled_indexes)
-    train_eval_holder = common.DataGenerator(files[0], params.batch_size, None)
-    valid_holder = common.DataGenerator(files[1], params.batch_size, None)
-    test_holder = common.DataGenerator(files[2], params.batch_size, None)
-    
+    train_holder = files[0]
+    test_holder = files[2]
     start_time = time.clock()
-    
     metrics, checkpointer = initialize_metrics(params)
     callbacks = [checkpointer]
 
@@ -155,15 +143,10 @@ def sequential_model(dataset, params, pretraining_set = None,
         lr_schedule = params.optimizer['config']['lr']
         params.optimizer['config']['lr'] = lr_schedule[0]
     optimizer = keras.optimizers.deserialize(params.optimizer)
-    
     model.compile(optimizer = optimizer,
                   loss = params.cost_function,
                   metrics = metrics,
-                  
-                  #theano stuff:    #<--- old keras-fork version
-                  # update_inputs = params.update_inputs,
-                  # update_inputs_lr = params.update_inputs_lr
-    )
+                 )
 
     #TODO - Joao: I think this if branch needs to be updated with the new data holder
     if params.online_transform is not None:
@@ -171,52 +154,60 @@ def sequential_model(dataset, params, pretraining_set = None,
         #check the bottom of this file for the old code
     else:
         print("Training without transformations...")
+        print('Verbosity level:', params.verbose)
         if lr_schedule is not None:
             callbacks = callbacks_with_lr_scheduler(lr_schedule, model, callbacks)
-        
         if return_results:
-            hist = model.fit_generator(train_holder,
-                  epochs = params.n_epochs,
-                  validation_data = valid_holder,
-                  callbacks = callbacks,
-                  max_queue_size=1000, 
-                  shuffle=False,
-                  use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
-                  #the old keras-fork version had more parameters here
+            hist = model.fit(
+                            x = train_holder['X'],
+                            y = train_holder['y'],
+                            epochs = params.n_epochs,
+                            batch_size = params.batch_size,
+                            shuffle = 'batch',
+                            validation_split=0.1,
+                            callbacks = callbacks,
+                            verbose = params.verbose,
+                            )
         else:
-            model.fit_generator(train_holder,
-                  epochs = params.n_epochs,
-                  validation_data = valid_holder,
-                  callbacks = callbacks,
-                  max_queue_size=1000,
-                  shuffle=False,
-                  use_multiprocessing=False)    #<------------ Don't use more than 1 worker! Will crash [Gen class must be upgraded]
-                  #the old keras-fork version had more parameters here
-                  
+            model.fit(
+                    x = train_holder['X'],
+                    y = train_holder['y'],
+                    epochs = params.n_epochs,
+                    batch_size = params.batch_size,
+                    shuffle = 'batch',
+                    validation_split=0.1,
+                    callbacks = callbacks,
+                    verbose = params.verbose,
+                    )
+
     model.set_weights(checkpointer.best_model)
-    
     #evals everything with a generator
     print('\nGetting the train metrics...')
-    train_metrics = model.evaluate_generator(train_eval_holder)
+    train_metrics = model.evaluate(
+                                x=train_holder['X'],
+                                y=train_holder['y'],
+                                batch_size=params.batch_size,
+                                  )
     print('Getting the validation metrics...')
-    valid_metrics = model.evaluate_generator(valid_holder)
+    valid_metrics = train_metrics # This is just here until we decide whether to keep a validation
+                                  # dataset 
     print('Getting the test metrics...')
-    test_metrics = model.evaluate_generator(test_holder)
-            
+    test_metrics = model.evaluate(
+                                x=test_holder['X'],
+                                y=test_holder['y'],
+                                batch_size=params.batch_size,
+                                 )
     print_results(model, train_metrics, valid_metrics, test_metrics)
 
     if return_results:
         results.set_history(hist)
-    
     end_time = time.clock()
-    
     print((('Optimization complete.\nBest valid: %f \n'
         'Obtained at epoch: %i\nTest: %f ') %
           (valid_metrics[1],
               checkpointer.best_epoch + 1, test_metrics[1])))
     print(('The code for ' + os.path.split(__file__)[1] +
                           ' ran for %.2fm' % ((end_time - start_time) / 60.)))
-    
     if return_results:
         results.set_final_observation(valid_metrics[1],
             test_metrics[1],

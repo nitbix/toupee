@@ -28,7 +28,6 @@ import h5py
 import time
 
 
-
 def load_data_files(args, params):
     '''
     Checks if the input file is a .npz or a h5 - and loads those files
@@ -113,7 +112,6 @@ def run_ensemble(args, params):
 
     #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
     scorer, scorer_name = get_scorer(params.classification)
-    
     members = []
     intermediate_scores = []
     final_score = None
@@ -278,6 +276,7 @@ if __name__ == '__main__':
         (args.testfile, 'testfile'),
         (args.validfile, 'validfile'),
         (args.trainfile, 'trainfile'),
+        (args.verbose, 'verbose'),
         (str(round(time.time())), 'ensemble_id')    #<-- unique ID for this ensemble
     ]
 
@@ -311,7 +310,7 @@ if __name__ == '__main__':
 
     for arg, param in arg_param_pairings:
         arg_params(arg,param)
-
+    
     #Runs the ensemble training
     intermediate_scores, final_score = run_ensemble(args, params)
 
