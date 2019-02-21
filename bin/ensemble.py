@@ -16,6 +16,8 @@ import argparse
 import os
 import re
 import dill
+import warnings
+
 from toupee.common import accuracy
 
 from pymongo import MongoClient
@@ -26,47 +28,11 @@ import h5py
 import time
 
 
-
-def set_file_location(args, params):
-    '''
-    Sets the input and model files folder
-    '''
-    
-    #Dataset location: hardcoded (@.yaml) < latest-experiment flag < specific model_dir
-    
-    model_dir = None
-
-    if args.latest_experiment or args.model_dir:
-        conn = MongoClient(host=args.results_host)
-        db = conn[args.results_db]
-        table = db[args.results_dep]
-        
-        if args.latest_experiment:
-            #gets the most recent ID
-            latest_entry = table.find().sort("_id", -1).limit(1)
-            if latest_entry.count() == 0:
-                raise ValueError('No DB entries for trained NNs')
-            else:
-                latest_entry = latest_entry[0]
-                
-            latest_entry_location = latest_entry['file_location']
-            model_dir = latest_entry_location
-            
-        if args.model_dir is not None:
-            model_dir = args.model_dir
-            
-            if not os.path.exists(model_dir):
-                raise ValueError("model_dir {0} doesn't exist!".format(model_dir))
-                
-    return model_dir
-
-
-    
 def load_data_files(args, params):
     '''
     Checks if the input file is a .npz or a h5 - and loads those files
     '''
-    
+
     if (args.trainfile[-4:] == '.npz') and (args.validfile[-4:] == '.npz') and (args.testfile[-4:] == '.npz'):
         print("\nLoading .npz data\n")
         trainfile = np.load(os.path.join(params.dataset, args.trainfile))
@@ -79,14 +45,14 @@ def load_data_files(args, params):
         testfile = h5py.File(os.path.join(params.dataset, args.testfile), 'r')
     else:
         raise ValueError('.npz or .h5 files are required; All sets must have the same format.')
-    
+
     files = [trainfile, validfile, testfile]
     return(files)
-    
-    
-    
+
+
+
 def get_scorer(classification):
-    
+
     scorer = []
     scorer_name = []
     if classification:
@@ -96,33 +62,30 @@ def get_scorer(classification):
         #TODO: these use the old non-generator files
         scorer.append(euclidian_distance)
         scorer_name.append('euclidian distance')
-        
+
         scorer.append(relative_distance)
         scorer_name.append('relative distance')
-        
+
     return (scorer, scorer_name)
-        
+
 
 def store_ensemble(args, params, members, ensemble):
-
     if args.dump_to is not None:
-        
-        
         if args.sweeping_architectures:
             ensemble_name = 'ensemble_' + str(params.ensemble_id) + '.pkl'
-            
-            if not os.path.exists(os.path.join(params.dataset, 'ensembles/')):
-                os.makedirs(os.path.join(params.dataset, 'ensembles/'))
-            
-            ensemble_location = os.path.join(params.dataset, 'ensembles/' , ensemble_name)
+
+            if not os.path.exists(os.path.join(params.model_dir, 'ensembles/')):
+                os.makedirs(os.path.join(params.model_dir, 'ensembles/'))
+
+            ensemble_location = os.path.join(params.model_dir, 'ensembles/' , ensemble_name)
         else:
-            ensemble_location = os.path.join(params.dataset, args.dump_to)
-        
+            ensemble_location = os.path.join(params.model_dir, args.dump_to)
+
         print("\nStoring the ensemble to {0}\n".format(ensemble_location))
-        
+
         dill.dump({'members': members, 'ensemble': ensemble},
                 open(ensemble_location,"wb"))
-                
+
     if args.dump_shapes_to is not None:
         if args.dump_shapes_to == '':
             dump_shapes_to = args.seed
@@ -132,21 +95,21 @@ def store_ensemble(args, params, members, ensemble):
             with open("{0}member-{1}.model".format(dump_shapes_to, i),"w") as f:
                 f.truncate()
                 f.write(members[i][0])
-        
-    
-    
+
+
+
 def run_ensemble(args, params):
 
     #Checks for h5/npz data, and returns the files if successful
     trainfile, validfile, testfile = load_data_files(args, params)
-    
+
     #gets the train size
     train_size = trainfile['y'].shape[0]
-    
+
     #initializes the ensemble method for the h5 file
     method = params.method
     method.prepare(params, train_size)
-    
+
     #selects the appropriate intermediate score: classification - accuracy; regression - euclidian_distance
     scorer, scorer_name = get_scorer(params.classification)
     members = []
@@ -161,31 +124,31 @@ def run_ensemble(args, params):
         for j in range(len(scorer)):
             test_score.append(scorer[j](ensemble,trainfile,params.batch_size))
             print(('Intermediate test {0}: {1}'.format(scorer_name[j], test_score[j])))
-        
+
         intermediate_scores.append(test_score)
         final_score = test_score
         if len(m) > 2 and not m[2]: #the ensemble method told us to stop
             break
-            
-    
+
+
     for j in range(len(scorer)): print(('Final test {0}: {1}'.format(scorer_name[j], test_score[j])))
-    
+
     #stores the ensemble (if needed)
     store_ensemble(args, params, members, ensemble)
-    
+
     #cleanup: closes the files
     trainfile.close()
     validfile.close()
     testfile.close()
-    
+
     return (intermediate_scores, final_score)
-    
-    
+
+
 def store_results(args, params, intermediate_scores, final_score):
     '''
     Stores the results in the DB
     '''
-    
+
     if 'results_db' in params.__dict__:
         if 'results_host' in params.__dict__:
             host = params.results_host
@@ -194,15 +157,15 @@ def store_results(args, params, intermediate_scores, final_score):
         print(("\nSaving results to {0}@{1}\n".format(params.results_db,host)))
         conn = MongoClient(host=host)
         db = conn[params.results_db]
-        if 'results_table' in params.__dict__: 
+        if 'results_table' in params.__dict__:
             table_name = params.results_table
         else:
             table_name = 'results'
         table = db[table_name]
-        
+
         #removes mongodb-buggy "params" entries
         params.method = ''
-        
+
         this_file_dir = os.path.dirname(os.path.realpath(__file__))
         results = {
                     "params_file": args.params_file,
@@ -212,12 +175,13 @@ def store_results(args, params, intermediate_scores, final_score):
                     "best_score": np.max(intermediate_scores),
                     "best_score_after_ensemble_#": np.argmax(intermediate_scores).item(),   #without "item()", defaults to np.int64, which is not supported by mongodb
                     "date": datetime.datetime.utcnow(),
-                    "code version": subprocess.check_output(["/usr/bin/git", 
+                    "code version": subprocess.check_output(["/usr/bin/git",
                         "describe","--always"], cwd = this_file_dir).strip(),
                     "model_dir": args.model_dir,
+                    "data_dir": args.data_dir,
                     "ensemble_ID": params.ensemble_id,
-                  }                
-        
+                  }
+
         #adds the dependency ID
         if 'results_dep' in params.__dict__:
             depend_col = db[params.results_dep]
@@ -228,10 +192,10 @@ def store_results(args, params, intermediate_scores, final_score):
                 latest_id = 'no previous entry!'
             column_name = params.results_dep + '_id'
             results[column_name] = latest_id
-        
-        
+
+
         id = table.insert_one(results).inserted_id
-        
+
         #prints stuff if needed [for now its on, to help with the dbg]
         if True:
             import pprint
@@ -241,10 +205,10 @@ def store_results(args, params, intermediate_scores, final_score):
             print("TABLE ENRTY:")
             latest_entry = table.find().sort("_id", -1).limit(1)
             pprint.pprint(latest_entry[0])
-        
+
         print(("\n\nDone. [Results stored in the DB, ID = {0}]".format(id)))
-    
-    
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a single MLP')
@@ -277,16 +241,19 @@ if __name__ == '__main__':
                         help='valid set npz file name')
     parser.add_argument('--trainfile', default='train.npz',
                         help='training set npz file name')
-    parser.add_argument('--model-dir', help="directory name containing the dataset",
+    parser.add_argument('--data-dir', help="directory name containing the dataset",
                         default=None)
-    parser.add_argument('--latest-experiment', help="uses the latest experiment",
-                        action='store_true')
+    parser.add_argument('--model-dir', help="directory name to save the model",
+                        default=None)
     parser.add_argument('--remove-tmp-files', help="remove the temporary model files at the end.",
                         action='store_true')
     parser.add_argument('--sweeping-architectures', help="use while sweeping multiple architectures",
                         action='store_true')
-    parser.add_argument('--verbose', help="Verbosity level 0, 1 (default) or 2 as specified\
-                     by Keras", type=int, default=1)
+    parser.add_argument('--verbose',
+                        help="Verbosity level 0, 1 (default) or 2 as specified by Keras",
+                        type=int, default=1)
+    parser.add_argument('--model-file',
+                        help='Name of the saved model file', default='dnn.model')
 
     args = parser.parse_args()
     #this needs to come before all the toupee and theano imports
@@ -312,35 +279,40 @@ if __name__ == '__main__':
         (args.verbose, 'verbose'),
         (str(round(time.time())), 'ensemble_id')    #<-- unique ID for this ensemble
     ]
-    
+
     if 'seed' in args.__dict__:
         print(("setting random seed to: {0}".format(args.seed)))
         numpy.random.seed(args.seed)
     from toupee import data
-    from toupee import config 
+    from toupee import config
     from toupee.mlp import sequential_model
 
     #sets the ensemble parameters
     #TODO: if any data transform option is true, :poop_emoji:
     params = config.load_parameters(args.params_file)
-    data_folder = set_file_location(args, params)
-    if data_folder is not None:
-        params.dataset = data_folder
-        if params.model_file is not None:
-            params.model_file = os.path.join(data_folder, params.model_file)
-        else:
-            params.model_file = os.path.join(data_folder, 'dnn.model')
-    
+
+    if args.model_dir is not None:
+        params.model_dir = args.model_dir
+
+    if args.data_dir is not None:
+        params.dataset = args.data_dir
+    elif args.model_dir is not None:
+        params.dataset = params.model_dir
+
+    if params.model_file is not None:
+        params.model_file = os.path.join(params.model_dir, params.model_file)
+    else:
+        params.model_file = os.path.join(params.model_dir, args.model_file)
+
     def arg_params(arg_value,param):
         if arg_value is not None:
             params.__dict__[param] = arg_value
 
     for arg, param in arg_param_pairings:
         arg_params(arg,param)
-        
+    
     #Runs the ensemble training
     intermediate_scores, final_score = run_ensemble(args, params)
-    
-    #Saves the results in the DB            
+
+    #Saves the results in the DB
     store_results(args, params, intermediate_scores, final_score)
-    
