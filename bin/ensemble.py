@@ -316,4 +316,3 @@ if __name__ == '__main__':
 
     #Saves the results in the DB
     store_results(args, params, intermediate_scores, final_score)
-
