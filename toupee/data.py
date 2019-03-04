@@ -222,6 +222,8 @@ class Resampler:
         
         #with returns the indexes, not the samples themselves
         
+        if sample_size is None:
+            sample_size = self.train_size
         weights = []
         
         #gets the sample indexes

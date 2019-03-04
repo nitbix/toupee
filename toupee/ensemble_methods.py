@@ -315,6 +315,7 @@ class Bagging(EnsembleMethod):
     def __init__(self,voting=False):
         self.voting = voting
         self.resampler = None
+
     def create_aggregator(self,params,members,train_set,valid_set):
         if 'voting' in self.__dict__ and self.voting:
             return MajorityVotingRunner(members,params) 
