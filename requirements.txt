@@ -7,4 +7,4 @@ scikit-image==0.14.1
 pymongo==3.7.1
 keras==2.2.4
 PyYAML==3.13
-tensorflow==1.11.0
+tensorflow==1.15.2
