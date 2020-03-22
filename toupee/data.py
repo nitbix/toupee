@@ -10,6 +10,9 @@ All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
+#TODO: Resampler, WeightedResampler
+#TODO: Polymorphism for different data formats
+
 import os
 import gc
 import sys
@@ -26,6 +29,10 @@ import tensorflow as tf
 
 KNOWN_DATA_TYPES = ["tfrecord", "h5", "npz"]
 
+DEFAULT_TRAINING_FILE = 'train.tfrecord'
+DEFAULT_VALIDATION_FILE = 'valid.tfrecord'
+DEFAULT_TESTING_FILE = 'test.tfrecord'
+
 def get_data_format(fileaname):
     """ Identifies the extension of the dataset """
     extension = os.path.splitext(filename)[1]
@@ -33,51 +40,63 @@ def get_data_format(fileaname):
         raise ValueError("Unknown data type %s" % extension)
     return extension
 
+def one_hot_numpy(dataset):
+    b = np.zeros((dataset.size, dataset.max()+1),dtype='float32')
+    b[np.arange(dataset.size), dataset] = 1.
+    return b
 
-def load_h5(self, filename):
+def load_h5(self, filename, **kwargs):
     """ Load an HDF5 file """
     #TODO: write me
     raise NotImplementedError()
 
 
-def load_npz(self, filename):
+def load_npz(self, filename, **kwargs):
     """ Load a NPZ file """
-    #TODO: write me
-    raise NotImplementedError()
+    #TODO: transformations
+    data = np.load(filename + '.npz')
+    data = (data['x'],data['y'])
+    if kwargs['one_hot_y']:
+        data = (data[0], one_hot_numpy(data[1]))
+    return data
 
 
-def load_tfrecord(self, filename)
+def load_tfrecord(self, filename, **kwargs):
     """ Load a TFRecord file """
     #TODO: write me
     raise NotImplementedError()
 
 
-def load(self, filename):
+def load(self, filename, **kwargs):
     """ Load any known data format """
     mapper = {'h5': load_h5,
               'npz': load_npz,
               'tfrecord': load_tfrecord
              }
-    return mapper[get_data_format(filename)](filename)
+    return mapper[get_data_format(filename)](filename, **kwargs)
 
 
 class Dataset:
     """ Class to load a dataset """
-    def __init__(self, training_file, validation_file=None, testing_file=None):
-        self.training_file = training_file
-        self.validation_file = validation_file
-        self.testing_file = testing_file
-        self.data_format = get_data_format(self.training_file)
-        for f_name in [self.validation_file, self.testing_file]:
+    def __init__(self, src_dir=None, training_file=None, validation_file=None, testing_file=None):
+        self.files = {}
+        if src_dir is None and training_file is None:
+            raise ValueError("Must specify one of src_dir or training_file")
+        self.files['train'] = training_file or DEFAULT_TRAINING_FILE
+        self.files['valid'] = validation_file or DEFAULT_VALIDATION_FILE
+        self.files['test'] = testing_file or DEFAULT_TESTING_FILE
+        if src_dir:
+            self.files = self.files.map(lambda f_name: os.path.join(src_dir, f_name))
+        self.file = self.file.map(lambda f_name: f_name if os.path.exists(f_name) else None)
+        self.data_format = get_data_format(self.files['train'])
+        for f_name in self.files.values():
             if f_name and get_data_format(f_name) != self.data_format:
                 raise ValueError("All files must be in same format")
-        self.training_data = load(self.training_file)
-        self.validation_data = load(self.validation_data) if self.validation_data else None
-        self.testing_data = load(self.testing_data) if self.testing_data else None
+        self.data = self.files.map(lambda f_name: load(f_name) if f_name else None)
 
     def get_training_handle(self):
         """ Return the appropriate handle to pass to keras .fit """
-        return self.training_data
+        return self.data['train']
 
 
 

@@ -10,6 +10,23 @@ All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
+class Model:
+    """ Representation of a model """
+    def __init__(self, params):
+        self.params = params
+        self._model = None
+
+    def train(self, data):
+        """ Train a model """
+        raise NotImplementedError()
+
+    def save(self, data):
+        """ Train a model """
+        raise NotImplementedError()
+
+    def get_keras_model(self):
+        """ Return raw Keras model """
+        return self._model
 
 # import gc
 # import os
