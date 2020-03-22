@@ -10,15 +10,34 @@ All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
+import time
+import tensorflow as tf
+
+
 class Model:
     """ Representation of a model """
+    #TODO: Frozen layers
     def __init__(self, params):
         self.params = params
-        self._model = None
+        self._model = tf.keras.models.model_from_yaml(params['model_yaml'])
+        if params['model_weights']:
+            self._model.load_weights(params['model_yaml'])
+        self._optimizer = tf.keras.optimizers.deserialize(params['optimizer'])
 
-    def train(self, data):
+    def fit(self, data, verbose=None):
         """ Train a model """
-        raise NotImplementedError()
+        start_time = time.clock()
+        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=params['tb_log_dir'])] #TODO: TensorBoard
+        model.fit(
+                data.get_training_handle(),
+                epochs = params['epochs'],
+                batch_size = params['batch_size'],
+                shuffle = 'batch',
+                callbacks = callbacks,
+                verbose = verbose or params['verbose'],
+                )
+        end_time = time.clock()))
+        print('Model trained for %.2fm' % ((end_time - start_time) / 60.))
 
     def save(self, data):
         """ Train a model """
