@@ -8,43 +8,53 @@ All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
-# import toupee.ensemble_methods
-import yaml 
+import yaml
 import toupee.parameters as parameters
 import os
 
 def yaml_include(loader, node):
-    # Get the path out of the yaml file
+    """ Parses the !include directive in yaml and returns the included
+        file's comments
+    """
     file_name = os.path.join(os.path.dirname(loader.name), node.value)
-
-    with file(file_name) as inputfile:
+    with open(file_name, 'r') as inputfile:
         return yaml.load(inputfile)
 
 yaml.add_constructor("!include", yaml_include)
-
-defaults = { 'random_seed': None,
-             'save_images': False,
-             'join_train_and_valid': False,
-             #TODO: 'pretraining_noise': None,
-             'detailed_stats': False,
-             'online_transform': None,
-             'resize_data_to': None,
-             'join_train_and_valid': False,
-             'shuffle_dataset': False,
-             'update_inputs': False,
-             'update_inputs_lr': 1,
-             #TODO:'pretraining': None,
-             'early_stopping' : None,
-             #TODO:'pretraining_passes' : 0,
-             'one_hot' : False,
-             'pickled' : False,
-             'zca_whitening' : False,
-             'test_at_each_epoch': True,
-             'classification' : True,
+defaults = {'shuffle_dataset': False,
+            'update_inputs': False,
+            'update_inputs_lr': 1,
+            'one_hot_y' : False,
+            'test_at_each_epoch': True,
+            'classification' : True,
+            'tb_log_dir': 'toupee_tb_logs',
            }
 
-class Loader(yaml.Loader):
+# Old defaults in v1
+# defaults = { 'random_seed': None,
+#              'save_images': False,
+#              'join_train_and_valid': False,
+#              #TODO: 'pretraining_noise': None,
+#              'detailed_stats': False,
+#              'online_transform': None,
+#              'resize_data_to': None,
+#              'join_train_and_valid': False,
+#              'shuffle_dataset': False,
+#              'update_inputs': False,
+#              'update_inputs_lr': 1,
+#              #TODO:'pretraining': None,
+#              'early_stopping' : None,
+#              #TODO:'pretraining_passes' : 0,
+#              'one_hot' : False,
+#              'pickled' : False,
+#              'zca_whitening' : False,
+#              'test_at_each_epoch': True,
+#              'classification' : True,
+#            }
 
+class Loader(yaml.Loader):
+    #TODO: does this need to go?
+    """ Custom loader for !include """
     def __init__(self, stream):
         self._root = os.path.split(stream.name)[0]
         super(Loader, self).__init__(stream)
@@ -57,6 +67,7 @@ class Loader(yaml.Loader):
 Loader.add_constructor('!include', Loader.include)
 
 def load_parameters(filename):
+    """ Loads a parameters file """
     with open(filename) as f:
         r = yaml.load(f)
     for d in defaults:

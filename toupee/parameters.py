@@ -13,7 +13,7 @@ import copy
 to_string = ['method']
 class Parameters(object):
 
-    def __init__(self, **entries): 
+    def __init__(self, **entries):
         self.__dict__.update(entries)
 
     def serialize(self):

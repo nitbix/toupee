@@ -265,7 +265,7 @@ def serialize(o):
 if 'toupee_global_instance' not in locals():
     toupee_global_instance = Toupee()
 
-#----------------------------------------------------------               
+#----------------------------------------------------------
 #for classification problems: 
 def get_probabilities(classifier, file_object, batch_size):
     """
