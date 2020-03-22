@@ -11,18 +11,24 @@ All code released under GPLv2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import argparse
-from toupee import config
-
+import toupee
 
 def train():
+    """ Train a base model as specified """
     parser = argparse.ArgumentParser(description='Train a single Base Model')
     parser.add_argument('params_file', help='the parameters file')
     parser.add_argument('save_file', nargs='?',
                         help='the file where the trained MLP is to be saved')
+    parser.add_argument('--epochs', type=int, nargs='?',
+                        help='number of epochs to run')
     args = parser.parse_args()
     print(("using toupee version {0}".format(toupee.version)))
-    params = config.load_parameters(args.params_file)
-
+    params = toupee.config.load_parameters(args.params_file)
+    data = toupee.data.Dataset(src_dir=params.dataset)
+    base_model = toupee.model.Model(params=params)
+    base_model.train(data=data)
+    if args.save_file:
+        base_model.save(args.save_file)
 
 if __name__ == '__main__':
     train()

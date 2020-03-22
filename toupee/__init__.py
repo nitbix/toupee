@@ -4,4 +4,4 @@ import toupee.mlp as mlp
 import toupee.parameters as parameters
 import toupee.config as config
 
-version = "0.1.0 alpha"
+version = "2.0.0 alpha nightly"
