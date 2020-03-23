@@ -25,7 +25,7 @@ def main(args=None):
         args = parser.parse_args()
     print(("using toupee version {0}".format(toupee.version)))
     params = toupee.config.load_parameters(args.params_file)
-    data = toupee.data.Dataset(src_dir=params.dataset)
+    data = toupee.data.Dataset(src_dir=params.dataset, **params.__dict__)
     base_model = toupee.model.Model(params=params)
     base_model.fit(data=data)
     if args.save_file:

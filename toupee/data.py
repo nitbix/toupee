@@ -14,28 +14,30 @@ __docformat__ = 'restructedtext en'
 #TODO: Polymorphism for different data formats
 
 import os
-import gc
+#import gc
 import sys
+from pathlib import Path
 import numpy as np
-import scipy.ndimage as ni
-import scipy.stats
-import numpy.random
-import gzip
-import pickle
-import math
-from skimage import transform
-import multiprocessing
+#import scipy.ndimage as ni
+#import scipy.stats
+#import numpy.random
+#import gzip
+#import pickle
+#import math
+#from skimage import transform
+#import multiprocessing
 import tensorflow as tf
+from toupee.common import dict_map
 
-KNOWN_DATA_TYPES = ["tfrecord", "h5", "npz"]
+KNOWN_DATA_TYPES = [".tfrecord", ".h5", ".npz"]
 
-DEFAULT_TRAINING_FILE = 'train.tfrecord'
-DEFAULT_VALIDATION_FILE = 'valid.tfrecord'
-DEFAULT_TESTING_FILE = 'test.tfrecord'
+DEFAULT_TRAINING_FILE = 'train'
+DEFAULT_VALIDATION_FILE = 'valid'
+DEFAULT_TESTING_FILE = 'test'
 
-def get_data_format(fileaname):
+def get_data_format(filename):
     """ Identifies the extension of the dataset """
-    extension = os.path.splitext(filename)[1]
+    extension = Path(filename).suffix
     if extension not in KNOWN_DATA_TYPES:
         raise ValueError("Unknown data type %s" % extension)
     return extension
@@ -45,40 +47,42 @@ def one_hot_numpy(dataset):
     b[np.arange(dataset.size), dataset] = 1.
     return b
 
-def load_h5(self, filename, **kwargs):
+def load_h5(filename, **kwargs):
     """ Load an HDF5 file """
     #TODO: write me
     raise NotImplementedError()
 
 
-def load_npz(self, filename, **kwargs):
+def load_npz(filename, **kwargs):
     """ Load a NPZ file """
     #TODO: transformations
-    data = np.load(filename + '.npz')
+    data = np.load(filename)
     data = (data['x'],data['y'])
-    if kwargs['one_hot_y']:
+    if kwargs['convert_to_one_hot_y']:
         data = (data[0], one_hot_numpy(data[1]))
-    return data
+    dataset = tf.data.Dataset.from_tensor_slices(data)
+    dataset = dataset.batch(kwargs['batch_size'])
+    return dataset
 
 
-def load_tfrecord(self, filename, **kwargs):
+def load_tfrecord(filename, **kwargs):
     """ Load a TFRecord file """
     #TODO: write me
     raise NotImplementedError()
 
 
-def load(self, filename, **kwargs):
+def load(filename, **kwargs):
     """ Load any known data format """
-    mapper = {'h5': load_h5,
-              'npz': load_npz,
-              'tfrecord': load_tfrecord
+    mapper = {'.h5': load_h5,
+              '.npz': load_npz,
+              '.tfrecord': load_tfrecord
              }
     return mapper[get_data_format(filename)](filename, **kwargs)
 
 
 class Dataset:
     """ Class to load a dataset """
-    def __init__(self, src_dir=None, training_file=None, validation_file=None, testing_file=None):
+    def __init__(self, src_dir=None, training_file=None, validation_file=None, testing_file=None, data_format="", **kwargs):
         self.files = {}
         if src_dir is None and training_file is None:
             raise ValueError("Must specify one of src_dir or training_file")
@@ -86,13 +90,16 @@ class Dataset:
         self.files['valid'] = validation_file or DEFAULT_VALIDATION_FILE
         self.files['test'] = testing_file or DEFAULT_TESTING_FILE
         if src_dir:
-            self.files = self.files.map(lambda f_name: os.path.join(src_dir, f_name))
-        self.file = self.file.map(lambda f_name: f_name if os.path.exists(f_name) else None)
+            self.files = dict_map(self.files, lambda f_name: os.path.join(src_dir, f_name))
+        if data_format:
+            self.files = dict_map(self.files, lambda f_name: f_name + '.' + data_format)
+        print(self.files)
+        self.files = dict_map(self.files, lambda f_name: f_name if os.path.exists(f_name) else None)
         self.data_format = get_data_format(self.files['train'])
         for f_name in self.files.values():
-            if f_name and get_data_format(f_name) != self.data_format:
+            if f_name is not None and get_data_format(f_name) != self.data_format:
                 raise ValueError("All files must be in same format")
-        self.data = self.files.map(lambda f_name: load(f_name) if f_name else None)
+        self.data = dict_map(self.files, lambda f_name: load(filename=f_name, **kwargs) if f_name else None)
 
     def get_training_handle(self):
         """ Return the appropriate handle to pass to keras .fit """

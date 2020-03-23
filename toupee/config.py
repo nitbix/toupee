@@ -24,10 +24,12 @@ yaml.add_constructor("!include", yaml_include)
 defaults = {'shuffle_dataset': False,
             'update_inputs': False,
             'update_inputs_lr': 1,
-            'one_hot_y' : False,
+            'convert_to_one_hot_y' : False,
             'test_at_each_epoch': True,
             'classification' : True,
             'tb_log_dir': 'toupee_tb_logs',
+            'model_weights': None,
+            'verbose': 1,
            }
 
 # Old defaults in v1

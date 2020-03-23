@@ -19,29 +19,36 @@ class Model:
     #TODO: Frozen layers
     def __init__(self, params):
         self.params = params
-        self._model = tf.keras.models.model_from_yaml(params['model_yaml'])
-        if params['model_weights']:
-            self._model.load_weights(params['model_yaml'])
-        self._optimizer = tf.keras.optimizers.deserialize(params['optimizer'])
+        with open(params.model_file, 'r') as model_file:
+            model_yaml = model_file.read()
+        self._model = tf.keras.models.model_from_yaml(model_yaml)
+        if params.model_weights:
+            self._model.load_weights(params.model_weights)
+        self._optimizer = tf.keras.optimizers.deserialize(params.optimizer)
+        self.params = params
+        self._metrics = ['accuracy']
+        self._model.compile(optimizer = self._optimizer,
+                      loss = params.cost_function,
+                      metrics = self._metrics,
+                     )
 
     def fit(self, data, verbose=None):
         """ Train a model """
         start_time = time.clock()
-        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=params['tb_log_dir'])] #TODO: TensorBoard
-        model.fit(
+        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir)] #TODO: TensorBoard
+        self._model.fit(
                 data.get_training_handle(),
-                epochs = params['epochs'],
-                batch_size = params['batch_size'],
+                epochs = self.params.epochs,
                 shuffle = 'batch',
                 callbacks = callbacks,
-                verbose = verbose or params['verbose'],
+                verbose = verbose or self.params.verbose,
                 )
-        end_time = time.clock()))
+        end_time = time.clock()
         print('Model trained for %.2fm' % ((end_time - start_time) / 60.))
 
-    def save(self, data):
+    def save(self, filename):
         """ Train a model """
-        raise NotImplementedError()
+        self._model.save(filename)
 
     def get_keras_model(self):
         """ Return raw Keras model """
