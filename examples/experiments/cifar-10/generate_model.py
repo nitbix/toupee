@@ -23,21 +23,21 @@ output = tf.keras.layers.BatchNormalization(axis=1)(output)
 output = tf.keras.layers.Activation('relu')(output)
 output = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(output)
 
-# output = tf.keras.layers.Convolution2D(128, (3, 3), bias_regularizer=l2(0.0001),
-#     kernel_regularizer=l2(0.0001), padding='valid')(output)
-# output = tf.keras.layers.BatchNormalization(axis=1)(output)
-# output = tf.keras.layers.Activation('relu')(output)
-# output = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(output)
+output = tf.keras.layers.Convolution2D(128, (3, 3), bias_regularizer=l2(0.0001),
+    kernel_regularizer=l2(0.0001), padding='valid')(output)
+output = tf.keras.layers.BatchNormalization(axis=1)(output)
+output = tf.keras.layers.Activation('relu')(output)
+output = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(output)
 
-# output = tf.keras.layers.Flatten()(output)
-# output = tf.keras.layers.Dense(1024)(output)
-# output = tf.keras.layers.BatchNormalization(axis=1)(output)
-# output = tf.keras.layers.Activation('relu')(output)
-# output = tf.keras.layers.Dropout(0.5)(output)
+output = tf.keras.layers.Flatten()(output)
+output = tf.keras.layers.Dense(1024)(output)
+output = tf.keras.layers.BatchNormalization(axis=1)(output)
+output = tf.keras.layers.Activation('relu')(output)
+output = tf.keras.layers.Dropout(0.5)(output)
 
 output = tf.keras.layers.Dense(output_classes)(output)
-# output = tf.keras.layers.BatchNormalization(axis=1)(output)
-# output = tf.keras.layers.Softmax()(output)
+output = tf.keras.layers.BatchNormalization(axis=1)(output)
+output = tf.keras.layers.Softmax()(output)
 
 model = tf.keras.Model(inputs=input_layer, outputs=output)
 print(model.to_yaml())
