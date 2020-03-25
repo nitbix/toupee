@@ -93,7 +93,6 @@ class Dataset:
             self.files = dict_map(self.files, lambda f_name: os.path.join(src_dir, f_name))
         if data_format:
             self.files = dict_map(self.files, lambda f_name: f_name + '.' + data_format)
-        print(self.files)
         self.files = dict_map(self.files, lambda f_name: f_name if os.path.exists(f_name) else None)
         self.data_format = get_data_format(self.files['train'])
         for f_name in self.files.values():
