@@ -1,6 +1,5 @@
 import toupee.data as data
-#TODO: FIXME
-#import toupee.ensemble_methods as ensemble_methods
+import toupee.ensembles as ensembles
 import toupee.model as model
 import toupee.parameters as parameters
 import toupee.config as config

@@ -13,6 +13,8 @@ __docformat__ = 'restructedtext en'
 import time
 import tensorflow as tf
 
+#TODO: adaptive learning rates
+#TODO: backprop to the inputs
 
 class Model:
     """ Representation of a model """
@@ -34,6 +36,8 @@ class Model:
 
     def fit(self, data, verbose=None):
         """ Train a model """
+        #TODO: validation set
+        #TODO: test metrics
         start_time = time.clock()
         callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir)] #TODO: TensorBoard
         self._model.fit(
@@ -45,6 +49,8 @@ class Model:
                 )
         end_time = time.clock()
         print('Model trained for %.2fm' % ((end_time - start_time) / 60.))
+        test_metrics = self._model.evaluate(data.get_testing_handle())
+        print(test_metrics)
 
     def save(self, filename):
         """ Train a model """
