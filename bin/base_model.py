@@ -11,7 +11,7 @@ All code released under GPLv2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import argparse
-import toupee
+import toupee as tp
 
 def main(args=None):
     """ Train a base model as specified """
@@ -23,10 +23,10 @@ def main(args=None):
         parser.add_argument('--epochs', type=int, nargs='?',
                             help='number of epochs to run')
         args = parser.parse_args()
-    print(("using toupee version {0}".format(toupee.version)))
-    params = toupee.config.load_parameters(args.params_file)
-    data = toupee.data.Dataset(src_dir=params.dataset, **params.__dict__)
-    base_model = toupee.model.Model(params=params)
+    print(("using toupee version {0}".format(tp.version)))
+    params = tp.config.load_parameters(args.params_file)
+    data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
+    base_model = tp.model.Model(params=params)
     base_model.fit(data=data)
     if args.save_file:
         base_model.save(args.save_file)

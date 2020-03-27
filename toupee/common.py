@@ -25,6 +25,7 @@ numpy.set_printoptions(threshold=numpy.inf)
 def dict_map(dictionary, f):
     return {k: f(v) for k, v in dictionary.items()}
 
+
 #KERAS ADD-ON
 # class ModelCheckpointInMemory(Callback):
 #     '''Save the model after every epoch in memory.
@@ -279,40 +280,7 @@ def dict_map(dictionary, f):
 #         class_proba = classifier.predict_proba(x_holder)
 #     return class_proba
 
-# def errors(classifier, file_object, batch_size):
-#     """
-#     Gets the model's binary error status for each sample
-#     """
 
-#     class_proba = get_probabilities(classifier, file_object, batch_size)
-#     n_samples = file_object['y'].shape[0]
-
-#     #converts to the predicted class (integer)
-#     if class_proba.shape[-1] > 1:
-#         classification = class_proba.argmax(axis=-1)
-#     else:
-#         classification = (class_proba > 0.5).astype('int32')
-
-#     #gets the result (iterativelly, to avoid running out of memory)
-#     end = 0
-#     r = numpy.empty(n_samples)
-#     while end < n_samples:
-#         start = end
-#         end += 131072  # magic number, power of 2 :D
-#         if end > n_samples:
-#             end = n_samples
-
-#         #checks if the most likely label is the true one
-#         data_y = numpy.asarray(file_object['y'][start:end]).argmax(axis=-1)
-#         r[start:end] = (classification[start:end] - data_y).astype(bool)
-#         #converts that result to 0/1
-#         r[start:end] = r[start:end].astype('int32')
-
-#     return r
-
-# def accuracy(classifier, file_object, batch_size):
-#     e = errors(classifier, file_object, batch_size)
-#     return 1.0 - (float(e.sum()) / float(file_object['y'].shape[0]))
 
 # #TODO: this is kinda a redefinition of data.py's one_hot
 # # -> take care of the duplicates!
