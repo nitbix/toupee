@@ -31,6 +31,6 @@ class Averaging(Aggregator):
         pass
 
     def __call__(self, Y):
-        prob_arr = np.array(Y)
-        a = np.sum(prob_arr,axis=0) / float(Y.shape[0])
+        proba = np.array(Y)
+        a = np.sum(proba, axis=0) / float(Y.shape[0])
         return a

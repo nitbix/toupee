@@ -36,7 +36,7 @@ class EnsembleMethod:
 
     def predict_proba(self, X=None):
         """ Abstract method for inference """
-        raise NotImplementedException()
+        raise NotImplementedError()
 
     def predict_classes(self, X):
         """ Aggregated argmax """
@@ -44,9 +44,7 @@ class EnsembleMethod:
 
     def predict(self, X):
         """ Aggregated class values """
-        a = self.predict_proba(X)
-        m = np.argmax(a,axis=1)
-        return np.eye(self.out_shape[1])[m]
+        return self.predict_proba(X)
 
     def save(self):
         """ Abstract - saves an ensemble """
@@ -55,8 +53,9 @@ class EnsembleMethod:
 
 class Simple(EnsembleMethod):
     """
-    A simple Ensemble - repeat the training N times
+    A simple Ensemble - repeat the training N times and aggregate the results
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.members = [tp.model.Model(params=self.params) for _ in range(self.size)]
@@ -72,14 +71,22 @@ class Simple(EnsembleMethod):
         print('Ensemble trained in %.2fm' % ((end_time - start_time) / 60.))
         print(self.evaluate(self.data.get_testing_handle()))
 
-    def evaluate(self, test_data):
+    def evaluate(self, test_data=None):
         """ Evaluate model on some test data """
-        #TODO: update if data formats change
+        #TODO: update for different data formats
+        test_data = test_data or self.data.raw_data['test']
         accuracy = tf.keras.metrics.Accuracy()
+        precision = tf.keras.metrics.Precision()
+        recall = tf.keras.metrics.Recall()
         for (x, y_true) in test_data:
             y_pred = self.predict(x)
             accuracy(y_pred, y_true)
-        return accuracy.result()
+            precision(y_pred, y_true)
+            recall(y_pred, y_true)
+        return { 'accuracy': accuracy.result(),
+                 'precision': precision.result(),
+                 'recall': recall.result()
+        }
     
     def raw_predict_proba(self, X):
         """ Returns all the predictions from all Ensemble members """
@@ -87,8 +94,17 @@ class Simple(EnsembleMethod):
 
     def predict_proba(self, X):
         """ Return predicted soft probability outputs for the aggregate """
-        self.aggregator(self.raw_predict_proba(X))
+        return self.aggregator(self.raw_predict_proba(X))
 
+
+class Bagging(Simple):
+    """
+    Bagging - TODO: documentation
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.data = self.data.resample()
 
     # def create_aggregator(self,params,members,train_set,valid_set):
     #     return WeightedAveragingRunner(members,self.alphas,params)
@@ -157,26 +173,6 @@ class Simple(EnsembleMethod):
 
 # #------------------------------------------------------------------------------
 # #Aggregators:
-# class Aggregator:
-#     """
-#     Base class for all aggregating methods
-#     """
-#     def __init__(self):
-#         pass
-
-#     def compute(self, X):
-#         raise NotImplementedException()
-
-#     def predict_proba(self, X=None):
-#         raise NotImplementedException()
-
-#     def predict_classes(self, X):
-#         return np.argmax(self.predict_proba(X), axis = 1)
-
-#     def predict(self, X):
-#         a = self.predict_proba(X)
-#         m = np.argmax(a,axis=1)
-#         return np.eye(self.out_shape[1])[m]
 
 # class MajorityVotingRunner(Aggregator):
 #     """
@@ -257,39 +253,8 @@ class Simple(EnsembleMethod):
 #         # return final_result
 
 # #------------------------------------------------------------------------------
-# #Emsembles:
+# #Ensembles:
 
-# class EnsembleMethod(common.ConfiguredObject):
-
-#     def _default_value(self, param_name, value):
-#         if param_name not in self.__dict__:
-#             print(("WARNING: setting default for: {0} to {1}" \
-#             .format(param_name, value)))
-#             self.__dict__[param_name] = value
-
-#     def create_aggregator(self,x,y,train_set,valid_set):
-#         raise NotImplementedException()
-
-#     def create_member(self):
-#         raise NotImplementedException()
-
-#     def prepare(self, params, dataset):
-#         raise NotImplementedException()
-
-#     def load_weights(self,weights,x,y,index):
-#         self.members = []
-#         self.weights = []
-#         raise "needs fixing"
-#         for w in weights:
-#             rng = numpy.random.RandomState(self.params.random_seed)
-#             m = mlp.MLP(params=self.params, rng=rng, input=x, index=index,
-#                         x=x, y=y)
-#             m.set_weights(w)
-#             self.members.append(m)
-#         return self.members
-
-#     def serialize(self):
-#         return 'UnknownEnsemble'
 
 
 # class AdaBoost_M1(EnsembleMethod):
