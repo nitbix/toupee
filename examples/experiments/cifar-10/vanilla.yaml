@@ -1,25 +1,28 @@
 ---
 ## MLP Parameters ##
 #dataset: /datasets/test_data/cifar10-th/
-dataset: /home/nitbix/cifar10/
+dataset: ../cifar10/
 data_format: npz
 convert_to_one_hot_y: true
-model_file: all-cnn.model
+model_file: examples/experiments/cifar-10/all-cnn.model
 optimizer:
   class_name: Adam
   config:
     learning_rate: 0.001
+    decay: 0.000001
     # lr:
     #   0:  0.001
     #   10: 0.0001
     #   20: 0.00001
-epochs: 1
+epochs: 20
 batch_size: 256
 cost_function: categorical_crossentropy
 shuffle_dataset: true
 #update_inputs: true
 
 ## Ensemble Parameters ##
-#resample_size: 60000
-#method: !Bagging {}
-#ensemble_size: 1
+ensemble_method: 
+  class_name: Bagging
+  params:
+    size: 10
+    aggregator: averaging

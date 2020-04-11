@@ -11,11 +11,12 @@ __docformat__ = 'restructedtext en'
 import time
 import numpy as np
 import tensorflow as tf
+import sklearn.metrics
 
 import toupee as tp
 
 class EnsembleMethod:
-    """ Abstract representation of an Ensemble """
+    """ Abstract representation of an Ensemble from which all other methods are derived """
     def __init__(self, data, size, params, aggregator, **kwargs):
         self.data = data
         self.size = size
@@ -23,6 +24,12 @@ class EnsembleMethod:
         self.aggregator = tp.ensembles.get_aggregator(aggregator)
         if kwargs:
             print("Unknown ensemble parameters: %s" % kwargs)
+        # contract: derived classes must set the members list
+        self._initialise_members()
+
+    def _initialise_members(self):
+        """ Abstract - must be implemented to initialise the members array """
+        raise NotImplementedError()
 
     def _default_value(self, param_name, value):
         if param_name not in self.__dict__:
@@ -30,62 +37,30 @@ class EnsembleMethod:
             .format(param_name, value)))
             self.__dict__[param_name] = value
 
-    def fit(self):
-        """ Abstract method for training """
-        raise NotImplementedError()
-
-    def predict_proba(self, X=None):
-        """ Abstract method for inference """
-        raise NotImplementedError()
-
-    def predict_classes(self, X):
-        """ Aggregated argmax """
-        return np.argmax(self.predict_proba(X), axis = 1)
-
-    def predict(self, X):
-        """ Aggregated class values """
-        return self.predict_proba(X)
-
     def save(self):
         """ Abstract - saves an ensemble """
         raise NotImplementedError()
 
+    def _on_model_end(self):
+        """ Default callback when a model finishes training """
+        pass
 
-class Simple(EnsembleMethod):
-    """
-    A simple Ensemble - repeat the training N times and aggregate the results
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.members = [tp.model.Model(params=self.params) for _ in range(self.size)]
+    def _on_model_start(self):
+        """ Default callback when a model starts training """
+        pass
 
     def fit(self):
         """ Train all Ensemble members """
-        print("\n=== Training Ensemble ===")
+        print("=== Training Ensemble ===")
         start_time = time.clock()
         for i, model in enumerate(self.members):
             print("\n=== Model %d / %d ===" % (i + 1, len(self.members)))
+            self._on_model_start()
             model.fit(self.data)
+            self._on_model_end()
         end_time = time.clock()
-        print('Ensemble trained in %.2fm' % ((end_time - start_time) / 60.))
-        print(self.evaluate(self.data.get_testing_handle()))
-
-    def evaluate(self, test_data=None):
-        """ Evaluate model on some test data """
-        #TODO: update for different data formats
-        test_data = test_data or self.data.raw_data['test']
-        accuracy = tf.keras.metrics.Accuracy()
-        precision = tf.keras.metrics.Precision()
-        recall = tf.keras.metrics.Recall()
-        for (x, y_true) in test_data:
-            y_pred = self.predict(x)
-            accuracy(y_pred, y_true)
-            precision(y_pred, y_true)
-            recall(y_pred, y_true)
-        return { 'accuracy': accuracy.result(),
-                 'precision': precision.result(),
-                 'recall': recall.result()
+        return {'classification_report': self.evaluate(self.data.get_testing_handle()),
+                'time': end_time - start_time
         }
     
     def raw_predict_proba(self, X):
@@ -95,6 +70,42 @@ class Simple(EnsembleMethod):
     def predict_proba(self, X):
         """ Return predicted soft probability outputs for the aggregate """
         return self.aggregator(self.raw_predict_proba(X))
+
+    def predict_classes(self, X):
+        """ Aggregated argmax """
+        return np.argmax(self.predict_proba(X), axis = 1)
+
+    def predict(self, X):
+        """ Aggregated class values """
+        return self.predict_proba(X)
+
+    def evaluate(self, test_data=None):
+        """ Evaluate model on some test data """
+        #TODO: update for different data formats
+        test_data = test_data or self.data.data['test']
+        all_y_pred = []
+        all_y_true = []
+        for (x, y_true) in test_data:
+            all_y_pred.append(self.predict_classes(x))
+            all_y_true.append(np.argmax(y_true.numpy(), axis=1))
+        y_pred = np.concatenate(all_y_pred)
+        y_true = np.concatenate(all_y_true)
+        return sklearn.metrics.classification_report(y_true, y_pred)
+        return { 'accuracy': accuracy.result().numpy(),
+                 'precision': precision.result().numpy(),
+                 'recall': recall.result().numpy()
+        }
+
+
+class Simple(EnsembleMethod):
+    """
+    A simple Ensemble - repeat the training N times and aggregate the results
+    """
+
+    def _initialise_members(self):
+        print("!!! init")
+        self.members = [tp.model.Model(params=self.params) for _ in range(self.size)]
+
 
 
 class Bagging(Simple):
