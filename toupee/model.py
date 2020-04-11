@@ -52,6 +52,10 @@ class Model:
         test_metrics = self._model.evaluate(data.get_testing_handle())
         print(test_metrics)
 
+    def predict_proba(self, X):
+        """ Output logits """
+        return self._model.predict(X)
+
     def save(self, filename):
         """ Train a model """
         self._model.save(filename)

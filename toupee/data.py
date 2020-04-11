@@ -18,6 +18,7 @@ import os
 import sys
 from pathlib import Path
 import numpy as np
+
 #import scipy.ndimage as ni
 #import scipy.stats
 #import numpy.random
@@ -47,25 +48,24 @@ def one_hot_numpy(dataset):
     b[np.arange(dataset.size), dataset] = 1.
     return b
 
-def load_h5(filename, **kwargs):
+def _load_h5(filename, **kwargs):
     """ Load an HDF5 file """
     #TODO: write me
     raise NotImplementedError()
 
 
-def load_npz(filename, **kwargs):
+def _load_npz(filename, **kwargs):
     """ Load a NPZ file """
     #TODO: transformations
+    #TODO: special dict mappings
     data = np.load(filename)
     data = (data['x'],data['y'])
     if kwargs['convert_to_one_hot_y']:
         data = (data[0], one_hot_numpy(data[1]))
-    dataset = tf.data.Dataset.from_tensor_slices(data)
-    dataset = dataset.batch(kwargs['batch_size'])
-    return dataset
+    return data
 
 
-def load_tfrecord(filename, **kwargs):
+def _load_tfrecord(filename, **kwargs):
     """ Load a TFRecord file """
     #TODO: write me
     raise NotImplementedError()
@@ -73,16 +73,45 @@ def load_tfrecord(filename, **kwargs):
 
 def load(filename, **kwargs):
     """ Load any known data format """
-    mapper = {'.h5': load_h5,
-              '.npz': load_npz,
-              '.tfrecord': load_tfrecord
+    mapper = {'.h5': _load_h5,
+              '.npz': _load_npz,
+              '.tfrecord': _load_tfrecord
              }
     return mapper[get_data_format(filename)](filename, **kwargs)
 
 
+def _np_to_tf(data, batch_size, **kwargs):
+    """ Convert an np dataset to a tfrecord """
+    dataset = tf.data.Dataset.from_tensor_slices(data)
+    dataset = dataset.batch(batch_size)
+    return dataset
+
+
+def convert_to_tf(data, data_format, **kwargs):
+    """ Convert current data to tf """
+    mapper = {'.h5': None,
+              '.npz': _np_to_tf,
+              '.tfrecord': None
+             }
+    return mapper[data_format](data, **kwargs)
+
+
+def _resample_np(data, sample_size, weights, replace):
+    """ Rasampling specifically for np arrays """
+    data_size = data[0].shape[0]
+    indices = np.random.choice(range(data_size), size=sample_size, replace=replace, p=weights)
+    return tuple(np.take(feature, indices, axis=0) for feature in data)
+
+
 class Dataset:
     """ Class to load a dataset """
-    def __init__(self, src_dir=None, training_file=None, validation_file=None, testing_file=None, data_format="", **kwargs):
+    def __init__(self,
+                 src_dir=None,
+                 training_file=None,
+                 validation_file=None,
+                 testing_file=None,
+                 data_format="",
+                 **kwargs):
         self.files = {}
         if src_dir is None and training_file is None:
             raise ValueError("Must specify one of src_dir or training_file")
@@ -100,17 +129,44 @@ class Dataset:
         for f_name in self.files.values():
             if f_name is not None and get_data_format(f_name) != self.data_format:
                 raise ValueError("All files must be in same format")
-        self.data = dict_map(self.files, lambda f_name: load(filename=f_name, **kwargs) if f_name else None)
+        self.raw_data = dict_map(self.files, lambda f_name: load(filename=f_name, **kwargs) if f_name else None)
+        self.data = dict_map(self.raw_data, lambda data: convert_to_tf(data=data, data_format=self.data_format, **kwargs))
+        self.kwargs = kwargs
 
     def get_training_handle(self):
         """ Return the appropriate handle to pass to keras .fit """
         return self.data['train']
-
     
     def get_testing_handle(self):
         """ Return the appropriate handle to pass to keras .evaluate """
         return self.data['test']
 
+    def resample(self, sample_size=None, weights=None, replace=True):
+        """ Promote the dataset to a resampling one """
+        self.resample_size = sample_size or self.raw_data['train'][0].shape[0]
+        self.resample_weights = weights
+        self.resample_replace = replace
+        self.__class__ = ResamplingDatasetWrapper
+        return self
+
+
+class ResamplingDatasetWrapper(Dataset):
+    """ A dataset that resamples every time a handle is given """
+
+    def __init__(self, **kwargs):
+        raise RuntimeError("ResamplingDatasetWrapper cannot be created directly, use Dataset.resample")
+
+    def get_training_handle(self):
+        print("!!! RESAMPLING")
+        mapper = {'.h5': None,
+                  '.npz': _resample_np,
+                  '.tfrecord': None
+            }
+        resampled = mapper[self.data_format](self.raw_data['train'],
+                                             sample_size=self.resample_size,
+                                             weights=self.resample_weights,
+                                             replace=self.resample_replace)
+        return convert_to_tf(resampled, self.data_format, **self.kwargs)
 
 
 #### THIS IS ALL OLD

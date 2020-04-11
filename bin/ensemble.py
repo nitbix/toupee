@@ -28,6 +28,8 @@ def main(args=None):
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     method = tp.ensembles.create(params, data)
     method.fit()
+    metrics = method.evaluate()
+    print(metrics)
     if args.save_file:
         method.save(args.save_file)
 
