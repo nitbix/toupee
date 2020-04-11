@@ -27,9 +27,12 @@ def main(args=None):
     params = tp.config.load_parameters(args.params_file)
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     method = tp.ensembles.create(params, data)
-    method.fit()
-    metrics = method.evaluate()
-    print(metrics)
+    metrics = method.fit()
+    print('{:*^40}'.format(' Ensemble trained in %.2fm ' % (metrics['time'] / 60.)))
+    print('{:*^40}'.format(" Metrics "))
+    print(metrics['classification_report'])
+    #for metric_name, metric_value in metrics.items():
+    #    print('  {0:15}: {1:.03f}'.format(metric_name, metric_value))
     if args.save_file:
         method.save(args.save_file)
 

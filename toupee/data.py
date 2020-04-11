@@ -44,9 +44,9 @@ def get_data_format(filename):
     return extension
 
 def one_hot_numpy(dataset):
-    b = np.zeros((dataset.size, dataset.max()+1),dtype='float32')
-    b[np.arange(dataset.size), dataset] = 1.
-    return b
+    out = np.zeros((dataset.size, dataset.max()+1),dtype='float32')
+    out[np.arange(dataset.size), dataset] = 1.
+    return out
 
 def _load_h5(filename, **kwargs):
     """ Load an HDF5 file """
@@ -157,7 +157,6 @@ class ResamplingDatasetWrapper(Dataset):
         raise RuntimeError("ResamplingDatasetWrapper cannot be created directly, use Dataset.resample")
 
     def get_training_handle(self):
-        print("!!! RESAMPLING")
         mapper = {'.h5': None,
                   '.npz': _resample_np,
                   '.tfrecord': None
