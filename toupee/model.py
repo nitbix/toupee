@@ -11,9 +11,11 @@ All code released under Apachev2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import time
+import copy
 import tensorflow as tf
+import numpy as np
 
-#TODO: adaptive learning rates
+import toupee as tp
 #TODO: backprop to the inputs
 
 class Model:
@@ -26,7 +28,11 @@ class Model:
         self._model = tf.keras.models.model_from_yaml(model_yaml)
         if params.model_weights:
             self._model.load_weights(params.model_weights)
-        self._optimizer = tf.keras.optimizers.deserialize(params.optimizer)
+        self.learning_rate = params.optimizer['config']['learning_rate']
+        optimizer_params = copy.deepcopy(params.optimizer)
+        if isinstance(self.learning_rate, dict):
+            optimizer_params['config']['learning_rate'] = self.learning_rate[0]
+        self._optimizer = tf.keras.optimizers.deserialize(optimizer_params)
         self.params = params
         self._metrics = ['accuracy']
         self._model.compile(optimizer = self._optimizer,
@@ -39,22 +45,50 @@ class Model:
         #TODO: validation set
         #TODO: test metrics
         start_time = time.clock()
-        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir)] #TODO: TensorBoard
+        def _lr_scheduler(epoch):
+            lr = None
+            if isinstance(self.learning_rate, dict):
+                for thresh, value in self.learning_rate.items():
+                    if epoch >= thresh:
+                        lr = value
+            else:
+                lr = self.learning_rate
+            return lr
+        lr_callback = tf.keras.callbacks.LearningRateScheduler(_lr_scheduler)
+        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir), lr_callback] #TODO: TensorBoard
+
         self._model.fit(
                 data.get_training_handle(),
                 epochs = self.params.epochs,
                 shuffle = 'batch',
                 callbacks = callbacks,
                 verbose = verbose or self.params.verbose,
+                #TODO: this is currently broken because tf can't handle it...
+                #validation_data = data.get_validation_handle(),
                 )
         end_time = time.clock()
         print('Model trained for %.2fm' % ((end_time - start_time) / 60.))
-        test_metrics = self._model.evaluate(data.get_testing_handle())
-        print(test_metrics)
+        self.test_metrics = self.evaluate(data.get_testing_handle())
+
+    def evaluate(self, test_data):
+        """ Evaluate model on some test data """
+        #TODO: update for different data formats
+        all_y_pred = []
+        all_y_true = []
+        for (x, y_true) in test_data:
+            all_y_pred.append(self.predict_classes(x))
+            all_y_true.append(np.argmax(y_true.numpy(), axis=1))
+        y_pred = np.concatenate(all_y_pred)
+        y_true = np.concatenate(all_y_true)
+        return tp.utils.eval_scores(y_true, y_pred)
 
     def predict_proba(self, X):
         """ Output logits """
         return self._model.predict(X)
+
+    def predict_classes(self, X):
+        """ Aggregated argmax """
+        return np.argmax(self.predict_proba(X), axis = 1)
 
     def save(self, filename):
         """ Train a model """

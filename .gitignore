@@ -4,3 +4,4 @@
 *.swn
 *.swp
 *.pyc
+toupee_tb_logs/*

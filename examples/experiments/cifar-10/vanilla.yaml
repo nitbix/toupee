@@ -4,20 +4,21 @@
 dataset: ../cifar10/
 data_format: npz
 convert_to_one_hot_y: true
-model_file: examples/experiments/cifar-10/all-cnn.model
+model_file: examples/experiments/cifar-10/densenet201.model
 optimizer:
   class_name: Adam
   config:
-    learning_rate: 0.001
-    decay: 0.000001
-    # lr:
-    #   0:  0.001
-    #   10: 0.0001
-    #   20: 0.00001
-epochs: 20
-batch_size: 256
+    learning_rate: # 0.001
+       0:  0.1
+       20: 0.01
+       50: 0.001
+       100: 0.0001
+    decay: 0.0001
+
+epochs: 300
+batch_size: 64
 cost_function: categorical_crossentropy
-shuffle_dataset: true
+shuffle: true
 #update_inputs: true
 
 ## Ensemble Parameters ##

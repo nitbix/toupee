@@ -12,6 +12,16 @@ __docformat__ = 'restructedtext en'
 
 import argparse
 import toupee as tp
+import dill
+
+PRINTABLE_METRICS = ['accuracy_score',
+                     'micro_precision_score',
+                     'micro_recall_score',
+                     'micro_f1_score',
+                     'macro_precision_score',
+                     'macro_recall_score',
+                     'macro_f1_score',
+                     ]
 
 def main(args=None):
     """ Train a base model as specified """
@@ -28,13 +38,20 @@ def main(args=None):
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     method = tp.ensembles.create(params, data)
     metrics = method.fit()
-    print('{:*^40}'.format(' Ensemble trained in %.2fm ' % (metrics['time'] / 60.)))
-    print('{:*^40}'.format(" Metrics "))
-    print(metrics['classification_report'])
-    #for metric_name, metric_value in metrics.items():
-    #    print('  {0:15}: {1:.03f}'.format(metric_name, metric_value))
+    print('\n{:*^40}'.format(' Ensemble trained in %.2fm ' % (metrics['time'] / 60.)))
+    print(metrics['ensemble']['classification_report'])
+    tp.utils.pretty_print_confusion_matrix(metrics['ensemble']['confusion_matrix'])
+    print('\n{:*^40}'.format(" Aggregate Metrics "))
+    for metric_name in PRINTABLE_METRICS:
+        print('** {}: {:02f}'.format(metric_name, metrics['ensemble'][metric_name]))
+    print('\n{:*^40}'.format(" Member Metrics "))
+    for metric_name in PRINTABLE_METRICS:
+        print('** {}'.format(metric_name))
+        print(metrics['members'][metric_name].tolist())
     if args.save_file:
         method.save(args.save_file)
+        dill.dump(metrics, args.save_file + '.metrics')
+
 
 if __name__ == '__main__':
     main()

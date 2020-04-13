@@ -10,11 +10,10 @@ All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
-#TODO: Resampler, WeightedResampler
 #TODO: Polymorphism for different data formats
+#TODO: Online image transformations
 
 import os
-#import gc
 import sys
 from pathlib import Path
 import numpy as np
@@ -80,10 +79,13 @@ def load(filename, **kwargs):
     return mapper[get_data_format(filename)](filename, **kwargs)
 
 
-def _np_to_tf(data, batch_size, **kwargs):
+def _np_to_tf(data, batch_size, shuffle, shuffle_buffer=None, **kwargs):
     """ Convert an np dataset to a tfrecord """
     dataset = tf.data.Dataset.from_tensor_slices(data)
     dataset = dataset.batch(batch_size)
+    if shuffle:
+        buffer = shuffle_buffer or data[0].shape[0]
+        dataset = dataset.shuffle(buffer)
     return dataset
 
 
@@ -111,6 +113,7 @@ class Dataset:
                  validation_file=None,
                  testing_file=None,
                  data_format="",
+                 shuffle=False,
                  **kwargs):
         self.files = {}
         if src_dir is None and training_file is None:
@@ -130,13 +133,21 @@ class Dataset:
             if f_name is not None and get_data_format(f_name) != self.data_format:
                 raise ValueError("All files must be in same format")
         self.raw_data = dict_map(self.files, lambda f_name: load(filename=f_name, **kwargs) if f_name else None)
-        self.data = dict_map(self.raw_data, lambda data: convert_to_tf(data=data, data_format=self.data_format, **kwargs))
+        self.data = dict_map(self.raw_data, lambda data: convert_to_tf(data=data,
+                                                                       data_format=self.data_format,
+                                                                       shuffle=shuffle,
+                                                                       **kwargs))
         self.kwargs = kwargs
 
     def get_training_handle(self):
         """ Return the appropriate handle to pass to keras .fit """
         return self.data['train']
-    
+
+    def get_validation_handle(self):
+        """ Return the appropriate handle to pass to keras .fit as validation_data """
+        #TODO: needs to support native tf.dataset
+        return self.raw_data['valid']
+
     def get_testing_handle(self):
         """ Return the appropriate handle to pass to keras .evaluate """
         return self.data['test']
@@ -146,17 +157,18 @@ class Dataset:
         self.resample_size = sample_size or self.raw_data['train'][0].shape[0]
         self.resample_weights = weights
         self.resample_replace = replace
-        self.__class__ = ResamplingDatasetWrapper
+        self.__class__ = ResamplingDataset
         return self
 
 
-class ResamplingDatasetWrapper(Dataset):
-    """ A dataset that resamples every time a handle is given """
+class ResamplingDataset(Dataset):
+    """ A dataset that resamples every time a training handle is requested """
 
     def __init__(self, **kwargs):
         raise RuntimeError("ResamplingDatasetWrapper cannot be created directly, use Dataset.resample")
 
     def get_training_handle(self):
+        """ Returns training tf.dataset, resampled every time from raw_data """
         mapper = {'.h5': None,
                   '.npz': _resample_np,
                   '.tfrecord': None

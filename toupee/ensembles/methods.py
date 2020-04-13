@@ -11,7 +11,7 @@ __docformat__ = 'restructedtext en'
 import time
 import numpy as np
 import tensorflow as tf
-import sklearn.metrics
+import pandas as pd
 
 import toupee as tp
 
@@ -22,6 +22,7 @@ class EnsembleMethod:
         self.size = size
         self.params = params
         self.aggregator = tp.ensembles.get_aggregator(aggregator)
+        self.members = []
         if kwargs:
             print("Unknown ensemble parameters: %s" % kwargs)
         # contract: derived classes must set the members list
@@ -59,7 +60,10 @@ class EnsembleMethod:
             model.fit(self.data)
             self._on_model_end()
         end_time = time.clock()
-        return {'classification_report': self.evaluate(self.data.get_testing_handle()),
+        m_summary = pd.DataFrame([m.test_metrics for m in self.members])
+
+        return {'ensemble': self.evaluate(self.data.get_testing_handle()),
+                'members': m_summary,
                 'time': end_time - start_time
         }
     
@@ -90,11 +94,19 @@ class EnsembleMethod:
             all_y_true.append(np.argmax(y_true.numpy(), axis=1))
         y_pred = np.concatenate(all_y_pred)
         y_true = np.concatenate(all_y_true)
-        return sklearn.metrics.classification_report(y_true, y_pred)
-        return { 'accuracy': accuracy.result().numpy(),
-                 'precision': precision.result().numpy(),
-                 'recall': recall.result().numpy()
-        }
+        return tp.utils.eval_scores(y_true, y_pred)
+
+
+class Single(EnsembleMethod):
+    """
+    A single model - run only once
+    """
+    def __init__(self, **kwargs):
+        kwargs['size'] = 1
+        super().__init__(**kwargs)
+
+    def _initialise_members(self):
+        self.members = [tp.model.Model(params=self.params)]
 
 
 class Simple(EnsembleMethod):
@@ -103,7 +115,6 @@ class Simple(EnsembleMethod):
     """
 
     def _initialise_members(self):
-        print("!!! init")
         self.members = [tp.model.Model(params=self.params) for _ in range(self.size)]
 
 
