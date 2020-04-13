@@ -28,6 +28,8 @@ def main(args=None):
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     base_model = tp.model.Model(params=params)
     base_model.fit(data=data)
+    print(base_model.test_metrics['classification_report'])
+    tp.utils.pretty_print_confusion_matrix(base_model.test_metrics['confusion_matrix'])
     if args.save_file:
         base_model.save(args.save_file)
 

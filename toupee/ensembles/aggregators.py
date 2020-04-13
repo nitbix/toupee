@@ -24,13 +24,15 @@ class Aggregator:
 
 class Averaging(Aggregator):
     """
-    Take an ensemble and produce the average
+    Take an ensemble and produce the average, takes optional weights
     """
 
     def __init__(self):
         pass
 
-    def __call__(self, Y):
+    def __call__(self, Y, weights=None):
+        """ Calling interface to aggregate by average with optional weights """
         proba = np.array(Y)
-        a = np.sum(proba, axis=0) / float(Y.shape[0])
-        return a
+        size = Y.shape[0]
+        weights = weights or [1. / float(size) for _ in range(size)]
+        return np.sum([proba[i] * weights[i] for i in range(size)], axis=0)

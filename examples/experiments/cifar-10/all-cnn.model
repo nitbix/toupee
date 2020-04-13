@@ -59,8 +59,11 @@ config:
       filters: 64
       kernel_constraint: null
       kernel_initializer:
-        class_name: GlorotUniform
+        class_name: VarianceScaling
         config:
+          distribution: uniform
+          mode: fan_in
+          scale: 2.0
           seed: null
       kernel_regularizer:
         class_name: L1L2
@@ -81,6 +84,39 @@ config:
         - 0
         - {}
     name: conv2d
+  - class_name: BatchNormalization
+    config:
+      axis: !!python/object/apply:tensorflow.python.training.tracking.data_structures.ListWrapper
+      - - 1
+      beta_constraint: null
+      beta_initializer:
+        class_name: Zeros
+        config: {}
+      beta_regularizer: null
+      center: true
+      dtype: float32
+      epsilon: 0.001
+      gamma_constraint: null
+      gamma_initializer:
+        class_name: Ones
+        config: {}
+      gamma_regularizer: null
+      momentum: 0.99
+      moving_mean_initializer:
+        class_name: Zeros
+        config: {}
+      moving_variance_initializer:
+        class_name: Ones
+        config: {}
+      name: batch_normalization
+      scale: true
+      trainable: true
+    inbound_nodes:
+    - - - conv2d
+        - 0
+        - 0
+        - {}
+    name: batch_normalization
   - class_name: Activation
     config:
       activation: relu
@@ -88,7 +124,7 @@ config:
       name: activation
       trainable: true
     inbound_nodes:
-    - - - conv2d
+    - - - batch_normalization
         - 0
         - 0
         - {}
@@ -112,8 +148,11 @@ config:
       filters: 64
       kernel_constraint: null
       kernel_initializer:
-        class_name: GlorotUniform
+        class_name: VarianceScaling
         config:
+          distribution: uniform
+          mode: fan_in
+          scale: 2.0
           seed: null
       kernel_regularizer:
         class_name: L1L2
@@ -132,6 +171,39 @@ config:
         - 0
         - {}
     name: conv2d_1
+  - class_name: BatchNormalization
+    config:
+      axis: !!python/object/apply:tensorflow.python.training.tracking.data_structures.ListWrapper
+      - - 1
+      beta_constraint: null
+      beta_initializer:
+        class_name: Zeros
+        config: {}
+      beta_regularizer: null
+      center: true
+      dtype: float32
+      epsilon: 0.001
+      gamma_constraint: null
+      gamma_initializer:
+        class_name: Ones
+        config: {}
+      gamma_regularizer: null
+      momentum: 0.99
+      moving_mean_initializer:
+        class_name: Zeros
+        config: {}
+      moving_variance_initializer:
+        class_name: Ones
+        config: {}
+      name: batch_normalization_1
+      scale: true
+      trainable: true
+    inbound_nodes:
+    - - - conv2d_1
+        - 0
+        - 0
+        - {}
+    name: batch_normalization_1
   - class_name: Activation
     config:
       activation: relu
@@ -139,7 +211,7 @@ config:
       name: activation_1
       trainable: true
     inbound_nodes:
-    - - - conv2d_1
+    - - - batch_normalization_1
         - 0
         - 0
         - {}
@@ -180,8 +252,11 @@ config:
       filters: 128
       kernel_constraint: null
       kernel_initializer:
-        class_name: GlorotUniform
+        class_name: VarianceScaling
         config:
+          distribution: uniform
+          mode: fan_in
+          scale: 2.0
           seed: null
       kernel_regularizer:
         class_name: L1L2
@@ -200,6 +275,39 @@ config:
         - 0
         - {}
     name: conv2d_2
+  - class_name: BatchNormalization
+    config:
+      axis: !!python/object/apply:tensorflow.python.training.tracking.data_structures.ListWrapper
+      - - 1
+      beta_constraint: null
+      beta_initializer:
+        class_name: Zeros
+        config: {}
+      beta_regularizer: null
+      center: true
+      dtype: float32
+      epsilon: 0.001
+      gamma_constraint: null
+      gamma_initializer:
+        class_name: Ones
+        config: {}
+      gamma_regularizer: null
+      momentum: 0.99
+      moving_mean_initializer:
+        class_name: Zeros
+        config: {}
+      moving_variance_initializer:
+        class_name: Ones
+        config: {}
+      name: batch_normalization_2
+      scale: true
+      trainable: true
+    inbound_nodes:
+    - - - conv2d_2
+        - 0
+        - 0
+        - {}
+    name: batch_normalization_2
   - class_name: Activation
     config:
       activation: relu
@@ -207,7 +315,7 @@ config:
       name: activation_2
       trainable: true
     inbound_nodes:
-    - - - conv2d_2
+    - - - batch_normalization_2
         - 0
         - 0
         - {}
@@ -231,8 +339,11 @@ config:
       filters: 128
       kernel_constraint: null
       kernel_initializer:
-        class_name: GlorotUniform
+        class_name: VarianceScaling
         config:
+          distribution: uniform
+          mode: fan_in
+          scale: 2.0
           seed: null
       kernel_regularizer:
         class_name: L1L2
@@ -251,6 +362,39 @@ config:
         - 0
         - {}
     name: conv2d_3
+  - class_name: BatchNormalization
+    config:
+      axis: !!python/object/apply:tensorflow.python.training.tracking.data_structures.ListWrapper
+      - - 1
+      beta_constraint: null
+      beta_initializer:
+        class_name: Zeros
+        config: {}
+      beta_regularizer: null
+      center: true
+      dtype: float32
+      epsilon: 0.001
+      gamma_constraint: null
+      gamma_initializer:
+        class_name: Ones
+        config: {}
+      gamma_regularizer: null
+      momentum: 0.99
+      moving_mean_initializer:
+        class_name: Zeros
+        config: {}
+      moving_variance_initializer:
+        class_name: Ones
+        config: {}
+      name: batch_normalization_3
+      scale: true
+      trainable: true
+    inbound_nodes:
+    - - - conv2d_3
+        - 0
+        - 0
+        - {}
+    name: batch_normalization_3
   - class_name: Activation
     config:
       activation: relu
@@ -258,7 +402,7 @@ config:
       name: activation_3
       trainable: true
     inbound_nodes:
-    - - - conv2d_3
+    - - - batch_normalization_3
         - 0
         - 0
         - {}
@@ -311,8 +455,11 @@ config:
       filters: 128
       kernel_constraint: null
       kernel_initializer:
-        class_name: GlorotUniform
+        class_name: VarianceScaling
         config:
+          distribution: uniform
+          mode: fan_in
+          scale: 2.0
           seed: null
       kernel_regularizer:
         class_name: L1L2
@@ -331,6 +478,39 @@ config:
         - 0
         - {}
     name: conv2d_4
+  - class_name: BatchNormalization
+    config:
+      axis: !!python/object/apply:tensorflow.python.training.tracking.data_structures.ListWrapper
+      - - 1
+      beta_constraint: null
+      beta_initializer:
+        class_name: Zeros
+        config: {}
+      beta_regularizer: null
+      center: true
+      dtype: float32
+      epsilon: 0.001
+      gamma_constraint: null
+      gamma_initializer:
+        class_name: Ones
+        config: {}
+      gamma_regularizer: null
+      momentum: 0.99
+      moving_mean_initializer:
+        class_name: Zeros
+        config: {}
+      moving_variance_initializer:
+        class_name: Ones
+        config: {}
+      name: batch_normalization_4
+      scale: true
+      trainable: true
+    inbound_nodes:
+    - - - conv2d_4
+        - 0
+        - 0
+        - {}
+    name: batch_normalization_4
   - class_name: Activation
     config:
       activation: relu
@@ -338,7 +518,7 @@ config:
       name: activation_4
       trainable: true
     inbound_nodes:
-    - - - conv2d_4
+    - - - batch_normalization_4
         - 0
         - 0
         - {}
@@ -362,8 +542,11 @@ config:
       filters: 128
       kernel_constraint: null
       kernel_initializer:
-        class_name: GlorotUniform
+        class_name: VarianceScaling
         config:
+          distribution: uniform
+          mode: fan_in
+          scale: 2.0
           seed: null
       kernel_regularizer:
         class_name: L1L2
@@ -382,6 +565,39 @@ config:
         - 0
         - {}
     name: conv2d_5
+  - class_name: BatchNormalization
+    config:
+      axis: !!python/object/apply:tensorflow.python.training.tracking.data_structures.ListWrapper
+      - - 1
+      beta_constraint: null
+      beta_initializer:
+        class_name: Zeros
+        config: {}
+      beta_regularizer: null
+      center: true
+      dtype: float32
+      epsilon: 0.001
+      gamma_constraint: null
+      gamma_initializer:
+        class_name: Ones
+        config: {}
+      gamma_regularizer: null
+      momentum: 0.99
+      moving_mean_initializer:
+        class_name: Zeros
+        config: {}
+      moving_variance_initializer:
+        class_name: Ones
+        config: {}
+      name: batch_normalization_5
+      scale: true
+      trainable: true
+    inbound_nodes:
+    - - - conv2d_5
+        - 0
+        - 0
+        - {}
+    name: batch_normalization_5
   - class_name: Activation
     config:
       activation: relu
@@ -389,7 +605,7 @@ config:
       name: activation_5
       trainable: true
     inbound_nodes:
-    - - - conv2d_5
+    - - - batch_normalization_5
         - 0
         - 0
         - {}
@@ -447,8 +663,11 @@ config:
       dtype: float32
       kernel_constraint: null
       kernel_initializer:
-        class_name: GlorotUniform
+        class_name: VarianceScaling
         config:
+          distribution: uniform
+          mode: fan_in
+          scale: 2.0
           seed: null
       kernel_regularizer: null
       name: dense
@@ -461,6 +680,39 @@ config:
         - 0
         - {}
     name: dense
+  - class_name: BatchNormalization
+    config:
+      axis: !!python/object/apply:tensorflow.python.training.tracking.data_structures.ListWrapper
+      - - 1
+      beta_constraint: null
+      beta_initializer:
+        class_name: Zeros
+        config: {}
+      beta_regularizer: null
+      center: true
+      dtype: float32
+      epsilon: 0.001
+      gamma_constraint: null
+      gamma_initializer:
+        class_name: Ones
+        config: {}
+      gamma_regularizer: null
+      momentum: 0.99
+      moving_mean_initializer:
+        class_name: Zeros
+        config: {}
+      moving_variance_initializer:
+        class_name: Ones
+        config: {}
+      name: batch_normalization_6
+      scale: true
+      trainable: true
+    inbound_nodes:
+    - - - dense
+        - 0
+        - 0
+        - {}
+    name: batch_normalization_6
   - class_name: Activation
     config:
       activation: relu
@@ -468,7 +720,7 @@ config:
       name: activation_6
       trainable: true
     inbound_nodes:
-    - - - dense
+    - - - batch_normalization_6
         - 0
         - 0
         - {}
@@ -499,8 +751,11 @@ config:
       dtype: float32
       kernel_constraint: null
       kernel_initializer:
-        class_name: GlorotUniform
+        class_name: VarianceScaling
         config:
+          distribution: uniform
+          mode: fan_in
+          scale: 2.0
           seed: null
       kernel_regularizer: null
       name: dense_1
@@ -513,6 +768,39 @@ config:
         - 0
         - {}
     name: dense_1
+  - class_name: BatchNormalization
+    config:
+      axis: !!python/object/apply:tensorflow.python.training.tracking.data_structures.ListWrapper
+      - - 1
+      beta_constraint: null
+      beta_initializer:
+        class_name: Zeros
+        config: {}
+      beta_regularizer: null
+      center: true
+      dtype: float32
+      epsilon: 0.001
+      gamma_constraint: null
+      gamma_initializer:
+        class_name: Ones
+        config: {}
+      gamma_regularizer: null
+      momentum: 0.99
+      moving_mean_initializer:
+        class_name: Zeros
+        config: {}
+      moving_variance_initializer:
+        class_name: Ones
+        config: {}
+      name: batch_normalization_7
+      scale: true
+      trainable: true
+    inbound_nodes:
+    - - - dense_1
+        - 0
+        - 0
+        - {}
+    name: batch_normalization_7
   - class_name: Softmax
     config:
       axis: -1
@@ -520,7 +808,7 @@ config:
       name: softmax
       trainable: true
     inbound_nodes:
-    - - - dense_1
+    - - - batch_normalization_7
         - 0
         - 0
         - {}
