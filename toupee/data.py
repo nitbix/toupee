@@ -15,6 +15,8 @@ __docformat__ = 'restructedtext en'
 
 import os
 import sys
+import math
+
 from pathlib import Path
 import numpy as np
 
@@ -23,7 +25,6 @@ import numpy as np
 #import numpy.random
 #import gzip
 #import pickle
-#import math
 #from skimage import transform
 #import multiprocessing
 import tensorflow as tf
@@ -43,9 +44,9 @@ def get_data_format(filename):
     return extension
 
 def one_hot_numpy(dataset):
-    out = np.zeros((dataset.size, dataset.max()+1),dtype='float32')
-    out[np.arange(dataset.size), dataset] = 1.
-    return out
+    """ Convert a numpy array of Y labels into one-hot encodings """
+    n_classes = dataset.max() + 1
+    return np.eye(n_classes)[dataset.reshape(-1)]
 
 def _load_h5(filename, **kwargs):
     """ Load an HDF5 file """
@@ -59,7 +60,7 @@ def _load_npz(filename, **kwargs):
     #TODO: special dict mappings
     data = np.load(filename)
     data = (data['x'],data['y'])
-    if kwargs['convert_to_one_hot_y']:
+    if kwargs['convert_labels_to_one_hot']:
         data = (data[0], one_hot_numpy(data[1]))
     return data
 
@@ -79,11 +80,21 @@ def load(filename, **kwargs):
     return mapper[get_data_format(filename)](filename, **kwargs)
 
 
-def _np_to_tf(data, batch_size, shuffle, shuffle_buffer=None, **kwargs):
+def _np_to_tf(data, batch_size, shuffle=False, shuffle_buffer=None, gen_flow=None, **kwargs):
     """ Convert an np dataset to a tfrecord """
-    dataset = tf.data.Dataset.from_tensor_slices(data)
+    if gen_flow:
+        dataset = tf.data.Dataset.from_generator(
+            lambda: gen_flow,
+            #img_gen.flow, args=[data[0], data[1], batch_size, shuffle], #TODO: figure out how to make them named
+            output_types=(tf.float32, tf.float32),
+            output_shapes=((None,) + data[0].shape[1:],
+                           (None,) + data[1].shape[1:])
+        )
+        dataset = dataset.unbatch()
+    else:
+        dataset = tf.data.Dataset.from_tensor_slices(data)
     dataset = dataset.batch(batch_size)
-    if shuffle:
+    if shuffle and not gen_flow: # gen_flow shuffle by itself and this will make things super slow
         buffer = shuffle_buffer or data[0].shape[0]
         dataset = dataset.shuffle(buffer)
     return dataset
@@ -114,8 +125,10 @@ class Dataset:
                  testing_file=None,
                  data_format="",
                  shuffle=False,
+                 img_gen_params=None,
                  **kwargs):
         self.files = {}
+        self.shuffle = shuffle
         if src_dir is None and training_file is None:
             raise ValueError("Must specify one of src_dir or training_file")
         self.files['train'] = training_file or DEFAULT_TRAINING_FILE
@@ -129,14 +142,30 @@ class Dataset:
             raise ValueError('Training file %s not found!' % self.files['train'])
         self.files = dict_map(self.files, lambda f_name: f_name if os.path.exists(f_name) else None)
         self.data_format = get_data_format(self.files['train'])
+        self.img_gen_params = img_gen_params
         for f_name in self.files.values():
             if f_name is not None and get_data_format(f_name) != self.data_format:
                 raise ValueError("All files must be in same format")
         self.raw_data = dict_map(self.files, lambda f_name: load(filename=f_name, **kwargs) if f_name else None)
-        self.data = dict_map(self.raw_data, lambda data: convert_to_tf(data=data,
-                                                                       data_format=self.data_format,
-                                                                       shuffle=shuffle,
-                                                                       **kwargs))
+        self.size = dict_map(self.raw_data, lambda data: data[0].shape[0])
+        self.steps_per_epoch = dict_map(self.size, lambda size: math.ceil(float(size) / kwargs['batch_size']))
+        if self.img_gen_params:
+            self.img_gen = tf.keras.preprocessing.image.ImageDataGenerator(**self.img_gen_params)
+            self.img_gen.fit(self.raw_data['train'][0])
+            self.train_flow = self.img_gen.flow(self.raw_data['train'][0],
+                                                self.raw_data['train'][1],
+                                                batch_size=kwargs['batch_size'],
+                                                shuffle=self.shuffle)
+            [self.img_gen.standardize(self.raw_data[k][0]) for k in ('valid', 'test')]
+        self.data = dict_map({k: self.raw_data[k] for k in  ('valid', 'test')},
+                             lambda data: convert_to_tf(data=data,
+                                                        data_format=self.data_format,
+                                                        **kwargs))
+        self.data['train'] = convert_to_tf(data=self.raw_data['train'],
+                                           data_format=self.data_format,
+                                           shuffle=self.shuffle,
+                                           gen_flow=self.train_flow,
+                                           **kwargs)
         self.kwargs = kwargs
 
     def get_training_handle(self):
@@ -145,8 +174,7 @@ class Dataset:
 
     def get_validation_handle(self):
         """ Return the appropriate handle to pass to keras .fit as validation_data """
-        #TODO: needs to support native tf.dataset
-        return self.raw_data['valid']
+        return self.data['valid']
 
     def get_testing_handle(self):
         """ Return the appropriate handle to pass to keras .evaluate """
@@ -177,7 +205,12 @@ class ResamplingDataset(Dataset):
                                              sample_size=self.resample_size,
                                              weights=self.resample_weights,
                                              replace=self.resample_replace)
-        return convert_to_tf(resampled, self.data_format, **self.kwargs)
+        if self.img_gen:
+            #TODO: use the sample weights here?
+            resampled_flow = self.img_gen.flow(resampled[0],
+                                          resampled[1],
+                                          batch_size=self.kwargs['batch_size'])
+        return convert_to_tf(resampled, self.data_format, shuffle=self.shuffle, gen_flow=resampled_flow, **self.kwargs)
 
 
 #### THIS IS ALL OLD

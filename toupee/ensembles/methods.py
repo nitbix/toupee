@@ -15,6 +15,12 @@ import pandas as pd
 
 import toupee as tp
 
+#TODO: AdaBoost
+#TODO: DIB
+#TODO: BRN
+#TODO: BaRN
+#TODO: Snapshot
+
 class EnsembleMethod:
     """ Abstract representation of an Ensemble from which all other methods are derived """
     def __init__(self, data, size, params, aggregator, **kwargs):
@@ -61,7 +67,9 @@ class EnsembleMethod:
             self._on_model_end()
         end_time = time.clock()
         m_summary = pd.DataFrame([m.test_metrics for m in self.members])
-
+        if self.aggregator.is_fittable:
+            #TODO: fit aggregator
+            raise NotImplementedError()
         return {'ensemble': self.evaluate(self.data.get_testing_handle()),
                 'members': m_summary,
                 'time': end_time - start_time
@@ -397,48 +405,6 @@ class Bagging(Simple):
 
 #     def serialize(self):
 #         return 'AdaBoostMA'
-
-# class Bagging(EnsembleMethod):
-#     """
-#     Create a Bagging Runner from parameters
-#     """
-
-#     yaml_tag = '!Bagging'
-
-#     def __init__(self,voting=False):
-#         self.voting = voting
-#         self.resampler = None
-#     def create_aggregator(self,params,members,train_set,valid_set):
-#         if 'voting' in self.__dict__ and self.voting:
-#             return MajorityVotingRunner(members,params) 
-#         else:
-#             return AveragingRunner(members,params)
-
-#     def create_member(self, data_files):
-#         #gets the training indexes
-#         if self.member_number > 0:
-#             train_indexes = self.resampler.make_new_train(self.params.resample_size)
-#         else:
-#             train_indexes = [None,None]
-#         #packs the needed data
-#         dataset = [
-#             train_indexes,
-#             data_files
-#         ]
-#         #trains the model
-#         m = mlp.sequential_model(dataset, self.params,
-#                 member_number = self.member_number)
-#         self.member_number += 1
-#         return (m.to_yaml(), m.get_weights())
-
-#     def prepare(self, params, train_size):
-#         self.params = params
-#         self.train_size = train_size
-#         self.resampler = Resampler(train_size)
-#         self.member_number = 0
-
-#     def serialize(self):
-#         return 'Bagging'
 
 
 # #--------------------------------------------------------------------------------------

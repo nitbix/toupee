@@ -11,6 +11,9 @@ __docformat__ = 'restructedtext en'
 import numpy as np
 import toupee as tp
 
+#TODO: Voting
+#TODO: Stacking
+
 class Aggregator:
     """
     Base class for all aggregating methods
@@ -21,6 +24,9 @@ class Aggregator:
     def __call__(self):
         raise NotImplementedError()
 
+    def fit(self, X, y):
+        pass
+
 
 class Averaging(Aggregator):
     """
@@ -28,7 +34,7 @@ class Averaging(Aggregator):
     """
 
     def __init__(self):
-        pass
+        self.is_fittable = False
 
     def __call__(self, Y, weights=None):
         """ Calling interface to aggregate by average with optional weights """
