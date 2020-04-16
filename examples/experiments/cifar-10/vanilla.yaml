@@ -1,25 +1,36 @@
 ---
 ## MLP Parameters ##
 #dataset: /datasets/test_data/cifar10-th/
-dataset: ../cifar10/
+dataset: ../cifar-10-new-loaded/
 data_format: npz
-convert_to_one_hot_y: true
+convert_labels_to_one_hot: true
 model_file: examples/experiments/cifar-10/densenet201.model
 optimizer:
   class_name: Adam
+#  momentum: 0.9
   config:
-    learning_rate: # 0.001
-       0:  0.1
-       20: 0.01
-       50: 0.001
-       100: 0.0001
-    decay: 0.0001
+    learning_rate:
+       0:   0.01
+       100: 0.001
+       150: 0.0001
+       #20: 0.0001
+       #50: 0.00001
+    decay: 0.00001
 
-epochs: 300
+epochs: 200
 batch_size: 64
-cost_function: categorical_crossentropy
+loss: categorical_crossentropy
 shuffle: true
 #update_inputs: true
+#use online image transformations by specifying arguments to ImageDataGenerator
+img_gen_params:
+  #zoom_range: 0.15
+  width_shift_range: 0.1
+  height_shift_range: 0.1
+  horizontal_flip: true
+  rotation_range: 15
+  #featurewise_std_normalization: true
+  #zca_whitening: true
 
 ## Ensemble Parameters ##
 ensemble_method: 

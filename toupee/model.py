@@ -21,6 +21,7 @@ import toupee as tp
 class Model:
     """ Representation of a model """
     #TODO: Frozen layers
+    #TODO: Get model id and use different tb log dir for each model
     def __init__(self, params):
         self.params = params
         with open(params.model_file, 'r') as model_file:
@@ -33,17 +34,16 @@ class Model:
         if isinstance(self.learning_rate, dict):
             optimizer_params['config']['learning_rate'] = self.learning_rate[0]
         self._optimizer = tf.keras.optimizers.deserialize(optimizer_params)
+        self._loss = tf.keras.losses.deserialize(params.loss)
         self.params = params
-        self._metrics = ['accuracy']
+        self._training_metrics = ['accuracy']
         self._model.compile(optimizer = self._optimizer,
-                      loss = params.cost_function,
-                      metrics = self._metrics,
+                      loss = self._loss,
+                      metrics = self._training_metrics,
                      )
 
     def fit(self, data, verbose=None):
         """ Train a model """
-        #TODO: validation set
-        #TODO: test metrics
         start_time = time.clock()
         def _lr_scheduler(epoch):
             lr = None
@@ -55,16 +55,16 @@ class Model:
                 lr = self.learning_rate
             return lr
         lr_callback = tf.keras.callbacks.LearningRateScheduler(_lr_scheduler)
-        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir), lr_callback] #TODO: TensorBoard
-
+        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir), lr_callback]
+        self.img_gen = data.img_gen
         self._model.fit(
                 data.get_training_handle(),
                 epochs = self.params.epochs,
+                steps_per_epoch = data.steps_per_epoch['train'],
                 shuffle = 'batch',
                 callbacks = callbacks,
                 verbose = verbose or self.params.verbose,
-                #TODO: this is currently broken because tf can't handle it...
-                #validation_data = data.get_validation_handle(),
+                validation_data = data.get_validation_handle(),
                 )
         end_time = time.clock()
         print('Model trained for %.2fm' % ((end_time - start_time) / 60.))
@@ -84,6 +84,8 @@ class Model:
 
     def predict_proba(self, X):
         """ Output logits """
+        if self.img_gen:
+            X = self.img_gen.standardize(X)
         return self._model.predict(X)
 
     def predict_classes(self, X):
