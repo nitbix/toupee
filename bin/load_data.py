@@ -3,23 +3,34 @@ import os
 import argparse
 import numpy as np
 import tensorflow as tf
+import toupee as tp
+
+
+def _rgb_to_float(features):
+    return features / np.max(features)
+
+
+def _preprocess_cifar(data):
+    return tp.common.dict_map(data, lambda d: (_rgb_to_float(d[0]), d[1]))
+
 
 def download_cifar10():
     data = tf.keras.datasets.cifar10.load_data()
-    return {
+    return _preprocess_cifar({
         'train': data[0],
         'valid': data[1],
         'test' : data[1]
-    }
+    })
+
 
 def download_cifar100():
     data = tf.keras.datasets.cifar10.load_data()
-
-    return {
+    return _preprocess_cifar({
         'train': data[0],
         'valid': data[1],
         'test' : data[1]
-    }
+    })
+
 
 MAPPING = {
     'cifar10': download_cifar10,
@@ -27,6 +38,7 @@ MAPPING = {
     'cifar100': download_cifar100,
     'cifar-100': download_cifar100
 }
+
 
 def main(args=None):
     """ Train a base model as specified """
@@ -41,6 +53,7 @@ def main(args=None):
         os.mkdir(args.save_dir)
     for set_name, set_data in data.items():
         np.savez(os.path.join(args.save_dir, set_name + '.npz'), x=set_data[0], y=set_data[1])
+
 
 if __name__ == '__main__':
     main()

@@ -18,6 +18,78 @@ import numpy as np
 import toupee as tp
 #TODO: backprop to the inputs
 
+
+class OptimizerSchedulerCallback(tf.keras.callbacks.Callback):
+
+    def __init__(self, optimizer_schedule, max_epochs, loss, metrics):
+        super(OptimizerSchedulerCallback, self).__init__()
+        self.optimizer_schedule = optimizer_schedule
+        # self.fit_function = fit_function
+        self.max_epochs = max_epochs
+        self.continue_training = False
+        self.loss = loss
+        self.metrics = metrics
+
+    def on_epoch_end(self, epoch, logs=None):
+        """ Callback to stop training and change the optimizer """
+        epoch_keys = self.optimizer_schedule.params.keys()
+        if epoch + 1 in epoch_keys:
+            optimizer = self.optimizer_schedule[epoch+1]
+            self.model.compile(optimizer, loss=self.loss, metrics=self.metrics)
+            print('Switched optimizer to {} for next epoch'.format(str(optimizer)))
+
+
+class OptimizerSchedule:
+    """ Schedules Optimizers and Learning Rates according to config """
+    def __init__(self, params, epochs):
+        """ Create an optimizer from params and learning rate """
+        self.params = copy.deepcopy(params)
+        self.optimizers = {}
+        self.epochs = epochs
+        if 'class_name' in self.params: # Force this to be an epoch schedule even if it's not
+            self.params = {0: self.params}
+        for thresh, opt_params in self.params.items():
+            conf = copy.deepcopy(opt_params)
+            if isinstance(conf['config']['learning_rate'], dict):
+                lr = conf['config']['learning_rate']
+                conf['config']['learning_rate'] = lr[min(lr.keys())]
+            self.optimizers[thresh] = tf.keras.optimizers.deserialize(conf)
+        self.lr_callback = tf.keras.callbacks.LearningRateScheduler(self._lr_scheduler)
+    
+    def _params_scheduler(self, epoch):
+        for thresh in sorted(self.params.keys(), reverse=True):
+            if epoch >= thresh:
+                return self.params[thresh]
+
+    def _opt_scheduler(self, epoch):
+        for thresh in sorted(self.optimizers.keys(), reverse=True):
+            if epoch >= thresh:
+                return self.optimizers[thresh]
+    
+    def __getitem__(self, epoch):
+        """
+        Subscripting operator, so we can use [] to get the right
+        optimizer for any epoch
+        """ 
+        return self._opt_scheduler(epoch)
+
+    def _lr_scheduler(self, epoch):
+        #TODO: use sorting
+        lr = None
+        params = self._params_scheduler(epoch)
+        if isinstance(params['config']['learning_rate'], dict):
+            for thresh, value in params['config']['learning_rate'].items():
+                if epoch >= thresh:
+                    lr = value
+        else:
+            lr = params['config']['learning_rate']
+        return lr
+
+    def get_callbacks(self, loss, metrics):
+        return [self.lr_callback,
+                OptimizerSchedulerCallback(self, max_epochs=self.epochs, loss=loss, metrics=metrics)]
+
+
 class Model:
     """ Representation of a model """
     #TODO: Frozen layers
@@ -29,34 +101,21 @@ class Model:
         self._model = tf.keras.models.model_from_yaml(model_yaml)
         if params.model_weights:
             self._model.load_weights(params.model_weights)
-        self.learning_rate = params.optimizer['config']['learning_rate']
-        optimizer_params = copy.deepcopy(params.optimizer)
-        if isinstance(self.learning_rate, dict):
-            optimizer_params['config']['learning_rate'] = self.learning_rate[0]
-        self._optimizer = tf.keras.optimizers.deserialize(optimizer_params)
+        self._optimizer_schedule = OptimizerSchedule(params.optimizer, self.params.epochs)
         self._loss = tf.keras.losses.deserialize(params.loss)
         self.params = params
         self._training_metrics = ['accuracy']
-        self._model.compile(optimizer = self._optimizer,
-                      loss = self._loss,
-                      metrics = self._training_metrics,
-                     )
 
     def fit(self, data, verbose=None):
         """ Train a model """
         start_time = time.clock()
-        def _lr_scheduler(epoch):
-            lr = None
-            if isinstance(self.learning_rate, dict):
-                for thresh, value in self.learning_rate.items():
-                    if epoch >= thresh:
-                        lr = value
-            else:
-                lr = self.learning_rate
-            return lr
-        lr_callback = tf.keras.callbacks.LearningRateScheduler(_lr_scheduler)
-        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir), lr_callback]
+
+        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir)] + self._optimizer_schedule.get_callbacks(self._loss, self._training_metrics)
         self.img_gen = data.img_gen
+        self._model.compile(optimizer = self._optimizer_schedule[0],
+                    loss = self._loss,
+                    metrics = self._training_metrics,
+                    )
         self._model.fit(
                 data.get_training_handle(),
                 epochs = self.params.epochs,
@@ -168,16 +227,6 @@ class Model:
 #             monitor = monitor_type,
 #             mode = 'max')
 #     return(metrics, checkpointer)
-
-# def callbacks_with_lr_scheduler(schedule, model, callbacks):
-#     def scheduler(epoch):
-#         if epoch in schedule:
-#             print(("Changing learning rate to {0}".format(schedule[epoch])))
-#             # model.optimizer.lr.set_value(schedule[epoch])     #<--- old keras-fork version
-#             model.optimizer.lr = K.variable(value = schedule[epoch])
-#         # return float(model.optimizer.lr.get_value())          #<--- old keras-fork version
-#         return float(K.eval(model.optimizer.lr))
-#     return callbacks + [keras.callbacks.LearningRateScheduler(scheduler)]
 
 # def print_results(model, train_metrics, valid_metrics, test_metrics):
 #     for metrics_name,metrics in (
