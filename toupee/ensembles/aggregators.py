@@ -42,3 +42,17 @@ class Averaging(Aggregator):
         size = Y.shape[0]
         weights = weights or [1. / float(size) for _ in range(size)]
         return np.sum([proba[i] * weights[i] for i in range(size)], axis=0)
+
+
+class MajorityVoting(Aggregator):
+    """
+    Use the argmax of an ensemble to get the votes and output the hard voting result
+    """
+
+    def __init__(self):
+        self.is_fittable = False
+
+    def __call__(self, Y, weights=None):
+        """ Calling interface to aggregate by vote with optional weights """
+        hard_Y = tp.data.one_hot_numpy(np.argmax(np.array(Y)))
+        return Averaging.__call__(self, hard_Y, weights)

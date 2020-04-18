@@ -105,18 +105,6 @@ class EnsembleMethod:
         return tp.utils.eval_scores(y_true, y_pred)
 
 
-class Single(EnsembleMethod):
-    """
-    A single model - run only once
-    """
-    def __init__(self, **kwargs):
-        kwargs['size'] = 1
-        super().__init__(**kwargs)
-
-    def _initialise_members(self):
-        self.members = [tp.model.Model(params=self.params)]
-
-
 class Simple(EnsembleMethod):
     """
     A simple Ensemble - repeat the training N times and aggregate the results
@@ -125,6 +113,13 @@ class Simple(EnsembleMethod):
     def _initialise_members(self):
         self.members = [tp.model.Model(params=self.params) for _ in range(self.size)]
 
+
+class Single(Simple):
+    """
+    A single model - run only once
+    """
+    def __init__(self, **kwargs):
+        super().__init__(size=1, **kwargs)
 
 
 class Bagging(Simple):
@@ -229,58 +224,6 @@ class Bagging(Simple):
 #         m = np.argmax(a,axis=1)
 #         return np.eye(self.out_shape[1])[m]
 
-
-# class WeightedAveragingRunner(Aggregator):
-#     """
-#     Take an Ensemble and produce a weighted average, usually done in AdaBoost
-#     """
-
-
-#     def __init__(self,members,weights,params):
-#         self.params = params
-#         self.members = members
-#         self.weights = weights
-
-#     def predict_proba(self,X):
-#         prob = []
-#         for i in range(len(self.members)):
-#             m_yaml, m_weights = self.members[i]
-#             m = keras.models.model_from_yaml(m_yaml)
-#             m.set_weights(m_weights)
-#             if isinstance(X, np.ndarray):   #To test the ensemble with ndarrays
-#                 p = m.predict_proba(X, batch_size = self.params.batch_size)
-#             else:
-#                 p = m.predict_generator(X, max_queue_size=1000)
-
-#             prob.append(p * self.weights[i])
-#         prob_arr = np.array(prob) / np.sum(self.weights)
-#         a = np.sum(prob_arr,axis=0)
-#         return a
-
-# # class WeightedAveragingRunner_Regression(Aggregator):
-#     # """
-#     # Take an Ensemble and produce a weighted average, usually done in AdaBoost 
-#     #(for regressions)
-#     # """
-
-
-#     # def __init__(self,members,weights,params):
-#         # self.params = params
-#         # self.members = members
-#         # self.weights = weights
-
-#     # def predict(self,data):
-#         # result = []
-#         # for i in range(len(self.members)):
-#             # m_yaml, m_weights = self.members[i]
-#             # m = keras.models.model_from_yaml(m_yaml)
-#             # m.set_weights(m_weights)
-#             # r = m.predict(data, batch_size = self.params.batch_size)
-#             # result.append(r * self.weights[i])
-#         # result_arr = np.array(result) / np.sum(self.weights)
-#         # final_result = np.sum(result_arr,axis=0) / float(len(self.members))
-
-#         # return final_result
 
 # #------------------------------------------------------------------------------
 # #Ensembles:
