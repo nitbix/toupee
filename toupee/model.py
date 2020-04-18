@@ -112,19 +112,20 @@ class Model:
 
         callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir)] + self._optimizer_schedule.get_callbacks(self._loss, self._training_metrics)
         self.img_gen = data.img_gen
-        self._model.compile(optimizer = self._optimizer_schedule[0],
-                    loss = self._loss,
-                    metrics = self._training_metrics,
-                    )
+        self._model.compile(
+            optimizer = self._optimizer_schedule[0],
+            loss = self._loss,
+            metrics = self._training_metrics,
+            )
         self._model.fit(
-                data.get_training_handle(),
-                epochs = self.params.epochs,
-                steps_per_epoch = data.steps_per_epoch['train'],
-                shuffle = 'batch',
-                callbacks = callbacks,
-                verbose = verbose or self.params.verbose,
-                validation_data = data.get_validation_handle(),
-                )
+            data.get_training_handle(),
+            epochs = self.params.epochs,
+            steps_per_epoch = data.steps_per_epoch['train'],
+            shuffle = 'batch',
+            callbacks = callbacks,
+            verbose = verbose or self.params.verbose,
+            validation_data = data.get_validation_handle(),
+            )
         end_time = time.clock()
         print('Model trained for %.2fm' % ((end_time - start_time) / 60.))
         self.test_metrics = self.evaluate(data.get_testing_handle())
@@ -159,8 +160,7 @@ class Model:
         """ Return raw Keras model """
         return self._model
 
-# import gc
-# import os
+### OLD BELOW
 # import sys
 # import time
 # import copy
@@ -227,16 +227,6 @@ class Model:
 #             monitor = monitor_type,
 #             mode = 'max')
 #     return(metrics, checkpointer)
-
-# def print_results(model, train_metrics, valid_metrics, test_metrics):
-#     for metrics_name,metrics in (
-#             ('train', train_metrics),
-#             ('valid', valid_metrics),
-#             ('test', test_metrics)
-#         ):
-#         print(("{0}:".format(metrics_name)))
-#         for i in range(len(metrics)):
-#             print(("  {0} = {1}".format(model.metrics_names[i], metrics[i])))
 
 # def sequential_model(dataset,
 #                      params,
@@ -367,24 +357,6 @@ class Model:
 #             # else:
 #                 # return default
 
-#         # datagen = keras.preprocessing.image.ImageDataGenerator(
-#             # featurewise_center=default_online_transform_param('featurewise_center',False),
-#             # samplewise_center=default_online_transform_param('samplewise_center',False),
-#             # featurewise_std_normalization=default_online_transform_param('featurewise_std_normalization',False),
-#             # samplewise_std_normalization=default_online_transform_param('samplewise_std_normalization',False),
-#             # zca_whitening=default_online_transform_param('zca_whitening',False),
-#             # rotation_range=default_online_transform_param('rotation_range',0),
-#             # width_shift_range=default_online_transform_param('width_shift',0),
-#             # height_shift_range=default_online_transform_param('height_shift',0),
-#             # horizontal_flip=default_online_transform_param('horizontal_flip',False),
-#             # vertical_flip=default_online_transform_param('vertical_flip',False),
-#             # elastic_transform=default_online_transform_param('elastic_transform',None),
-#             # pad=default_online_transform_param('pad',None),
-#             # crop=default_online_transform_param('crop',None)
-#         # )
-#         # datagen.fit(data_holder.train_set_x, rounds=1)
-#         # pre_epochs = default_online_transform_param("after_epoch", 0)
-#         # pre_lr = default_online_transform_param("pre_lr", params.optimizer['config']['lr'])
 
 #         # TODO: this does not work, the network is reset at every fit() call
 #         # if pre_epochs > 0:

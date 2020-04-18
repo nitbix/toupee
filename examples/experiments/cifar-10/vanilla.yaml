@@ -8,27 +8,25 @@ model_file: examples/experiments/cifar-10/densenet201.model
 optimizer:
   0:
     class_name: Adam
-  #  momentum: 0.9
     config:
       learning_rate:
         0:   0.1
         30:  0.01
-        100: 0.001
-        #20: 0.0001
-        #50: 0.00001
       decay: 0.00001
   100:
     class_name: SGD
     config:
       learning_rate: 
-        100: 0.01
-        130: 0.001
-        150: 0.0001
+        100: 0.1
+        130: 0.01
+        150: 0.001
       momentum: 0.9
 epochs: 200
 batch_size: 128
 loss: categorical_crossentropy
 shuffle: true
+#max_examples: 100
+
 #use online image transformations by specifying arguments to ImageDataGenerator
 img_gen_params:
   #zoom_range: 0.15
