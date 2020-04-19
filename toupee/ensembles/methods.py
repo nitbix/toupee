@@ -12,14 +12,17 @@ import time
 import numpy as np
 import tensorflow as tf
 import pandas as pd
+import math
 
 import toupee as tp
 
-#TODO: AdaBoost
+#TODO: AdaBoost MA
 #TODO: DIB
 #TODO: BRN
 #TODO: BaRN
 #TODO: Snapshot
+#TODO: ManyModels
+
 
 class EnsembleMethod:
     """ Abstract representation of an Ensemble from which all other methods are derived """
@@ -29,6 +32,7 @@ class EnsembleMethod:
         self.params = params
         self.aggregator = tp.ensembles.get_aggregator(aggregator)
         self.members = []
+        self.model_weights = [1. / float(self.size) for _ in range(self.size)]
         if kwargs:
             print("Unknown ensemble parameters: %s" % kwargs)
         # contract: derived classes must set the members list
@@ -49,7 +53,11 @@ class EnsembleMethod:
         raise NotImplementedError()
 
     def _on_model_end(self):
-        """ Default callback when a model finishes training """
+        """
+        Default callback when a model finishes training.
+        self._fit_loop_info contains information about the current step in the
+        loop that trains all ensemble members.
+        """
         pass
 
     def _on_model_start(self):
@@ -62,6 +70,10 @@ class EnsembleMethod:
         start_time = time.clock()
         for i, model in enumerate(self.members):
             print("\n=== Model %d / %d ===" % (i + 1, len(self.members)))
+            self._fit_loop_info = {
+                'current_step': i,
+                'current_model': model,
+            }
             self._on_model_start()
             model.fit(self.data)
             self._on_model_end()
@@ -81,7 +93,7 @@ class EnsembleMethod:
 
     def predict_proba(self, X):
         """ Return predicted soft probability outputs for the aggregate """
-        return self.aggregator(self.raw_predict_proba(X))
+        return self.aggregator(self.raw_predict_proba(X), weights=self.model_weights)
 
     def predict_classes(self, X):
         """ Aggregated argmax """
@@ -131,163 +143,70 @@ class Bagging(Simple):
         super().__init__(**kwargs)
         self.data = self.data.resample()
 
-    # def create_aggregator(self,params,members,train_set,valid_set):
-    #     return WeightedAveragingRunner(members,self.alphas,params)
 
-    # def create_member(self, data_files):
-    #     #Gets the training indexes
-    #     if self.member_number > 0:
-    #         train_indexes = \
-    #             self.resampler.make_new_train(self.params.resample_size)
-    #     else:
-    #         train_indexes = [None,None]
-    #     #Packs the needed data
-    #     dataset = [
-    #         train_indexes,
-    #         data_files
-    #     ]
-    #     #Trains the model
-    #     m = mlp.sequential_model(dataset, self.params,
-    #             member_number = self.member_number)
-    #     #Gets the errors for the train set and updates the weights
-    #     print('Getting the train errors and updating the weights')
-    #     errors = common.errors(m, data_files[0], self.params.batch_size)
-    #     e = np.sum((errors * self.D))
-    #     if e > 0:
-    #         n_classes = data_files[0]['y'].shape[1]
-    #         alpha = .5 * (math.log((1-e)/e) + math.log(n_classes-1))
-    #         if alpha <= 0.0:
-    #             #By setting to 0 (instead of crashing), we should avoid 
-    #             # cicleci problems
-    #             print("\nWARNING - NEGATIVE ALPHA (setting to 0.0)\n")
-    #             alpha = 0.0
-    #         w = np.where(errors == 1,
-    #             self.D * math.exp(alpha),
-    #             self.D * math.exp(-alpha))
-    #         self.D = w / w.sum()
-    #     else:
-    #         alpha = 1.0 / (self.member_number + 1)
-    #     self.resampler.update_weights(self.D)
-    #     self.alphas.append(alpha)
-    #     self.member_number += 1
-    #     return (m.to_yaml(), m.get_weights())
+#TODO: finish MA - sample counts, h, r
+class AdaBoost(Simple):
+    """
+    Adaboost - TODO: finish documentation
+    Currently supports two variants:
+     - M1
+     - MA (http://www.jmlr.org/papers/volume6/eibl05a/eibl05a.pdf)
+    """
+    def __init__(self, variant='M1', **kwargs):
+        super().__init__(**kwargs)
+        self.sample_weights = [1. / float(self.data.size['train'])
+                                for _ in range(self.data.size['train'])]
+        self.model_weights = []
+        self.data = self.data.resample()
 
-    # def prepare(self, params, train_size):
-    #     self.params = params
-    #     self.train_size = train_size
-    #     self.resampler = WeightedResampler(train_size)
-    #     self.D = self.resampler.weights
-    #     self.alphas = []
-    #     self.member_number = 0
+
+    def _on_model_end(self):
+        """ Default callback when a model finishes training """
+        model = self._fit_loop_info['current_model']
+        y_true = []
+        y_pred_p = []
+        for (x, y_true_batch) in self.data.get_training_handle():
+            y_true.append(np.argmax(y_true_batch, axis=1))
+            y_pred_p.append(model.predict_proba(x))
+        y_true = np.concatenate(y_true)
+        y_pred_p = np.concatenate(y_pred_p)
+        y_pred = np.argmax(y_pred_p, axis=1)
+        if self.variant == 'MA': 
+            y_pred_weights = np.max(y_pred_p, axis=1)
+        else:
+            y_pred_weights = 1.
+        errors = (y_true == y_pred).astype('int32')
+        e = np.sum(errors * self.sample_weights * y_pred_weights)
+        if e > 0:
+            alpha = .5 * math.log((1-e)/2) + math.log(self.data.n_classes-1)
+            unnorm_weights = np.where(errors == 1,
+                                      self.sample_weights * math.exp(alpha),
+                                      self.sample_weights * math.exp(-alpha)
+                                    )
+            self.sample_weights = unnorm_weights / unnorm_weights.sum()
+        self.data.set_weights(self.sample_weights)
+        self.model_weights[self._fit_loop_info['current_step']] = alpha
+
+    def _on_model_start(self):
+        """ Default callback when a model starts training """
+        pass
+
+
 
 
 
 # import numpy as np
 # from numpy.core.umath_tests import inner1d
-# import toupee.mlp as mlp
-# from toupee.data import Resampler, WeightedResampler
-# import toupee.common as common
 # import math
-# import keras
 # from toupee.common import read_yaml_file
 # from keras.layers import Input, Convolution2D, merge
 # from keras.models import Model
 # from pprint import pprint
-# import copy
 
-
-# #------------------------------------------------------------------------------
-# #Aggregators:
-
-# class MajorityVotingRunner(Aggregator):
-#     """
-#     Take an ensemble and produce the majority vote output on a dataset
-#     """
-
-#     def __init__(self,members,params):
-#         self.params = params
-#         self.members = members
-
-#     def predict_proba(self,X):
-#         prob = []
-#         for (m_yaml, m_weights) in self.members:
-#             m = keras.models.model_from_yaml(m_yaml)
-#             m.set_weights(m_weights)
-#             if isinstance(X, np.ndarray):   #To test the ensemble with ndarrays 
-#                 p = m.predict_proba(X, batch_size = self.params.batch_size)   
-#             else:
-#                 p = m.predict_generator(X, max_queue_size=1000)
-#             prob.append(p)
-#             self.out_shape = m.layers[-1].output_shape
-#         prob_arr = np.array(prob)
-#         a = np.sum(prob_arr,axis=0) / float(len(self.members))
-#         m = np.argmax(a,axis=1)
-#         return np.eye(self.out_shape[1])[m]
 
 
 # #------------------------------------------------------------------------------
 # #Ensembles:
-
-
-
-# class AdaBoost_M1(EnsembleMethod):
-#     """
-#     Create an AdaBoost M1 Ensemble from parameters
-#     """
-
-#     yaml_tag = '!AdaBoostM1'
-
-#     def create_aggregator(self,params,members,train_set,valid_set):
-#         return WeightedAveragingRunner(members,self.alphas,params)
-
-#     def create_member(self, data_files):
-#         #Gets the training indexes
-#         if self.member_number > 0:
-#             train_indexes = \
-#                 self.resampler.make_new_train(self.params.resample_size)
-#         else:
-#             train_indexes = [None,None]
-#         #Packs the needed data
-#         dataset = [
-#             train_indexes,
-#             data_files
-#         ]
-#         #Trains the model
-#         m = mlp.sequential_model(dataset, self.params,
-#                 member_number = self.member_number)
-#         #Gets the errors for the train set and updates the weights
-#         print('Getting the train errors and updating the weights')
-#         errors = common.errors(m, data_files[0], self.params.batch_size)
-#         e = np.sum((errors * self.D))
-#         if e > 0:
-#             n_classes = data_files[0]['y'].shape[1]
-#             alpha = .5 * (math.log((1-e)/e) + math.log(n_classes-1))
-#             if alpha <= 0.0:
-#                 #By setting to 0 (instead of crashing), we should avoid 
-#                 # cicleci problems
-#                 print("\nWARNING - NEGATIVE ALPHA (setting to 0.0)\n")
-#                 alpha = 0.0
-#             w = np.where(errors == 1,
-#                 self.D * math.exp(alpha),
-#                 self.D * math.exp(-alpha))
-#             self.D = w / w.sum()
-#         else:
-#             alpha = 1.0 / (self.member_number + 1)
-#         self.resampler.update_weights(self.D)
-#         self.alphas.append(alpha)
-#         self.member_number += 1
-#         return (m.to_yaml(), m.get_weights())
-
-#     def prepare(self, params, train_size):
-#         self.params = params
-#         self.train_size = train_size
-#         self.resampler = WeightedResampler(train_size)
-#         self.D = self.resampler.weights
-#         self.alphas = []
-#         self.member_number = 0
-
-#     def serialize(self):
-#         return 'AdaBoostM1'
 
 # class AdaBoost_MA(EnsembleMethod):
 #     """

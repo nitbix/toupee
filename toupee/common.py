@@ -17,11 +17,6 @@ import time
 import h5py
 import warnings
 
-#from keras.callbacks import Callback
-#from keras.utils import Sequence
-
-numpy.set_printoptions(threshold=numpy.inf)
-
 def dict_map(dictionary, f):
     return {k: f(v) for k, v in dictionary.items()}
 
@@ -280,14 +275,6 @@ def dict_map(dictionary, f):
 #         class_proba = classifier.predict_proba(x_holder)
 #     return class_proba
 
-
-
-# #TODO: this is kinda a redefinition of data.py's one_hot
-# # -> take care of the duplicates!
-# def one_hot(data, n_classes):
-#     b = numpy.zeros((data.size, n_classes),dtype='float32')
-#     b[numpy.arange(data.size), data] = 1.
-#     return b
 
 # def count_classes(file_object):
 #     """Counts the number of entries on each class"""
