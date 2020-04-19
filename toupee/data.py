@@ -140,11 +140,14 @@ class Dataset:
         for f_name in self.files.values():
             if f_name is not None and get_data_format(f_name) != self.data_format:
                 raise ValueError("All files must be in same format")
-        self.raw_data = dict_map(self.files, lambda f_name: load(filename=f_name, **kwargs) if f_name else None)
+        self.raw_data = dict_map(self.files,
+                                 lambda f_name: load(filename=f_name, **kwargs) if f_name else None)
+        self.n_classes = self.raw_data['train'][1].shape[1]
         if max_examples:
             self.raw_data = dict_map(self.raw_data, lambda d: (d[0][:max_examples], d[1][:max_examples]))
         self.size = dict_map(self.raw_data, lambda data: data[0].shape[0])
-        self.steps_per_epoch = dict_map(self.size, lambda size: math.ceil(float(size) / kwargs['batch_size']))
+        self.steps_per_epoch = dict_map(self.size,
+                                        lambda size: math.ceil(float(size) / kwargs['batch_size']))
         if self.img_gen_params:
             self.img_gen = tf.keras.preprocessing.image.ImageDataGenerator(**self.img_gen_params)
             self.img_gen.fit(self.raw_data['train'][0])
@@ -153,7 +156,14 @@ class Dataset:
                                                 batch_size=kwargs['batch_size'],
                                                 shuffle=self.shuffle)
             # Only standardize validation set because the test set is standardized in predict_proba
-            self.img_gen.standardize(self.raw_data['valid'][0])
+            self.standardized_raw_data = dict_map(self.raw_data,
+                                                  lambda data: (self.img_gen.standardize(np.copy(data[0])),
+                                                                data[1]))
+            self.standardized_data = dict_map(
+                {k: self.standardized_raw_data[k] for k in  ('valid', 'test')},
+                lambda data: convert_to_tf(data=data,
+                                            data_format=self.data_format,
+                                            **kwargs))
         self.data = dict_map({k: self.raw_data[k] for k in  ('valid', 'test')},
                              lambda data: convert_to_tf(data=data,
                                                         data_format=self.data_format,
@@ -169,13 +179,19 @@ class Dataset:
         """ Return the appropriate handle to pass to keras .fit """
         return self.data['train']
 
-    def get_validation_handle(self):
+    def get_handle(self, split, standardized=False):
         """ Return the appropriate handle to pass to keras .fit as validation_data """
-        return self.data['valid']
+        if standardized:
+            return self.standardized_data[split]
+        return self.data[split]
 
-    def get_testing_handle(self):
+    def get_validation_handle(self, standardized=False):
+        """ Return the appropriate handle to pass to keras .fit as validation_data """
+        return self.get_handle(split='valid', standardized=standardized)
+
+    def get_testing_handle(self, standardized=False):
         """ Return the appropriate handle to pass to keras .evaluate """
-        return self.data['test']
+        return self.get_handle(split='test', standardized=standardized)
 
     def resample(self, sample_size=None, weights=None, replace=True):
         """ Promote the dataset to a resampling one """
@@ -191,6 +207,10 @@ class ResamplingDataset(Dataset):
 
     def __init__(self, **kwargs):
         raise RuntimeError("ResamplingDatasetWrapper cannot be created directly, use Dataset.resample")
+
+    def set_weights(self, weights):
+        """ Change the resampling weights """
+        self.resample_weights = weights
 
     def get_training_handle(self):
         """ Returns training tf.dataset, resampled every time from raw_data """

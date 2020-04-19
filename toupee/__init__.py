@@ -7,4 +7,4 @@ import toupee.utils as utils
 #TODO: use AI Platform
 #TODO: use local TPUs
 
-version = "2.0.0 alpha nightly"
+version = "2.0.0 pre-release nightly"

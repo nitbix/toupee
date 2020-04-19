@@ -21,7 +21,7 @@ class Aggregator:
     def __init__(self):
         pass
 
-    def __call__(self):
+    def __call__(self, Y, weights=None):
         raise NotImplementedError()
 
     def fit(self, X, y):
