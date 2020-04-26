@@ -122,6 +122,7 @@ class Dataset:
                  max_examples=None,
                  **kwargs):
         self.files = {}
+        self.train_flow = None
         self.shuffle = shuffle
         if src_dir is None and training_file is None:
             raise ValueError("Must specify one of src_dir or training_file")
