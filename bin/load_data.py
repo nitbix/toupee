@@ -16,6 +16,7 @@ def _preprocess_cifar(data):
 
 def download_cifar10():
     data = tf.keras.datasets.cifar10.load_data()
+    print(data[0][0].shape)
     return _preprocess_cifar({
         'train': data[0],
         'valid': data[1],

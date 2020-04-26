@@ -28,7 +28,9 @@ defaults = {'shuffle_dataset': False,
             'classification' : True,
             'tb_log_dir': 'toupee_tb_logs',
             'model_weights': None,
+            'reduce_lr_on_plateau': None,
             'verbose': 1,
+            'multi_gpu': False,
            }
 
 # Old defaults in v1

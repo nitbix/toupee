@@ -106,8 +106,15 @@ class Model:
     def fit(self, data, verbose=None):
         """ Train a model """
         start_time = time.clock()
-
-        callbacks = [tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir)] + self._optimizer_schedule.get_callbacks(self._loss, self._training_metrics)
+        callbacks = self._optimizer_schedule.get_callbacks(self._loss,
+                                                           self._training_metrics)
+        callbacks.append(tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir))
+        if self.params.reduce_lr_on_plateau:
+            callbacks.append(
+                tf.keras.callbacks.ReduceLROnPlateau(**self.params.reduce_lr_on_plateau))
+        if self.params.multi_gpu:
+            print("!!! running on multi gpu")
+            tf.keras.utils.multi_gpu_model(self._model, gpus=self.params.multi_gpu)
         self.img_gen = data.img_gen
         self._model.compile(
             optimizer = self._optimizer_schedule[0],
