@@ -29,8 +29,8 @@ optimizer:
   #       250: 0.001
   #     momentum: 0.9
   #     decay: 0.0005
-epochs: 300
-batch_size: 32
+epochs: 1
+batch_size: 256
 loss: categorical_crossentropy
 shuffle: true
 # multi_gpu: 2
@@ -49,10 +49,9 @@ img_gen_params:
 
 ## Ensemble Parameters ##
 ensemble_method: 
-  class_name: Bagging
+  class_name: AdaBoost
   params:
-    size: 10
-    aggregator: averaging
+    size: 2
 
 ### BEST SO FAR:
 

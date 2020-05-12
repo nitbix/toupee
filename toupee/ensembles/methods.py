@@ -153,7 +153,8 @@ class AdaBoost(Simple):
      - MA (http://www.jmlr.org/papers/volume6/eibl05a/eibl05a.pdf)
     """
     def __init__(self, variant='M1', **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(aggregator='averaging', **kwargs)
+        self.variant = variant
         self.sample_weights = [1. / float(self.data.size['train'])
                                 for _ in range(self.data.size['train'])]
         self.model_weights = []
@@ -162,15 +163,20 @@ class AdaBoost(Simple):
 
     def _on_model_end(self):
         """ Default callback when a model finishes training """
+        print("!!! IN CALLBACK")
+        import pdb; pdb.set_trace()
         model = self._fit_loop_info['current_model']
         y_true = []
         y_pred_p = []
-        for (x, y_true_batch) in self.data.get_training_handle():
+        for (x, y_true_batch) in self.data.get_training_handle(resample=False): #TODO: non-resampled handle here
             y_true.append(np.argmax(y_true_batch, axis=1))
             y_pred_p.append(model.predict_proba(x))
+            print(len(y_true))
+        print("!!! Iterated")
         y_true = np.concatenate(y_true)
         y_pred_p = np.concatenate(y_pred_p)
         y_pred = np.argmax(y_pred_p, axis=1)
+        print("!!! Concatenated")
         if self.variant == 'MA': 
             y_pred_weights = np.max(y_pred_p, axis=1)
         else:
@@ -184,6 +190,7 @@ class AdaBoost(Simple):
                                       self.sample_weights * math.exp(-alpha)
                                     )
             self.sample_weights = unnorm_weights / unnorm_weights.sum()
+        print("!!! GOT WEIGHTS")
         self.data.set_weights(self.sample_weights)
         self.model_weights[self._fit_loop_info['current_step']] = alpha
 
