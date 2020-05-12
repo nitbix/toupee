@@ -1,9 +1,10 @@
 from .aggregators import Averaging
-from .methods import Simple, Bagging
+from .methods import Simple, Bagging, AdaBoost
 
 METHOD_MAPPER = {
     'simple': Simple,
-    'bagging': Bagging
+    'bagging': Bagging,
+    'adaboost': AdaBoost
 }
 
 

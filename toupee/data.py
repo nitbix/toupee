@@ -199,6 +199,7 @@ class Dataset:
         self.resample_size = sample_size or self.raw_data['train'][0].shape[0]
         self.resample_weights = weights
         self.resample_replace = replace
+        print("!!! Resample", self.resample_size)
         self.__class__ = ResamplingDataset
         return self
 
@@ -213,8 +214,10 @@ class ResamplingDataset(Dataset):
         """ Change the resampling weights """
         self.resample_weights = weights
 
-    def get_training_handle(self):
+    def get_training_handle(self, resample=True):
         """ Returns training tf.dataset, resampled every time from raw_data """
+        if not resample:
+            return mapper[self.data_format](self.raw_data['train']) #this guarantees we do not apply transformations
         mapper = {'.h5': None,
                   '.npz': _resample_np,
                   '.tfrecord': None
