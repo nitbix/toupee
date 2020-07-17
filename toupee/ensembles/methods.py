@@ -26,17 +26,21 @@ import toupee as tp
 
 class EnsembleMethod:
     """ Abstract representation of an Ensemble from which all other methods are derived """
-    def __init__(self, data, size, params, aggregator, **kwargs):
+    def __init__(self, data, size, model_params, aggregator, model_factory=tp.model.Model, saved_ensemble=None, **kwargs):
         self.data = data
         self.size = size
-        self.params = params
+        self.model_params = model_params
         self.aggregator = tp.ensembles.get_aggregator(aggregator)
         self.members = []
+        self.model_factory = model_factory
         self.model_weights = [1. / float(self.size) for _ in range(self.size)]
         if kwargs:
             print("Unknown ensemble parameters: %s" % kwargs)
         # contract: derived classes must set the members list
-        self._initialise_members()
+        if saved_ensemble:
+            self._load(saved_ensemble)
+        else:
+            self._initialise_members()
 
     def _initialise_members(self):
         """ Abstract - must be implemented to initialise the members array """
@@ -49,7 +53,17 @@ class EnsembleMethod:
             self.__dict__[param_name] = value
 
     def save(self):
-        """ Abstract - saves an ensemble """
+        """ Saves an ensemble """
+        # for m in members:
+        #     m.save(...)
+        # _save_ensemble_details
+        raise NotImplementedError()
+
+    def _load(self, location):
+        """ Loads an ensemble """
+        # for m in member_locations:
+        #     m.append(self.model_factory(model_location, ...))
+        # _save_ensemble_details
         raise NotImplementedError()
 
     def _on_model_end(self):
@@ -121,9 +135,8 @@ class Simple(EnsembleMethod):
     """
     A simple Ensemble - repeat the training N times and aggregate the results
     """
-
     def _initialise_members(self):
-        self.members = [tp.model.Model(params=self.params) for _ in range(self.size)]
+        self.members = [self.model_factory(params=self.model_params) for _ in range(self.size)]
 
 
 class Single(Simple):
@@ -138,7 +151,6 @@ class Bagging(Simple):
     """
     Bagging - TODO: documentation
     """
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.data = self.data.resample()
@@ -155,28 +167,23 @@ class AdaBoost(Simple):
     def __init__(self, variant='M1', **kwargs):
         super().__init__(aggregator='averaging', **kwargs)
         self.variant = variant
-        self.sample_weights = [1. / float(self.data.size['train'])
-                                for _ in range(self.data.size['train'])]
-        self.model_weights = []
+        self.sample_weights = np.ones(self.data.size['train']) / float(self.data.size['train'])
+        self.model_weights = np.ones(self.size)
         self.data = self.data.resample()
 
 
     def _on_model_end(self):
         """ Default callback when a model finishes training """
-        print("!!! IN CALLBACK")
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
         model = self._fit_loop_info['current_model']
         y_true = []
         y_pred_p = []
         for (x, y_true_batch) in self.data.get_training_handle(resample=False): #TODO: non-resampled handle here
             y_true.append(np.argmax(y_true_batch, axis=1))
             y_pred_p.append(model.predict_proba(x))
-            print(len(y_true))
-        print("!!! Iterated")
         y_true = np.concatenate(y_true)
         y_pred_p = np.concatenate(y_pred_p)
         y_pred = np.argmax(y_pred_p, axis=1)
-        print("!!! Concatenated")
         if self.variant == 'MA': 
             y_pred_weights = np.max(y_pred_p, axis=1)
         else:
@@ -190,7 +197,6 @@ class AdaBoost(Simple):
                                       self.sample_weights * math.exp(-alpha)
                                     )
             self.sample_weights = unnorm_weights / unnorm_weights.sum()
-        print("!!! GOT WEIGHTS")
         self.data.set_weights(self.sample_weights)
         self.model_weights[self._fit_loop_info['current_step']] = alpha
 
@@ -789,58 +795,3 @@ class AdaBoost(Simple):
 # #
 # #    def serialize(self):
 # #        return 'Stacking' 
-
-
-# # class AdaBoost_Regression(EnsembleMethod):
-#     # """
-#     # Create an AdaBoost Ensemble from parameters 
-#     # (based on [1]"Improving Regressors using Boosting Techniques", 1997)
-#     # """
-
-#     # yaml_tag = '!AdaBoostRegression'
-
-#     # def create_aggregator(self,params,members,train_set,valid_set):
-#             # return WeightedAveragingRunner_Regression(members,self.alphas,params)
-
-#     # def create_member(self):
-#         # train_set, sample_weights = self.resampler.make_new_train(self.params.resample_size)
-#         # if self.member_number > 0 :
-#             # resampled = [
-#                     # train_set,
-#                     # self.resampler.get_valid(),
-#                     # self.resampler.get_test()
-#             # ]
-#         # else:
-#             # resampled = [
-#                 # self.resampler.get_train(),
-#                 # self.resampler.get_valid(),
-#                 # self.resampler.get_test()
-#             # ]
-#         # m = mlp.sequential_model(resampled, self.params,            # <--- trains the new model(step 2 in [1]) 
-#                 # member_number = self.member_number)
-#         # orig_train = self.resampler.get_train()
-#         # distance = common.distance(m, orig_train[0], orig_train[1]) # <--- loss for each element (steps 3 and 4 in [1])
-#         # max_dist = distance.max()
-#         # distance_norm = distance / max_dist                         # <--- the loss function is now normalized in range [0,1]
-#         # weighted_dist = np.sum((distance_norm * self.D))            # <--- average weighted loss (step 5 in [1])
-#         # beta = weighted_dist / (1 - weighted_dist)                  # <--- computation of the confidence in the predictor (step 6 in [1])
-#                                                                           # [low beta = good prediction]
-#         # w = self.D * (beta ** (1 - distance_norm))                  # <--- updates the weights for each sample (step 7 in [1])
-#         # self.D = w / w.sum()
-#         # alpha = the better the model is (smaller beta), the bigger alpha will be   [alpha is computed to maintain consistency with other models]
-#         # alpha = 0.5 * math.log(1/beta)
-#         # self.resampler.update_weights(self.D)
-#         # self.alphas.append(alpha)
-#         # self.member_number += 1
-#         # return (m.to_yaml(), m.get_weights())
-
-#     # def prepare(self, params, dataset):
-#         # self.params = params
-#         # self.dataset = dataset
-#         # self.resampler = WeightedResampler(dataset)
-#         # self.D = self.resampler.weights                             # <--- sets the initial weights (step 1 in [1])
-#         # self.alphas = []
-#         # self.member_number = 0
-
-#     # def serialize(self):
-#         # return 'AdaBoostRegression'

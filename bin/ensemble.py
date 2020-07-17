@@ -23,7 +23,7 @@ PRINTABLE_METRICS = ['accuracy_score',
                      'macro_f1_score',
                      ]
 
-def main(args=None):
+def main(args=None, params=None):
     """ Train a base model as specified """
     if args is None:
         parser = argparse.ArgumentParser(description='Train a single Base Model')
@@ -34,7 +34,8 @@ def main(args=None):
                             help='number of epochs to run')
         args = parser.parse_args()
     print(("using toupee version {0}".format(tp.version)))
-    params = tp.config.load_parameters(args.params_file)
+    if not params:
+        params = tp.config.load_parameters(args.params_file)
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     method = tp.ensembles.create(params, data)
     metrics = method.fit()
@@ -51,6 +52,7 @@ def main(args=None):
     if args.save_file:
         method.save(args.save_file)
         dill.dump(metrics, args.save_file + '.metrics')
+    #save_metadata_etc
 
 
 if __name__ == '__main__':

@@ -34,7 +34,7 @@ batch_size: 256
 loss: categorical_crossentropy
 shuffle: true
 # multi_gpu: 2
-#max_examples: 100
+# max_examples: 100
 
 #use online image transformations by specifying arguments to ImageDataGenerator
 img_gen_params:
