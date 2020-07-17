@@ -40,7 +40,7 @@ class Averaging(Aggregator):
         """ Calling interface to aggregate by average with optional weights """
         proba = np.array(Y)
         size = Y.shape[0]
-        weights = weights or [1. / float(size) for _ in range(size)]
+        weights = weights if weights is not None else np.ones(size) / float(size)
         return np.sum([proba[i] * weights[i] for i in range(size)], axis=0)
 
 
