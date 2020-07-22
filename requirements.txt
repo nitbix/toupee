@@ -1,8 +1,6 @@
 numpy>=1.15.2
 pytest>=4.0.1
 dill>=0.2.8.2
-sklearn==0.0
-scikit-image>=0.14.1
 PyYAML>=3.13
 tensorflow>=2.1.0
 pandas>=1.0.3
