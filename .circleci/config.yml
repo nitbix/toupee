@@ -40,11 +40,6 @@ jobs:
             . venv/bin/activate
             python3 setup.py test
 
-      - run:
-          name: Test Common Datasets
-          command: |
-            echo Please make sure you ran the tests internally!
-
       - store_artifacts:
           path: test-reports
           destination: test-reports
