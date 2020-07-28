@@ -88,8 +88,8 @@ def _np_to_tf(data, batch_size, shuffle=False, shuffle_buffer=None, gen_flow=Non
         dataset = tf.data.Dataset.from_tensor_slices(data)
     dataset = dataset.batch(batch_size)
     if shuffle and not gen_flow: # gen_flow shuffle by itself and this will make things super slow
-        buffer = shuffle_buffer or data[0].shape[0]
-        dataset = dataset.shuffle(buffer)
+        shuffle_buffer = shuffle_buffer or data[0].shape[0]
+        dataset = dataset.shuffle(shuffle_buffer)
     return dataset
 
 
