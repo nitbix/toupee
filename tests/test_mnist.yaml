@@ -1,0 +1,41 @@
+---
+## MLP Parameters ##
+#dataset: /datasets/test_data/cifar10-th/
+dataset: test/mnist/
+data_format: npz
+convert_labels_to_one_hot: true
+model_file: test_mnist.model
+reduce_lr_on_plateau:
+  factor: 0.1
+  patience: 5
+  cooldown: 0
+  min_lr: 0.0000001
+optimizer:
+  0:
+    class_name: Adam
+    config:
+      learning_rate:
+        0:  0.001
+        1: 0.0001
+epochs: 3
+batch_size: 256
+loss: categorical_crossentropy
+shuffle: true
+
+#use online image transformations by specifying arguments to ImageDataGenerator
+img_gen_params:
+  #zoom_range: 0.15
+  width_shift_range: 0.125
+  height_shift_range: 0.125
+  horizontal_flip: true
+  rotation_range: 15
+  featurewise_std_normalization: true
+  featurewise_center: true
+  #zca_whitening: true
+
+## Ensemble Parameters ##
+ensemble_method: 
+  class_name: Bagging
+  params:
+    size: 10
+    aggregator: averaging

@@ -13,6 +13,7 @@ import sklearn.metrics
 import numpy as np
 
 
+# this is needed because PowerShell does not understand colour escapes
 if sys.platform == 'win32': 
     try: 
         import colorama 
