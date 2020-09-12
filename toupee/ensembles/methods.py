@@ -52,7 +52,7 @@ class EnsembleMethod:
             .format(param_name, value)))
             self.__dict__[param_name] = value
 
-    def save(self):
+    def save(self, location):
         """ Saves an ensemble """
         # for m in members:
         #     m.save(...)
