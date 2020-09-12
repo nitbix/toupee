@@ -33,24 +33,6 @@ defaults = {'shuffle_dataset': False,
             'multi_gpu': False,
            }
 
-# Old defaults in v1
-# defaults = { 'random_seed': None,
-#              'save_images': False,
-#              'join_train_and_valid': False,
-#              'detailed_stats': False,
-#              'online_transform': None,
-#              'resize_data_to': None,
-#              'join_train_and_valid': False,
-#              'shuffle_dataset': False,
-#              'update_inputs': False,
-#              'update_inputs_lr': 1,
-#              'early_stopping' : None,
-#              'one_hot' : False,
-#              'pickled' : False,
-#              'zca_whitening' : False,
-#              'test_at_each_epoch': True,
-#              'classification' : True,
-#            }
 
 class Loader(yaml.Loader):
     #TODO: does this need to go?

@@ -113,7 +113,7 @@ class Model:
             callbacks.append(
                 tf.keras.callbacks.ReduceLROnPlateau(**self.params.reduce_lr_on_plateau))
         if self.params.multi_gpu:
-            print("!!! running on multi gpu")
+            print("!!! WARNING - EXPERIMENTAL !!! running on multi gpu")
             tf.keras.utils.multi_gpu_model(self._model, gpus=self.params.multi_gpu)
         self.img_gen = data.img_gen
         self._model.compile(

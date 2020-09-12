@@ -87,7 +87,7 @@ def _np_to_tf(data, batch_size, shuffle=False, shuffle_buffer=None, gen_flow=Non
     else:
         dataset = tf.data.Dataset.from_tensor_slices(data)
     dataset = dataset.batch(batch_size)
-    if shuffle and not gen_flow: # gen_flow shuffle by itself and this will make things super slow
+    if shuffle and not gen_flow: # gen_flow already does shuffling
         shuffle_buffer = shuffle_buffer or data[0].shape[0]
         dataset = dataset.shuffle(shuffle_buffer)
     return dataset
@@ -123,6 +123,7 @@ class Dataset:
                  **kwargs):
         self.files = {}
         self.train_flow = None
+        self.img_gen = None
         self.shuffle = shuffle
         if src_dir is None and training_file is None:
             raise ValueError("Must specify one of src_dir or training_file")
@@ -147,9 +148,14 @@ class Dataset:
         if max_examples:
             self.raw_data = dict_map(self.raw_data, lambda d: (d[0][:max_examples], d[1][:max_examples]))
         self.size = dict_map(self.raw_data, lambda data: data[0].shape[0])
-        self.steps_per_epoch = dict_map(self.size,
-                                        lambda size: math.ceil(float(size) / kwargs['batch_size']))
+
+        # Keras' fit() will expect that if specifying a steps_per_epoch, all batches will be the same size.
+        # Here, we set it to None so that when the dataset is not a generator we are not causing this to happen.
+        # Later, it will be set to a value wherever (if) the dataset becomes a generator.
+        self.steps_per_epoch = dict_map(self.size, lambda size: None)
         if self.img_gen_params:
+            self.steps_per_epoch = dict_map(self.size,
+                                            lambda size: math.ceil(float(size) / kwargs['batch_size']))
             self.img_gen = tf.keras.preprocessing.image.ImageDataGenerator(**self.img_gen_params)
             self.img_gen.fit(self.raw_data['train'][0])
             self.train_flow = self.img_gen.flow(self.raw_data['train'][0],
@@ -182,7 +188,7 @@ class Dataset:
 
     def get_handle(self, split, standardized=False):
         """ Return the appropriate handle to pass to keras .fit as validation_data """
-        if standardized:
+        if standardized and self.img_gen:
             return self.standardized_data[split]
         return self.data[split]
 
