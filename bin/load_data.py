@@ -1,20 +1,25 @@
 import sys
 import os
 import argparse
-import numpy as np
-import tensorflow as tf
+import numpy as np # type: ignore
+import tensorflow as tf # type: ignore
 import toupee as tp
 
 
-def _rgb_to_float(features):
+def _rgb_to_float(features: np.ndarray):
+    """ Convert RGB values to float """
     return features / np.max(features)
 
 
-def _preprocess_cifar(data):
+def _preprocess_cifar(data: dict) -> dict:
     return tp.common.dict_map(data, lambda d: (_rgb_to_float(d[0]), d[1]))
 
 
-def download_cifar10():
+def _preprocess_mnist(data:dict) -> dict:
+    data = tp.common.dict_map(data, lambda d: (np.expand_dims(d[0], axis=3), d[1]))
+    return tp.common.dict_map(data, lambda d: (_rgb_to_float(d[0]), d[1]))
+
+def download_cifar10() -> dict:
     data = tf.keras.datasets.cifar10.load_data()
     return _preprocess_cifar({
         'train': data[0],
@@ -23,9 +28,18 @@ def download_cifar10():
     })
 
 
-def download_cifar100():
+def download_cifar100() -> dict:
     data = tf.keras.datasets.cifar100.load_data()
     return _preprocess_cifar({
+        'train': data[0],
+        'valid': data[1],
+        'test' : data[1]
+    })
+
+
+def download_mnist() -> dict:
+    data = tf.keras.datasets.mnist.load_data()
+    return _preprocess_mnist({
         'train': data[0],
         'valid': data[1],
         'test' : data[1]
@@ -36,11 +50,12 @@ MAPPING = {
     'cifar10': download_cifar10,
     'cifar-10': download_cifar10,
     'cifar100': download_cifar100,
-    'cifar-100': download_cifar100
+    'cifar-100': download_cifar100,
+    'mnist': download_mnist,
 }
 
 
-def main(args=None):
+def main(args=None) -> None:
     """ Train a base model as specified """
     if args is None:
         parser = argparse.ArgumentParser(description='Train a single Base Model')
