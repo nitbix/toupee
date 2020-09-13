@@ -11,6 +11,7 @@ All code released under GPLv2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import argparse
+import logging
 import toupee as tp
 
 def main(args=None):
@@ -23,12 +24,12 @@ def main(args=None):
         parser.add_argument('--epochs', type=int, nargs='?',
                             help='number of epochs to run')
         args = parser.parse_args()
-    print(("using toupee version {0}".format(tp.version)))
+    logging.info(("using toupee version {0}".format(tp.version)))
     params = tp.config.load_parameters(args.params_file)
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     base_model = tp.model.Model(params=params)
     base_model.fit(data=data)
-    print(base_model.test_metrics['classification_report'])
+    logging.info(base_model.test_metrics['classification_report'])
     tp.utils.pretty_print_confusion_matrix(base_model.test_metrics['confusion_matrix'])
     if args.save_file:
         base_model.save(args.save_file)
