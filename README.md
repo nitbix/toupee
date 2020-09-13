@@ -1,4 +1,5 @@
 # Welcome to Toupee
+![Toupee Logo](/logo.png)
 "The ugly thing on top that covers up what's missing"
 A library for Deep Learning ensembles, with a tooolkit for running experiments,
 based on Keras.
