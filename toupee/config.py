@@ -48,7 +48,7 @@ class Loader(yaml.Loader):
 
 Loader.add_constructor('!include', Loader.include)
 
-def load_parameters(filename):
+def load_parameters(filename: str) -> parameters.Parameters:
     """ Loads a parameters file """
     with open(filename) as f:
         r = yaml.load(f)
