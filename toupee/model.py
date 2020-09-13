@@ -12,8 +12,8 @@ __docformat__ = 'restructedtext en'
 
 import time
 import copy
-import tensorflow as tf
-import numpy as np
+import tensorflow as tf # type: ignore
+import numpy as np # type: ignore
 
 import toupee as tp
 #TODO: backprop to the inputs

@@ -18,10 +18,10 @@ import sys
 import math
 
 from pathlib import Path
-import numpy as np
+import numpy as np # type: ignore
 
-import tensorflow as tf
-from toupee.common import dict_map
+import tensorflow as tf # type: ignore
+from toupee.utils import dict_map
 
 KNOWN_DATA_TYPES = [".tfrecord", ".h5", ".npz"]
 

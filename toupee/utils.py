@@ -9,18 +9,22 @@ __docformat__ = 'restructedtext en'
 
 import os
 import sys
-import sklearn.metrics
-import numpy as np
+import logging
+import sklearn.metrics # type: ignore
+import numpy as np # type: ignore
 
 
 # this is needed because PowerShell does not understand colour escapes
 if sys.platform == 'win32': 
     try: 
-        import colorama 
+        import colorama # type: ignore
     except ImportError: 
         pass 
     else: 
         colorama.init() 
+
+def dict_map(dictionary, f):
+    return {k: f(v) for k, v in dictionary.items()}
 
 def eval_scores(y_true, y_pred):
     """ Calculate all the eval scores we want and return them in a dict """

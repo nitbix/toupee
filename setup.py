@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup # type: ignore
  
 setup(
     name='toupee',       # This is the name of your PyPI-package.
