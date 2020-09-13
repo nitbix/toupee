@@ -10,16 +10,16 @@ __docformat__ = 'restructedtext en'
 
 import copy
 
-to_string = ['method']
+__STRINGABLE = ['method']
 class Parameters(object):
 
-    def __init__(self, **entries): 
+    def __init__(self, **entries):
         self.__dict__.update(entries)
 
     def serialize(self):
         serialized = copy.deepcopy(self)
 
-        for x in to_string:
+        for x in __STRINGABLE:
             if x in serialized.__dict__:
                 serialized.__dict__[x] = serialized.__dict__[x].serialize()
         return serialized.__dict__
