@@ -12,6 +12,7 @@ __docformat__ = 'restructedtext en'
 
 import time
 import copy
+import logging
 import tensorflow as tf # type: ignore
 import numpy as np # type: ignore
 
@@ -105,7 +106,7 @@ class Model:
 
     def fit(self, data, verbose=None):
         """ Train a model """
-        start_time = time.clock()
+        start_time = time.perf_counter()
         callbacks = self._optimizer_schedule.get_callbacks(self._loss,
                                                            self._training_metrics)
         callbacks.append(tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir))
@@ -113,7 +114,7 @@ class Model:
             callbacks.append(
                 tf.keras.callbacks.ReduceLROnPlateau(**self.params.reduce_lr_on_plateau))
         if self.params.multi_gpu:
-            print("!!! WARNING - EXPERIMENTAL !!! running on multi gpu")
+            logging.warning("!!! WARNING - EXPERIMENTAL !!! running on multi gpu")
             tf.keras.utils.multi_gpu_model(self._model, gpus=self.params.multi_gpu)
         self.img_gen = data.img_gen
         self._model.compile(
@@ -130,8 +131,8 @@ class Model:
             verbose = verbose or self.params.verbose,
             validation_data = data.get_validation_handle(standardized=True),
             )
-        end_time = time.clock()
-        print('Model trained for %.2fm' % ((end_time - start_time) / 60.))
+        end_time = time.perf_counter()
+        logging.info('Model trained for %.2fm' % ((end_time - start_time) / 60.))
         self.test_metrics = self.evaluate(data.get_testing_handle())
 
     def evaluate(self, test_data):

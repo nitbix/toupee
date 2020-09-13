@@ -82,7 +82,7 @@ class EnsembleMethod:
     def fit(self):
         """ Train all Ensemble members """
         logging.info("=== Training Ensemble ===")
-        start_time = time.clock()
+        start_time = time.perf_counter()
         for i, model in enumerate(self.members):
             logging.info("\n=== Model %d / %d ===" % (i + 1, len(self.members)))
             self._fit_loop_info = {
@@ -92,7 +92,7 @@ class EnsembleMethod:
             self._on_model_start()
             model.fit(self.data)
             self._on_model_end()
-        end_time = time.clock()
+        end_time = time.perf_counter()
         m_summary = pd.DataFrame([m.test_metrics for m in self.members])
         if self.aggregator.is_fittable:
             #TODO: fit aggregator
