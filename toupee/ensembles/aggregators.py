@@ -8,7 +8,7 @@ All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
-import numpy as np
+import numpy as np # type: ignore
 import toupee as tp
 
 #TODO: Voting

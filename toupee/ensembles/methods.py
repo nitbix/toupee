@@ -10,9 +10,9 @@ __docformat__ = 'restructedtext en'
 
 import time
 import logging
-import numpy as np
-import tensorflow as tf
-import pandas as pd
+import numpy as np # type: ignore
+import tensorflow as tf # type: ignore
+import pandas as pd # type: ignore
 import math
 
 import toupee as tp
@@ -175,7 +175,6 @@ class AdaBoost(Simple):
 
     def _on_model_end(self):
         """ Default callback when a model finishes training """
-        #import pdb; pdb.set_trace()
         model = self._fit_loop_info['current_model']
         y_true = []
         y_pred_p = []

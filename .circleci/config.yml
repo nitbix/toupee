@@ -38,6 +38,11 @@ jobs:
             - ./venv
           key: v3-dependencies-{{ checksum "requirements.txt" }}
 
+      - run:
+          name: Static Type Checks
+          command: |
+            . venv/bin/activate
+            mypy .
 
       - run:
           name: Run Tests

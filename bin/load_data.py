@@ -3,7 +3,7 @@ import os
 import argparse
 import numpy as np # type: ignore
 import tensorflow as tf # type: ignore
-import toupee as tp
+from toupee.utils import dict_map
 
 
 def _rgb_to_float(features: np.ndarray):
@@ -12,12 +12,12 @@ def _rgb_to_float(features: np.ndarray):
 
 
 def _preprocess_cifar(data: dict) -> dict:
-    return tp.common.dict_map(data, lambda d: (_rgb_to_float(d[0]), d[1]))
+    return dict_map(data, lambda d: (_rgb_to_float(d[0]), d[1]))
 
 
 def _preprocess_mnist(data:dict) -> dict:
-    data = tp.common.dict_map(data, lambda d: (np.expand_dims(d[0], axis=3), d[1]))
-    return tp.common.dict_map(data, lambda d: (_rgb_to_float(d[0]), d[1]))
+    data = dict_map(data, lambda d: (np.expand_dims(d[0], axis=3), d[1]))
+    return dict_map(data, lambda d: (_rgb_to_float(d[0]), d[1]))
 
 def download_cifar10() -> dict:
     data = tf.keras.datasets.cifar10.load_data()
