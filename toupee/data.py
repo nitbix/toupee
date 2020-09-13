@@ -29,7 +29,7 @@ DEFAULT_TRAINING_FILE = 'train'
 DEFAULT_VALIDATION_FILE = 'valid'
 DEFAULT_TESTING_FILE = 'test'
 
-def get_data_format(filename):
+def get_data_format(filename: str) -> str:
     """ Identifies the extension of the dataset """
     extension = Path(filename).suffix
     if extension not in KNOWN_DATA_TYPES:
@@ -47,7 +47,7 @@ def _load_h5(filename, **kwargs):
     raise NotImplementedError()
 
 
-def _load_npz(filename, **kwargs):
+def _load_npz(filename: str, **kwargs) -> tuple:
     """ Load a NPZ file """
     #TODO: transformations
     #TODO: special dict mappings
@@ -64,7 +64,7 @@ def _load_tfrecord(filename, **kwargs):
     raise NotImplementedError()
 
 
-def load(filename, **kwargs):
+def load(filename: str, **kwargs) -> tuple:
     """ Load any known data format """
     mapper = {'.h5': _load_h5,
               '.npz': _load_npz,
@@ -73,7 +73,7 @@ def load(filename, **kwargs):
     return mapper[get_data_format(filename)](filename, **kwargs)
 
 
-def _np_to_tf(data, batch_size, shuffle=False, shuffle_buffer=None, gen_flow=None, **kwargs):
+def _np_to_tf(data:tuple, batch_size:int, shuffle:bool=False, shuffle_buffer:int=None, gen_flow=None, **kwargs):
     """ Convert an np dataset to a tfrecord """
     if gen_flow:
         dataset = tf.data.Dataset.from_generator(
@@ -93,16 +93,14 @@ def _np_to_tf(data, batch_size, shuffle=False, shuffle_buffer=None, gen_flow=Non
     return dataset
 
 
-def convert_to_tf(data, data_format, **kwargs):
+def convert_to_tf(data:tuple, data_format:str, **kwargs):
     """ Convert current data to tf """
-    mapper = {'.h5': None,
-              '.npz': _np_to_tf,
-              '.tfrecord': None
+    mapper = {'.npz': _np_to_tf,
              }
     return mapper[data_format](data, **kwargs)
 
 
-def _resample_np(data, sample_size, weights, replace):
+def _resample_np(data:tuple, sample_size:int, weights, replace:bool) -> tuple:
     """ Rasampling specifically for np arrays """
     data_size = data[0].shape[0]
     indices = np.random.choice(range(data_size), size=sample_size, replace=replace, p=weights)
