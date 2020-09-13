@@ -233,6 +233,7 @@ class ResamplingDataset(Dataset):
                                              sample_size=self.resample_size,
                                              weights=self.resample_weights,
                                              replace=self.resample_replace)
+        resampled_flow = None
         if self.img_gen:
             #TODO: use the sample weights here?
             resampled_flow = self.img_gen.flow(resampled[0],

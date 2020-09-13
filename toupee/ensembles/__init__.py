@@ -17,7 +17,7 @@ def create(params, data):
     spec = params.ensemble_method
     return METHOD_MAPPER[spec['class_name'].lower()](
         data=data,
-        params=params,
+        model_params=params,
         **spec['params']
     )
 
