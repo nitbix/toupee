@@ -5,3 +5,8 @@
 *.swp
 *.pyc
 toupee_tb_logs/*
+.vscode/settings.json
+toupee.egg-info/PKG-INFO
+toupee.egg-info/SOURCES.txt
+toupee.egg-info/top_level.txt
+toupee.egg-info/dependency_links.txt
