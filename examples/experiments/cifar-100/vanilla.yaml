@@ -1,10 +1,10 @@
 ---
 ## MLP Parameters ##
 #dataset: /datasets/test_data/cifar10-th/
-dataset: ../cifar-10-new-loaded/
+dataset: ../cifar-100-new-loaded/
 data_format: npz
 convert_labels_to_one_hot: true
-model_file: examples/experiments/cifar-10/densenet121.model
+model_file: examples/experiments/cifar-100/densenet121.model
 reduce_lr_on_plateau:
   factor: 0.1
   patience: 5
@@ -16,7 +16,7 @@ optimizer:
     config:
       learning_rate:
         0:  0.001
-        256: 0.0001
+        75: 0.0001
   #       30: 0.001
   #       50: 0.0001
   #       # 100: 0.0001
