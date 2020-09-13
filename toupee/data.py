@@ -110,14 +110,14 @@ def _resample_np(data:tuple, sample_size:int, weights, replace:bool) -> tuple:
 class Dataset:
     """ Class to load a dataset """
     def __init__(self,
-                 src_dir=None,
-                 training_file=None,
-                 validation_file=None,
-                 testing_file=None,
-                 data_format="",
-                 shuffle=False,
-                 img_gen_params=None,
-                 max_examples=None,
+                 src_dir:str=None,
+                 training_file:str=None,
+                 validation_file:str=None,
+                 testing_file:str=None,
+                 data_format:str="",
+                 shuffle:bool=False,
+                 img_gen_params:dict=None,
+                 max_examples:int=None,
                  **kwargs):
         self.files = {}
         self.train_flow = None
@@ -180,25 +180,25 @@ class Dataset:
                                            **kwargs)
         self.kwargs = kwargs
 
-    def get_training_handle(self):
+    def get_training_handle(self) -> tuple:
         """ Return the appropriate handle to pass to keras .fit """
         return self.data['train']
 
-    def get_handle(self, split, standardized=False):
+    def get_handle(self, split:str, standardized:bool=False):
         """ Return the appropriate handle to pass to keras .fit as validation_data """
         if standardized and self.img_gen:
             return self.standardized_data[split]
         return self.data[split]
 
-    def get_validation_handle(self, standardized=False):
+    def get_validation_handle(self, standardized:bool=False):
         """ Return the appropriate handle to pass to keras .fit as validation_data """
         return self.get_handle(split='valid', standardized=standardized)
 
-    def get_testing_handle(self, standardized=False):
+    def get_testing_handle(self, standardized:bool=False):
         """ Return the appropriate handle to pass to keras .evaluate """
         return self.get_handle(split='test', standardized=standardized)
 
-    def resample(self, sample_size=None, weights=None, replace=True):
+    def resample(self, sample_size:int=None, weights=None, replace:bool=True):
         """ Promote the dataset to a resampling one """
         self.resample_size = sample_size or self.raw_data['train'][0].shape[0]
         self.resample_weights = weights
