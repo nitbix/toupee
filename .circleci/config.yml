@@ -5,8 +5,8 @@
 version: 2
 jobs:
   build:
-    docker:
-      - image: circleci/python:latest
+    machine: gpu.nvidia.small
+      image: ubuntu-1604-cuda-10.1:201909-23
 
     working_directory: ~/repo
 
