@@ -51,7 +51,7 @@ def _load_npz(filename, **kwargs):
     """ Load a NPZ file """
     #TODO: transformations
     #TODO: special dict mappings
-    data = np.load(filename, allow_pickle=True)
+    data = np.load(filename)
     data = (data['x'],data['y'])
     if kwargs['convert_labels_to_one_hot']:
         data = (data[0], one_hot_numpy(data[1]))
