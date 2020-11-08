@@ -23,7 +23,7 @@ optimizer:
   # 100:
   #   class_name: SGD
   #   config:
-  #     learning_rate: 
+  #     learning_rate:
   #       0: 0.1
   #       150: 0.01
   #       250: 0.001
@@ -48,7 +48,7 @@ img_gen_params:
   #zca_whitening: true
 
 ## Ensemble Parameters ##
-ensemble_method: 
+ensemble_method:
   class_name: DIB
   params:
     subsequent_epochs: 2
