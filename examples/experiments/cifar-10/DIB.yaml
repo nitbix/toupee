@@ -1,0 +1,153 @@
+---
+## MLP Parameters ##
+#dataset: /datasets/test_data/cifar10-th/
+dataset: ../cifar-10-new-loaded/
+data_format: npz
+convert_labels_to_one_hot: true
+model_file: examples/experiments/cifar-10/all-cnn.model
+reduce_lr_on_plateau:
+  factor: 0.1
+  patience: 5
+  cooldown: 0
+  min_lr: 0.0000001
+optimizer:
+  0:
+    class_name: Adam
+    config:
+      learning_rate:
+        0:  0.001
+        256: 0.0001
+  #       30: 0.001
+  #       50: 0.0001
+  #       # 100: 0.0001
+  # 100:
+  #   class_name: SGD
+  #   config:
+  #     learning_rate: 
+  #       0: 0.1
+  #       150: 0.01
+  #       250: 0.001
+  #     momentum: 0.9
+  #     decay: 0.0005
+epochs: 10
+batch_size: 256
+loss: categorical_crossentropy
+shuffle: true
+# multi_gpu: 2
+# max_examples: 2000
+
+#use online image transformations by specifying arguments to ImageDataGenerator
+img_gen_params:
+  #zoom_range: 0.15
+  width_shift_range: 0.125
+  height_shift_range: 0.125
+  horizontal_flip: true
+  rotation_range: 15
+  featurewise_std_normalization: true
+  featurewise_center: true
+  #zca_whitening: true
+
+## Ensemble Parameters ##
+ensemble_method: 
+  class_name: DIB
+  params:
+    subsequent_epochs: 2
+    insert_after: activation_4
+    new_layers:
+    - class_name: Conv2D
+      config:
+        activation: linear
+        activity_regularizer: null
+        bias_constraint: null
+        bias_initializer:
+          class_name: Zeros
+          config: {}
+        bias_regularizer:
+          class_name: L1L2
+          config:
+            l1: 0.0
+            l2: 9.999999747378752e-05
+        data_format: channels_last
+        dilation_rate: [1,1]
+        dtype: float32
+        filters: 128
+        kernel_constraint: null
+        kernel_initializer:
+          class_name: VarianceScaling
+          config:
+            distribution: uniform
+            mode: fan_in
+            scale: 2.0
+            seed: null
+        kernel_regularizer:
+          class_name: L1L2
+          config:
+            l1: 0.0
+            l2: 9.999999747378752e-05
+        kernel_size: [3,3]
+        name: conv2d_5
+        padding: valid
+        strides: [1,1]
+        trainable: true
+        use_bias: true
+      inbound_nodes:
+      - - - activation_4
+          - 0
+          - 0
+          - {}
+      name: conv2d_5
+    - class_name: BatchNormalization
+      config:
+        axis: !!python/object/apply:tensorflow.python.training.tracking.data_structures.ListWrapper
+        - - 1
+        beta_constraint: null
+        beta_initializer:
+          class_name: Zeros
+          config: {}
+        beta_regularizer: null
+        center: true
+        dtype: float32
+        epsilon: 0.001
+        gamma_constraint: null
+        gamma_initializer:
+          class_name: Ones
+          config: {}
+        gamma_regularizer: null
+        momentum: 0.99
+        moving_mean_initializer:
+          class_name: Zeros
+          config: {}
+        moving_variance_initializer:
+          class_name: Ones
+          config: {}
+        name: batch_normalization_5
+        scale: true
+        trainable: true
+      inbound_nodes:
+      - - - conv2d_5
+          - 0
+          - 0
+          - {}
+      name: batch_normalization_5
+    - class_name: Activation
+      config:
+        activation: relu
+        dtype: float32
+        name: activation_5
+        trainable: true
+      inbound_nodes:
+      - - - batch_normalization_5
+          - 0
+          - 0
+          - {}
+      name: activation_5
+    size: 2
+
+### BEST SO FAR:
+
+  # 0:
+  #   class_name: Adam
+  #   config:
+  #     learning_rate:
+  #       0:  0.001
+  #       256: 0.0001

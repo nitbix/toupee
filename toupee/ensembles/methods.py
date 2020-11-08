@@ -14,11 +14,11 @@ import numpy as np # type: ignore
 import tensorflow as tf # type: ignore
 import pandas as pd # type: ignore
 import math
+import uuid
 
 import toupee as tp
 
 #TODO: AdaBoost MA
-#TODO: DIB
 #TODO: BRN
 #TODO: BaRN
 #TODO: Snapshot
@@ -31,13 +31,17 @@ class EnsembleMethod:
         self.data = data
         self.size = size
         self.model_params = model_params
-        self.aggregator = tp.ensembles.get_aggregator(aggregator)
         self.members = []
+        self.aggregator = tp.ensembles.get_aggregator(aggregator)
         self.model_factory = model_factory
         self.model_weights = [1. / float(self.size) for _ in range(self.size)]
+        self._fit_loop_info = {
+            'current_step': None,
+            'current_model': None,
+        }
         if kwargs:
             logging.warning("Unknown ensemble parameters: %s" % kwargs)
-        # contract: derived classes must set the members list
+        # contract: derived classes must set the members list or generator
         if saved_ensemble:
             self._load(saved_ensemble)
         else:
@@ -52,6 +56,15 @@ class EnsembleMethod:
             logging.warning(("setting default for: {0} to {1}" \
             .format(param_name, value)))
             self.__dict__[param_name] = value
+
+    def _members(self):
+        """
+        Generator function that yield the members one at a time. This version
+        is based off of a static members list, but can be modified to create new
+        members parametrically.
+        """
+        for member in self._members:
+            yield member
 
     def save(self, location):
         """ Saves an ensemble """
@@ -83,14 +96,14 @@ class EnsembleMethod:
         """ Train all Ensemble members """
         logging.info("=== Training Ensemble ===")
         start_time = time.perf_counter()
-        for i, model in enumerate(self.members):
-            logging.info("\n=== Model %d / %d ===" % (i + 1, len(self.members)))
+        for i, model in enumerate(self._members()):
+            logging.info("\n=== Model %d / %d ===" % (i + 1, self.size))
             self._fit_loop_info = {
                 'current_step': i,
                 'current_model': model,
             }
             self._on_model_start()
-            model.fit(self.data)
+            self._fit_call(model)
             self._on_model_end()
         end_time = time.perf_counter()
         m_summary = pd.DataFrame([m.test_metrics for m in self.members])
@@ -102,6 +115,10 @@ class EnsembleMethod:
                 'time': end_time - start_time
         }
     
+    def _fit_call(self, model):
+        """ Wrapper for calling the model fitting """
+        model.fit(self.data)
+
     def raw_predict_proba(self, X):
         """ Returns all the predictions from all Ensemble members """
         return np.array([m.predict_proba(X) for m in self.members])
@@ -202,4 +219,78 @@ class AdaBoost(Simple):
 
     def _on_model_start(self):
         """ Default callback when a model starts training """
+        self.data = self.data.resample()
+
+
+class DynamicMembers(EnsembleMethod):
+    """
+    A simple Ensemble - repeat the training N times and aggregate the results
+    """
+    def _initialise_members(self):
         pass
+
+    def _members(self):
+        """ Must be implemented by the inheriting class """
+        raise NotImplementedError()
+
+
+class DIB(DynamicMembers):
+    """
+    Deep Incremental Boosting ()
+    """
+    def __init__(self, subsequent_epochs, insert_after, new_layers, variant='M1', **kwargs):
+        super().__init__(aggregator='averaging', **kwargs)
+        self.subsequent_epochs = subsequent_epochs
+        self.new_layers = new_layers
+        self.insert_after = insert_after
+        self.variant = variant
+        self.sample_weights = np.ones(self.data.size['train']) / float(self.data.size['train'])
+        self.model_weights = np.ones(self.size)
+
+    def _on_model_end(self):
+        """ Default callback when a model finishes training """
+        model = self._fit_loop_info['current_model']
+        y_true = []
+        y_pred_p = []
+        for (x, y_true_batch) in self.data.get_training_handle(resample=False): #TODO: non-resampled handle here
+            y_true.append(np.argmax(y_true_batch, axis=1))
+            y_pred_p.append(model.predict_proba(x))
+        y_true = np.concatenate(y_true)
+        y_pred_p = np.concatenate(y_pred_p)
+        y_pred = np.argmax(y_pred_p, axis=1)
+        if self.variant == 'MA': 
+            y_pred_weights = np.max(y_pred_p, axis=1)
+        else:
+            y_pred_weights = 1.
+        errors = (y_true == y_pred).astype('int32')
+        e = np.sum(errors * self.sample_weights * y_pred_weights)
+        if e > 0:
+            alpha = .5 * math.log((1-e)/2) + math.log(self.data.n_classes-1)
+            unnorm_weights = np.where(errors == 1,
+                                      self.sample_weights * math.exp(alpha),
+                                      self.sample_weights * math.exp(-alpha)
+                                    )
+            self.sample_weights = unnorm_weights / unnorm_weights.sum()
+        self.data.set_weights(self.sample_weights)
+        self.model_weights[self._fit_loop_info['current_step']] = alpha
+
+    def _on_model_start(self):
+        """ Default callback when a model starts training """
+        self.data = self.data.resample()
+
+    def _members(self):
+        """ Generator that creates new members on the fly by making the previous member bigger """
+        for _ in range(self.size):
+            new_member = self.model_factory(params=self.model_params)
+            if self.members:
+                new_member.inject_layers(self.new_layers, self.insert_after)
+                new_member.copy_weights(self.members[-1])
+            self.members.append(new_member)
+            yield new_member
+
+    def _fit_call(self, model):
+        """ Wrapper for calling the model fitting """
+        if self._fit_loop_info['current_step'] > 0:
+            model.fit(self.data, self.subsequent_epochs)
+        else:
+            model.fit(self.data)
