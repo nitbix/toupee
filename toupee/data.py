@@ -123,6 +123,8 @@ class Dataset:
         self.train_flow = None
         self.img_gen = None
         self.shuffle = shuffle
+        if not self.shuffle:
+            print("WARNING - DATASET INSTANTIATED WITH SHUFFLING TURNED OFF")
         if src_dir is None and training_file is None:
             raise ValueError("Must specify one of src_dir or training_file")
         self.files['train'] = training_file or DEFAULT_TRAINING_FILE
@@ -165,7 +167,7 @@ class Dataset:
                                                   lambda data: (self.img_gen.standardize(np.copy(data[0])),
                                                                 data[1]))
             self.standardized_data = dict_map(
-                {k: self.standardized_raw_data[k] for k in  ('valid', 'test')},
+                {k: self.standardized_raw_data[k] for k in  ('train', 'valid', 'test')},
                 lambda data: convert_to_tf(data=data,
                                             data_format=self.data_format,
                                             **kwargs))
