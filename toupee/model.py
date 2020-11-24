@@ -40,10 +40,8 @@ class TrainLossStore(tf.keras.callbacks.Callback):
         asserted = False
         for (x, y_true) in self.data_unshuffled.get_handle("train", standardized=True):
             if not asserted:
-                # to assert that the data is NOT shuffled, each epoch ##paranoia
-                # if data parameters like batch size change, this might change
-                # print(x[31, 31, 31, 0])
-                # print(y_true[2])
+                # To assert that the data is NOT shuffled, each epoch. ##paranoia
+                # If data parameters like batch size change, this might change.
                 assert np.argmax(y_true[2]) == 0
                 assert np.isclose(x[31, 31, 31, 0], 0.42758296500872006)
                 asserted = True
@@ -56,8 +54,9 @@ class TrainLossStore(tf.keras.callbacks.Callback):
             reduction=tf.keras.losses.Reduction.NONE)
         all_losses = scce(y_true, y_pred_proba).numpy()
         file_name = os.path.join(self.store_folder, f"epoch_{epoch}.npz")
+        current_lr = self.model_cls_instance._model.optimizer.lr.numpy()
         print(f"Storing in {file_name}.")
-        np.savez(file_name, loss=all_losses)
+        np.savez(file_name, loss=all_losses, current_lr=current_lr)
 
 
 class OptimizerSchedulerCallback(tf.keras.callbacks.Callback):
@@ -88,8 +87,7 @@ class OptimizerSchedule:
             if isinstance(conf['config']['learning_rate'], dict):
                 lr = conf['config']['learning_rate']
                 conf['config']['learning_rate'] = lr[min(lr.keys())]
-            #self.optimizers[thresh] = tf.keras.optimizers.deserialize(conf)
-            self.optimizers[thresh] = conf
+            self.optimizers[thresh] = tf.keras.optimizers.deserialize(conf)
         self.lr_callback = tf.keras.callbacks.LearningRateScheduler(self._lr_scheduler)
 
     def _params_scheduler(self, epoch):
