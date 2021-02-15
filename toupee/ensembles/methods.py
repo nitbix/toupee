@@ -63,7 +63,7 @@ class EnsembleMethod:
         is based off of a static members list, but can be modified to create new
         members parametrically.
         """
-        for member in self._members:
+        for member in self.members:
             yield member
 
     def save(self, location):

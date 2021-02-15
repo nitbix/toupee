@@ -56,9 +56,9 @@ MAPPING = {
 
 
 def main(args=None) -> None:
-    """ Train a base model as specified """
+    """ Download a well-known dataset """
     if args is None:
-        parser = argparse.ArgumentParser(description='Train a single Base Model')
+        parser = argparse.ArgumentParser(description='Download a well-know dataset')
         parser.add_argument('dataset', help='the dataset name')
         parser.add_argument('save_dir', nargs='?',
                             help='the location where to save the dataset')
