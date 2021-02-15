@@ -130,9 +130,6 @@ class Model:
                     updated_inbound = True
                 new_layers.append(layer)
         model_config['layers'] = new_layers
-        # from pprint import pprint
-        # pprint(model_config['layers'])
-        # # import pdb; pdb.set_trace()
         self._model = tf.keras.Model.from_config(model_config)
         self.model_yaml = self._model.to_yaml()
 
