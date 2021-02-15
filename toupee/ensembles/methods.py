@@ -149,6 +149,8 @@ class EnsembleMethod:
         return tp.utils.eval_scores(y_true, y_pred)
 
 
+### Ensemble Types / Class Templates ###
+
 class Simple(EnsembleMethod):
     """
     A simple Ensemble - repeat the training N times and aggregate the results
@@ -156,6 +158,20 @@ class Simple(EnsembleMethod):
     def _initialise_members(self):
         self.members = [self.model_factory(params=self.model_params) for _ in range(self.size)]
 
+
+class DynamicMembers(EnsembleMethod):
+    """
+    An Ensemble where the members are generated dynamically at each round
+    """
+    def _initialise_members(self):
+        pass
+
+    def _members(self):
+        """ Must be implemented by the inheriting class """
+        raise NotImplementedError()
+
+
+### Actual Ensemble Methods ###
 
 class Single(Simple):
     """
@@ -221,17 +237,6 @@ class AdaBoost(Simple):
         """ Default callback when a model starts training """
         self.data = self.data.resample()
 
-
-class DynamicMembers(EnsembleMethod):
-    """
-    A simple Ensemble - repeat the training N times and aggregate the results
-    """
-    def _initialise_members(self):
-        pass
-
-    def _members(self):
-        """ Must be implemented by the inheriting class """
-        raise NotImplementedError()
 
 
 class DIB(DynamicMembers):
