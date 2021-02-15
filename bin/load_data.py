@@ -57,12 +57,12 @@ MAPPING = {
 
 def main(args=None) -> None:
     """ Download a well-known dataset """
-    if args is None:
-        parser = argparse.ArgumentParser(description='Download a well-know dataset')
-        parser.add_argument('dataset', help='the dataset name')
-        parser.add_argument('save_dir', nargs='?',
-                            help='the location where to save the dataset')
-        args = parser.parse_args()
+    parser = argparse.ArgumentParser(description='Download a well-know dataset')
+    parser.add_argument('dataset', help='the dataset name')
+    parser.add_argument('save_dir', nargs='?',
+                        help='the location where to save the dataset')
+    args = parser.parse_args(args)
+    print(args.dataset)
     data = MAPPING[args.dataset]()
     if not os.path.exists(args.save_dir):
         os.mkdir(args.save_dir)
