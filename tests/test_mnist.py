@@ -14,6 +14,11 @@ METRICS_TO_CHECK = {'accuracy_score': 0.98,
                     'macro_f1_score': 0.98}
 
 
+def test_download_mnist() -> None:
+    """ Download MNIST for the following tests """
+    import bin.load_data
+    bin.load_data.main(["mnist", "tests/mnist"])
+
 def test_mnist_single() -> None:
     """ Loads parameters to train a single model on MNIST """
     params = tp.config.load_parameters(MNIST_PARAMS_FILE)
@@ -34,5 +39,6 @@ def test_mnist_bagging() -> None:
         assert metrics['ensemble'][metric] > limit
 
 if __name__ == "__main__":
+    test_download_mnist()
     test_mnist_bagging()
     test_mnist_single()
