@@ -15,6 +15,7 @@ import tensorflow as tf # type: ignore
 import pandas as pd # type: ignore
 import math
 import uuid
+import wandb
 
 import toupee as tp
 
@@ -27,13 +28,14 @@ import toupee as tp
 
 class EnsembleMethod:
     """ Abstract representation of an Ensemble from which all other methods are derived """
-    def __init__(self, data, size, model_params, aggregator, model_factory=tp.model.Model, saved_ensemble=None, **kwargs):
+    def __init__(self, data, size, model_params, aggregator, model_factory=tp.model.Model, saved_ensemble=None, wandb=None, **kwargs):
         self.data = data
         self.size = size
         self.model_params = model_params
         self.members = []
         self.aggregator = tp.ensembles.get_aggregator(aggregator)
         self.model_factory = model_factory
+        self.wandb = wandb
         self.model_weights = [1. / float(self.size) for _ in range(self.size)]
         self._fit_loop_info = {
             'current_step': None,
@@ -96,15 +98,24 @@ class EnsembleMethod:
         """ Train all Ensemble members """
         logging.info("=== Training Ensemble ===")
         start_time = time.perf_counter()
+        cumulative_results = []
         for i, model in enumerate(self._members()):
-            logging.info("\n=== Model %d / %d ===" % (i + 1, self.size))
+            logging.info("\n\n\n=== Starting ensemble round %d / %d ===" % (i + 1, self.size))
             self._fit_loop_info = {
                 'current_step': i,
                 'current_model': model,
             }
             self._on_model_start()
+            if self.wandb:
+                run = wandb.init(project=self.wandb["project"], reinit=True,
+                            config={"type": "ensemble", "params": self.model_params.__dict__},
+                            group=self.wandb["group"],
+                            name=f"member-{i}")
             self._fit_call(model)
+            if self.wandb:
+                run.finish()
             self._on_model_end()
+            cumulative_results.append(self.evaluate(self.data.get_testing_handle()))
         end_time = time.perf_counter()
         m_summary = pd.DataFrame([m.test_metrics for m in self.members])
         if self.aggregator.is_fittable:
@@ -112,16 +123,17 @@ class EnsembleMethod:
             raise NotImplementedError()
         return {'ensemble': self.evaluate(self.data.get_testing_handle()),
                 'members': m_summary,
+                'round_cumulative': cumulative_results,
                 'time': end_time - start_time
         }
     
     def _fit_call(self, model):
         """ Wrapper for calling the model fitting """
-        model.fit(self.data)
+        model.fit(self.data, log_wandb=self.wandb)
 
     def raw_predict_proba(self, X):
         """ Returns all the predictions from all Ensemble members """
-        return np.array([m.predict_proba(X) for m in self.members])
+        return np.array([m.predict_proba(X) for m in self.members[:self._fit_loop_info['current_step'] + 1]])
 
     def predict_proba(self, X):
         """ Return predicted soft probability outputs for the aggregate """
@@ -296,6 +308,6 @@ class DIB(DynamicMembers):
     def _fit_call(self, model):
         """ Wrapper for calling the model fitting """
         if self._fit_loop_info['current_step'] > 0:
-            model.fit(self.data, self.subsequent_epochs)
+            model.fit(self.data, self.subsequent_epochs, log_wandb=self.wandb)
         else:
-            model.fit(self.data)
+            model.fit(self.data, log_wandb=self.wandb)

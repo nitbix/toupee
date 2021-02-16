@@ -6,7 +6,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.6
+      - image: circleci/python:3.7
     resource_class: large
       # machine:
       #   resource_class: gpu.nvidia.small
@@ -33,25 +33,25 @@ jobs:
       - run:
           name: install
           command: |
-            python3 -m venv venv
-            . venv/bin/activate
+            python3 -m venv ~/venv
+            . ~/venv/bin/activate
             pip install -r requirements.txt
             pip install -e .
       - save_cache:
           paths:
-            - ./venv
+            - ~/venv
           key: v3-dependencies-{{ checksum "requirements.txt" }}
 
       - run:
           name: Static Type Checks
           command: |
-            . venv/bin/activate
+            . ~/venv/bin/activate
             mypy .
 
       - run:
           name: Run Tests
           command: |
-            . venv/bin/activate
+            . ~/venv/bin/activate
             pytest -vs
 
       - store_artifacts:

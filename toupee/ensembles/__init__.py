@@ -13,12 +13,13 @@ AGGREGATOR_MAPPER = {
     'averaging': Averaging
 }
 
-def create(params, data):
+def create(params, data, wandb=None):
     """ Create an Ensemble from spec """
     spec = params.ensemble_method
     return METHOD_MAPPER[spec['class_name'].lower()](
         data=data,
         model_params=params,
+        wandb=wandb,
         **spec['params']
     )
 
