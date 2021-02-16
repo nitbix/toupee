@@ -51,7 +51,7 @@ img_gen_params:
 ensemble_method: 
   class_name: AdaBoost
   params:
-    size: 2
+    size: 20
 
 ### BEST SO FAR:
 

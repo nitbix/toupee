@@ -10,6 +10,7 @@ All code released under GPLv2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
+import os
 import argparse
 import toupee as tp
 import dill
@@ -43,10 +44,10 @@ def main(args=None, params=None):
         params = tp.config.load_parameters(args.params_file)
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     if args.wandb:
-        import wandb
-        wandb_project = args.wandb_project or f"toupee-{params.dataset}-{params.ensemble_method.class_name}"
+        dataset_name = os.path.basename(os.path.normpath(params.dataset))
+        wandb_project = args.wandb_project or f"toupee-{dataset_name}"
         group_id = wandb.util.generate_id()
-        wandb_group = args.wandb_group or f"toupee-{params.dataset}-{group_id}"
+        wandb_group = args.wandb_group or f"{dataset_name}-{params.ensemble_method['class_name']}-{group_id}"
     method = tp.ensembles.create(params=params, data=data, wandb={"project": wandb_project, "group": wandb_group})
     metrics = method.fit()
     logging.info('\n{:*^40}'.format(' Ensemble trained in %.2fm ' % (metrics['time'] / 60.)))

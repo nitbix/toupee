@@ -141,12 +141,13 @@ class Model:
                 break
             this_layer.set_weights(other_layer.get_weights())
 
-    def fit(self, data, epochs=None, verbose=None):
+    def fit(self, data, epochs=None, verbose=None, log_wandb=False):
         """ Train a model """
         start_time = time.perf_counter()
         callbacks = self._optimizer_schedule.get_callbacks(self._loss,
                                                            self._training_metrics)
-        callbacks.append(tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir))
+        if not log_wandb:
+            callbacks.append(tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir))
         if self.params.reduce_lr_on_plateau:
             callbacks.append(
                 tf.keras.callbacks.ReduceLROnPlateau(**self.params.reduce_lr_on_plateau))
