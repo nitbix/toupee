@@ -3,8 +3,10 @@
 *.swm
 *.swn
 *.swp
-*.pyc
+**/*.pyc
+**/*.npz
 toupee_tb_logs/*
+wandb/*
 .vscode/settings.json
 toupee.egg-info/PKG-INFO
 toupee.egg-info/SOURCES.txt

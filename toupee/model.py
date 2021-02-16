@@ -17,6 +17,7 @@ import tensorflow as tf # type: ignore
 import numpy as np # type: ignore
 import uuid
 
+import wandb
 import toupee as tp
 #TODO: backprop to the inputs
 #TODO: sample weights
@@ -149,6 +150,9 @@ class Model:
         if self.params.reduce_lr_on_plateau:
             callbacks.append(
                 tf.keras.callbacks.ReduceLROnPlateau(**self.params.reduce_lr_on_plateau))
+        if log_wandb:
+            from wandb.keras import WandbCallback
+            callbacks.append(WandbCallback())
         if self.params.multi_gpu:
             logging.warning("!!! WARNING - EXPERIMENTAL !!! running on multi gpu")
             tf.keras.utils.multi_gpu_model(self._model, gpus=self.params.multi_gpu)
@@ -170,6 +174,9 @@ class Model:
         end_time = time.perf_counter()
         logging.info('Model trained for %.2fm' % ((end_time - start_time) / 60.))
         self.test_metrics = self.evaluate(data.get_testing_handle())
+        if log_wandb:
+            for metric, value in self.test_metrics.items():
+                wandb.run.summary[metric] = value
 
     def evaluate(self, test_data):
         """ Evaluate model on some test data handle """
