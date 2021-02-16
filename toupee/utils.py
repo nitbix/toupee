@@ -12,7 +12,7 @@ import sys
 import logging
 import sklearn.metrics # type: ignore
 import numpy as np # type: ignore
-
+from toupee.metrics import calibration
 
 # this is needed because PowerShell does not understand colour escapes
 if sys.platform == 'win32': 
@@ -26,7 +26,7 @@ if sys.platform == 'win32':
 def dict_map(dictionary, f):
     return {k: f(v) for k, v in dictionary.items()}
 
-def eval_scores(y_true, y_pred):
+def eval_scores(y_true, y_pred, y_true_onehot, y_pred_onehot):
     """ Calculate all the eval scores we want and return them in a dict """
     return {'classification_report': sklearn.metrics.classification_report(y_true, y_pred),
             'accuracy_score': sklearn.metrics.accuracy_score(y_true, y_pred),
@@ -37,6 +37,7 @@ def eval_scores(y_true, y_pred):
             'macro_recall_score': sklearn.metrics.recall_score(y_true, y_pred, average="macro"),
             'macro_f1_score': sklearn.metrics.f1_score(y_true, y_pred, average="macro"),
             'confusion_matrix': sklearn.metrics.confusion_matrix(y_true, y_pred),
+            'calibration': calibration(y_true_onehot, y_pred_onehot),
             'y_true': y_true,
             'y_pred': y_pred,
     }
