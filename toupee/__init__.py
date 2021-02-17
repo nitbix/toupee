@@ -4,6 +4,10 @@ import toupee.ensembles as ensembles
 import toupee.parameters as parameters
 import toupee.config as config
 import toupee.utils as utils
+import toupee.adversarial as adversarial
+
+from toupee.utils import log_metrics
+
 #TODO: use AI Platform
 #TODO: use local TPUs
 
@@ -18,3 +22,5 @@ PRINTABLE_METRICS = ['accuracy_score',
                      'macro_f1_score',
                      'calibration'
                      ]
+
+ADVERSARIAL_EPSILONS = [0.1, 0.01, 0.001]

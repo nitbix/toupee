@@ -12,6 +12,7 @@ import sys
 import logging
 import sklearn.metrics # type: ignore
 import numpy as np # type: ignore
+import toupee as tp
 from toupee.metrics import calibration
 
 # this is needed because PowerShell does not understand colour escapes
@@ -26,21 +27,25 @@ if sys.platform == 'win32':
 def dict_map(dictionary, f):
     return {k: f(v) for k, v in dictionary.items()}
 
-def eval_scores(y_true, y_pred, y_true_onehot, y_pred_onehot):
+
+def eval_scores(y_true, y_pred, y_true_onehot=None, y_pred_onehot=None):
     """ Calculate all the eval scores we want and return them in a dict """
-    return {'classification_report': sklearn.metrics.classification_report(y_true, y_pred),
-            'accuracy_score': sklearn.metrics.accuracy_score(y_true, y_pred),
-            'micro_precision_score': sklearn.metrics.precision_score(y_true, y_pred, average="micro"),
-            'micro_recall_score': sklearn.metrics.recall_score(y_true, y_pred, average="micro"),
-            'micro_f1_score': sklearn.metrics.f1_score(y_true, y_pred, average="micro"),
-            'macro_precision_score': sklearn.metrics.precision_score(y_true, y_pred, average="macro"),
-            'macro_recall_score': sklearn.metrics.recall_score(y_true, y_pred, average="macro"),
-            'macro_f1_score': sklearn.metrics.f1_score(y_true, y_pred, average="macro"),
-            'confusion_matrix': sklearn.metrics.confusion_matrix(y_true, y_pred),
-            'calibration': calibration(y_true_onehot, y_pred_onehot),
-            'y_true': y_true,
-            'y_pred': y_pred,
+    scores = {  'classification_report': sklearn.metrics.classification_report(y_true, y_pred),
+                'accuracy_score': sklearn.metrics.accuracy_score(y_true, y_pred),
+                'micro_precision_score': sklearn.metrics.precision_score(y_true, y_pred, average="micro"),
+                'micro_recall_score': sklearn.metrics.recall_score(y_true, y_pred, average="micro"),
+                'micro_f1_score': sklearn.metrics.f1_score(y_true, y_pred, average="micro"),
+                'macro_precision_score': sklearn.metrics.precision_score(y_true, y_pred, average="macro"),
+                'macro_recall_score': sklearn.metrics.recall_score(y_true, y_pred, average="macro"),
+                'macro_f1_score': sklearn.metrics.f1_score(y_true, y_pred, average="macro"),
+                'confusion_matrix': sklearn.metrics.confusion_matrix(y_true, y_pred),
+                'y_true': y_true,
+                'y_pred' : y_pred,
     }
+    if y_true_onehot is not None and y_pred_onehot is not None:
+        scores['calibration'] = calibration(y_true_onehot, y_pred_onehot)
+    return scores
+
 
 def get_colour_string(string, target_colour, use_colours=True):
     '''
@@ -93,6 +98,19 @@ def pretty_print_confusion_matrix(conf_matrix, cm_decimals=3):
     print("LEGEND: rows = true class; columns = predicted class;")
     print("        colour = most likely prediction for each row;")
 
-# def gauss(x, y, sigma=2.0):
-#     Z = 2 * np.pi * sigma**2
-#     return  1./Z * np.exp(-(x**2 + y**2) / (2. * sigma**2))
+def _log_metrics(metrics) -> None:
+    for metric_name in tp.PRINTABLE_METRICS:
+        logging.info(f"{metric_name}: {metrics[metric_name]}")
+
+def log_metrics(metrics) -> None:
+    logging.info('\n{:*^40}'.format(" Classification Report "))
+    logging.info(metrics['classification_report'])
+    logging.info('\n{:*^40}'.format(" Confusion Matrix "))
+    pretty_print_confusion_matrix(metrics['confusion_matrix'])
+    logging.info('\n{:*^40}'.format(" Metrics "))
+    _log_metrics(metrics)
+    if 'adversarial' in metrics:
+        logging.info('\n{:*^40}'.format(" Adversarial Metrics "))
+        for epsilon in metrics['adversarial']:
+            logging.info(f"** Epsilon = {epsilon}")
+            _log_metrics(metrics['adversarial'][epsilon])

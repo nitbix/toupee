@@ -41,7 +41,7 @@ class OptimizerSchedulerCallback(tf.keras.callbacks.Callback):
 
 class OptimizerSchedule:
     """ Schedules Optimizers and Learning Rates according to config """
-    def __init__(self, params, epochs):
+    def __init__(self, params, epochs: int):
         """ Create an optimizer from params and learning rate """
         self.params = copy.deepcopy(params)
         self.optimizers = {}
@@ -56,24 +56,24 @@ class OptimizerSchedule:
             self.optimizers[thresh] = tf.keras.optimizers.deserialize(conf)
         self.lr_callback = tf.keras.callbacks.LearningRateScheduler(self._lr_scheduler)
     
-    def _params_scheduler(self, epoch):
+    def _params_scheduler(self, epoch: int):
         for thresh in sorted(self.params.keys(), reverse=True):
             if epoch >= thresh:
                 return self.params[thresh]
 
-    def _opt_scheduler(self, epoch):
+    def _opt_scheduler(self, epoch: int):
         for thresh in sorted(self.optimizers.keys(), reverse=True):
             if epoch >= thresh:
                 return self.optimizers[thresh]
     
-    def __getitem__(self, epoch):
+    def __getitem__(self, epoch: int):
         """
         Subscripting operator, so we can use [] to get the right
         optimizer for any epoch
         """ 
         return self._opt_scheduler(epoch)
 
-    def _lr_scheduler(self, epoch):
+    def _lr_scheduler(self, epoch: int):
         #TODO: use sorting
         lr = None
         params = self._params_scheduler(epoch)
@@ -141,7 +141,8 @@ class Model:
                 break
             this_layer.set_weights(other_layer.get_weights())
 
-    def fit(self, data, epochs=None, verbose=None, log_wandb=False):
+    def fit(self, data: tp.data.Dataset, epochs=None, verbose=None, log_wandb:bool=False,
+            adversarial_testing:bool=False):
         """ Train a model """
         start_time = time.perf_counter()
         callbacks = self._optimizer_schedule.get_callbacks(self._loss,
@@ -150,8 +151,7 @@ class Model:
             callbacks.append(
                 tf.keras.callbacks.ReduceLROnPlateau(**self.params.reduce_lr_on_plateau))
         if log_wandb:
-            from wandb.keras import WandbCallback
-            callbacks.append(WandbCallback())
+            callbacks.append(wandb.keras.WandbCallback())
         else:
             callbacks.append(tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir))
         if self.params.multi_gpu:
@@ -174,28 +174,42 @@ class Model:
             )
         end_time = time.perf_counter()
         logging.info('Model trained for %.2fm' % ((end_time - start_time) / 60.))
-        self.test_metrics = self.evaluate(data.get_testing_handle())
+        self.test_metrics = self.evaluate(data.get_testing_handle(), adversarial=adversarial_testing)
         if log_wandb:
             for metric, value in self.test_metrics.items():
-                wandb.run.summary[metric] = value
+                # for some reason MyPy doesn't understand this module well
+                wandb.run.summary[metric] = value  # type: ignore
 
-    def evaluate(self, test_data):
+    def evaluate(self, test_data, adversarial:bool=False):
         """ Evaluate model on some test data handle """
         #TODO: update for different data formats
         all_y_pred = []
         all_y_true = []
         all_y_pred_onehot = []
         all_y_true_onehot = []
+        all_x = []
         for (x, y_true) in test_data:
+            all_x.append(x)
             all_y_pred.append(self.predict_classes(x))
             all_y_pred_onehot.append(self.predict_proba(x))
             all_y_true.append(np.argmax(y_true.numpy(), axis=1))
             all_y_true_onehot.append(y_true.numpy())
+        x = np.concatenate(all_x)
         y_pred = np.concatenate(all_y_pred)
         y_true = np.concatenate(all_y_true)
         y_pred_onehot = np.concatenate(all_y_pred_onehot)
         y_true_onehot = np.concatenate(all_y_true_onehot)
-        return tp.utils.eval_scores(y_true=y_true, y_pred=y_pred, y_true_onehot=y_true_onehot, y_pred_onehot=y_pred_onehot)
+        scores = tp.utils.eval_scores(y_true=y_true, y_pred=y_pred, y_true_onehot=y_true_onehot, y_pred_onehot=y_pred_onehot)
+        if adversarial:
+            adversarial_scores = {}
+            adversarial_perturbation = tp.adversarial.FGSM(self, x, y_true_onehot)
+            for epsilon in tp.ADVERSARIAL_EPSILONS:
+                adversarial_x = x + epsilon * adversarial_perturbation
+                y_adv = self.predict_classes(adversarial_x)
+                y_adv_onehot = self.predict_proba(adversarial_x)
+                adversarial_scores[epsilon] = tp.utils.eval_scores(y_true, y_adv, y_true_onehot, y_adv_onehot)
+            scores['adversarial'] = adversarial_scores
+        return scores
 
     def predict_proba(self, X):
         """ Output logits """
