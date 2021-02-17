@@ -15,7 +15,7 @@ import numpy as np # type: ignore
 import toupee
 
 
-def FGSM(model: toupee.model.Model, X: np.array, Y: np.array) -> np.array:
+def FGSM(model: toupee.model.Model, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
     with tf.GradientTape() as tape:
         X = tf.cast(X, tf.float32)
         tape.watch(X)
