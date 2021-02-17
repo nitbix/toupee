@@ -10,6 +10,7 @@ All code released under GPLv2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
+import os
 import argparse
 import logging
 import toupee as tp
@@ -27,6 +28,7 @@ def main(args=None):
     parser.add_argument('--wandb-project', type=str, help="Weights and Biases project name")
     parser.add_argument('--wandb-group', type=str, help="Weights and Biases group name")
     args = parser.parse_args(args)
+    logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
     logging.info(("using toupee version {0}".format(tp.version)))
     params = tp.config.load_parameters(args.params_file)
     if args.wandb:
@@ -43,6 +45,9 @@ def main(args=None):
     base_model.fit(data=data, log_wandb=args.wandb)
     logging.info(base_model.test_metrics['classification_report'])
     tp.utils.pretty_print_confusion_matrix(base_model.test_metrics['confusion_matrix'])
+    logging.info('\n{:*^40}'.format(" Model Metrics "))
+    for metric_name in tp.PRINTABLE_METRICS:
+        logging.info(f"{metric_name}: {base_model.test_metrics[metric_name]}")
     if args.save_file:
         base_model.save(args.save_file)
 

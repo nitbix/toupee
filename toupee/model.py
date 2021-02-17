@@ -146,14 +146,14 @@ class Model:
         start_time = time.perf_counter()
         callbacks = self._optimizer_schedule.get_callbacks(self._loss,
                                                            self._training_metrics)
-        if not log_wandb:
-            callbacks.append(tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir))
         if self.params.reduce_lr_on_plateau:
             callbacks.append(
                 tf.keras.callbacks.ReduceLROnPlateau(**self.params.reduce_lr_on_plateau))
         if log_wandb:
             from wandb.keras import WandbCallback
             callbacks.append(WandbCallback())
+        else:
+            callbacks.append(tf.keras.callbacks.TensorBoard(log_dir=self.params.tb_log_dir))
         if self.params.multi_gpu:
             logging.warning("!!! WARNING - EXPERIMENTAL !!! running on multi gpu")
             tf.keras.utils.multi_gpu_model(self._model, gpus=self.params.multi_gpu)
@@ -184,12 +184,18 @@ class Model:
         #TODO: update for different data formats
         all_y_pred = []
         all_y_true = []
+        all_y_pred_onehot = []
+        all_y_true_onehot = []
         for (x, y_true) in test_data:
             all_y_pred.append(self.predict_classes(x))
+            all_y_pred_onehot.append(self.predict_proba(x))
             all_y_true.append(np.argmax(y_true.numpy(), axis=1))
+            all_y_true_onehot.append(y_true.numpy())
         y_pred = np.concatenate(all_y_pred)
         y_true = np.concatenate(all_y_true)
-        return tp.utils.eval_scores(y_true, y_pred)
+        y_pred_onehot = np.concatenate(all_y_pred_onehot)
+        y_true_onehot = np.concatenate(all_y_true_onehot)
+        return tp.utils.eval_scores(y_true=y_true, y_pred=y_pred, y_true_onehot=y_true_onehot, y_pred_onehot=y_pred_onehot)
 
     def predict_proba(self, X):
         """ Output logits """

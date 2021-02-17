@@ -46,7 +46,7 @@ jobs:
           name: Static Type Checks
           command: |
             . ~/venv/bin/activate
-            mypy .
+            mypy -p toupee
 
       - run:
           name: Run Tests
