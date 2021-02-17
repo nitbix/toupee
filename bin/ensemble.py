@@ -37,6 +37,8 @@ def main(args=None, params=None):
     logging.info(("using toupee version {0}".format(tp.version)))
     if not params:
         params = tp.config.load_parameters(args.params_file)
+    if args.epochs:
+        params.epochs = args.epochs
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     wandb_params = None
     if args.wandb:

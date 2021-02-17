@@ -153,34 +153,8 @@ class EnsembleMethod:
         """ Evaluate model on some test data """
         #TODO: update for different data formats
         test_data = test_data or self.data.data['test']
-        all_y_pred = []
-        all_y_true = []
-        all_y_pred_onehot = []
-        all_y_true_onehot = []
-        all_x = []
-        for (x, y_true) in test_data:
-            all_x.append(x)
-            all_y_pred.append(self.predict_classes(x))
-            all_y_true.append(np.argmax(y_true.numpy(), axis=1))
-            all_y_pred_onehot.append(self.predict_proba(x))
-            all_y_true_onehot.append(y_true.numpy())
-        x = np.concatenate(all_x)
-        y_pred = np.concatenate(all_y_pred)
-        y_true = np.concatenate(all_y_true)
-        y_pred_onehot = np.concatenate(all_y_pred_onehot)
-        y_true_onehot = np.concatenate(all_y_true_onehot)
-        scores = tp.utils.eval_scores(y_true=y_true, y_pred=y_pred, y_true_onehot=y_true_onehot, y_pred_onehot=y_pred_onehot)
-        if self.adversarial_testing:
-            adversarial_scores = {}
-            # convention: we take the adversarial perturbations from the first member
-            adversarial_perturbation = tp.adversarial.FGSM(self.members[0], x, y_true_onehot)
-            for epsilon in tp.ADVERSARIAL_EPSILONS:
-                adversarial_x = x + epsilon * adversarial_perturbation
-                y_adv = self.predict_classes(adversarial_x)
-                y_adv_onehot = self.predict_proba(adversarial_x)
-                adversarial_scores[epsilon] = tp.utils.eval_scores(y_true, y_adv, y_true_onehot, y_adv_onehot)
-            scores['adversarial'] = adversarial_scores
-        return scores
+        return tp.metrics.evaluate(self, test_data, self.members[0] if self.adversarial_testing else None)
+
 
 ### Ensemble Types / Class Templates ###
 
