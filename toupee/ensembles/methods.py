@@ -28,7 +28,8 @@ import toupee as tp
 
 class EnsembleMethod:
     """ Abstract representation of an Ensemble from which all other methods are derived """
-    def __init__(self, data, size, model_params, aggregator, model_factory=tp.model.Model, saved_ensemble=None, wandb=None, **kwargs):
+    def __init__(self, data, size, model_params, aggregator, model_factory=tp.model.Model, saved_ensemble=None, wandb=None,
+                 adversarial_testing=False, **kwargs):
         self.data = data
         self.size = size
         self.model_params = model_params
@@ -36,6 +37,7 @@ class EnsembleMethod:
         self.aggregator = tp.ensembles.get_aggregator(aggregator)
         self.model_factory = model_factory
         self.wandb = wandb
+        self.adversarial_testing = adversarial_testing
         self.model_weights = [1. / float(self.size) for _ in range(self.size)]
         self._fit_loop_info = {
             'current_step': None,
@@ -155,17 +157,30 @@ class EnsembleMethod:
         all_y_true = []
         all_y_pred_onehot = []
         all_y_true_onehot = []
+        all_x = []
         for (x, y_true) in test_data:
+            all_x.append(x)
             all_y_pred.append(self.predict_classes(x))
             all_y_true.append(np.argmax(y_true.numpy(), axis=1))
             all_y_pred_onehot.append(self.predict_proba(x))
             all_y_true_onehot.append(y_true.numpy())
+        x = np.concatenate(all_x)
         y_pred = np.concatenate(all_y_pred)
         y_true = np.concatenate(all_y_true)
         y_pred_onehot = np.concatenate(all_y_pred_onehot)
         y_true_onehot = np.concatenate(all_y_true_onehot)
-        return tp.utils.eval_scores(y_true=y_true, y_pred=y_pred, y_true_onehot=y_true_onehot, y_pred_onehot=y_pred_onehot)
-
+        scores = tp.utils.eval_scores(y_true=y_true, y_pred=y_pred, y_true_onehot=y_true_onehot, y_pred_onehot=y_pred_onehot)
+        if self.adversarial_testing:
+            adversarial_scores = {}
+            # convention: we take the adversarial perturbations from the first member
+            adversarial_perturbation = tp.adversarial.FGSM(self.members[0], x, y_true_onehot)
+            for epsilon in tp.ADVERSARIAL_EPSILONS:
+                adversarial_x = x + epsilon * adversarial_perturbation
+                y_adv = self.predict_classes(adversarial_x)
+                y_adv_onehot = self.predict_proba(adversarial_x)
+                adversarial_scores[epsilon] = tp.utils.eval_scores(y_true, y_adv, y_true_onehot, y_adv_onehot)
+            scores['adversarial'] = adversarial_scores
+        return scores
 
 ### Ensemble Types / Class Templates ###
 

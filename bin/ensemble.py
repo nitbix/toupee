@@ -26,6 +26,8 @@ def main(args=None, params=None):
                         help='the file where the trained MLP is to be saved')
     parser.add_argument('--epochs', type=int, nargs='?',
                         help='number of epochs to run')
+    parser.add_argument('--adversarial-testing', action="store_true",
+                        help="Test for adversarial robustness")
     parser.add_argument('--wandb', action="store_true",
                         help="Send results to Weights and Biases")
     parser.add_argument('--wandb-project', type=str, help="Weights and Biases project name")
@@ -43,7 +45,7 @@ def main(args=None, params=None):
         group_id = wandb.util.generate_id()
         wandb_group = args.wandb_group or f"{dataset_name}-{params.ensemble_method['class_name']}-{group_id}"
         wandb_params = {"project": wandb_project, "group": wandb_group}
-    method = tp.ensembles.create(params=params, data=data, wandb=wandb_params)
+    method = tp.ensembles.create(params=params, data=data, wandb=wandb_params, adversarial_testing=args.adversarial_testing)
     metrics = method.fit()
     logging.info('\n{:*^40}'.format(' Ensemble trained in %.2fm ' % (metrics['time'] / 60.)))
     logging.info(metrics['ensemble']['classification_report'])
@@ -62,12 +64,12 @@ def main(args=None, params=None):
             wandb.run.summary[metric] = value
         wandb.run.summary['total time'] = metrics['time']
         run.finish()
-    logging.info('\n{:*^40}'.format(" Aggregate Metrics "))
-    for metric_name in tp.PRINTABLE_METRICS:
-        logging.info(f"{metric_name}: {metrics['ensemble'][metric_name]}")
     logging.info('\n{:*^40}'.format(" Member Metrics "))
     for metric_name in tp.PRINTABLE_METRICS:
         logging.info(f"{metric_name}: {metrics['members'][metric_name].tolist()}")
+    logging.info('\n{:*^40}'.format(" Aggregate Metrics "))
+    tp.log_metrics(metrics["ensemble"])
+
     if args.save_file:
         method.save(args.save_file)
         dill.dump(metrics, args.save_file + '.metrics')
