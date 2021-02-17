@@ -16,11 +16,12 @@ import toupee
 
 
 def FGSM(model: toupee.model.Model, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+    # WARNING: this treats everything as a single batch!
     with tf.GradientTape() as tape:
-        X = tf.cast(X, tf.float32)
+        X = tf.convert_to_tensor(X)
         tape.watch(X)
         prediction = model._model(X)
         loss = model._loss(Y, prediction)
         gradient = tape.gradient(loss, X)
         signed_grad = tf.sign(gradient)
-        return signed_grad.numpy()
+    return signed_grad.numpy()

@@ -15,7 +15,7 @@ import argparse
 import logging
 import toupee as tp
 
-def main(args=None):
+def main(args=None, params=None):
     """ Train a base model as specified """
     parser = argparse.ArgumentParser(description='Train a single Base Model')
     parser.add_argument('params_file', help='the parameters file')
@@ -32,7 +32,10 @@ def main(args=None):
     args = parser.parse_args(args)
     logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
     logging.info(("using toupee version {0}".format(tp.version)))
-    params = tp.config.load_parameters(args.params_file)
+    if not params:
+        params = tp.config.load_parameters(args.params_file)
+    if args.epochs:
+        params.epochs = args.epochs
     if args.wandb:
         import wandb
         wandb_project = args.wandb_project or f"toupee-{params.dataset}-base_model"
