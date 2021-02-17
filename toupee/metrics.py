@@ -10,8 +10,8 @@ All code released under Apachev2.0 licensing.
 """
 __docformat__ = 'restructedtext en'
 
-import numpy as np
-from sklearn.calibration import calibration_curve
+import numpy as np # type: ignore
+from sklearn.calibration import calibration_curve # type: ignore
 
 
 def ece_binary(prob_true, prob_pred, bin_sizes):
