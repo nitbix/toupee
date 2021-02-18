@@ -1,0 +1,64 @@
+---
+## MLP Parameters ##
+#dataset: /datasets/test_data/cifar10-th/
+dataset: ../cifar-10-new-loaded/
+data_format: npz
+convert_labels_to_one_hot: true
+model_file: examples/experiments/cifar-10/densenet121.model
+reduce_lr_on_plateau:
+  factor: 0.1
+  patience: 5
+  cooldown: 0
+  min_lr: 0.0000001
+optimizer:
+  0:
+    class_name: Adam
+    config:
+      learning_rate:
+        0:  0.001
+        50: 0.0001
+  #       30: 0.001
+  #       50: 0.0001
+  #       # 100: 0.0001
+  # 100:
+  #   class_name: SGD
+  #   config:
+  #     learning_rate: 
+  #       0: 0.1
+  #       150: 0.01
+  #       250: 0.001
+  #     momentum: 0.9
+  #     decay: 0.0005
+epochs: 5
+batch_size: 256
+loss: categorical_crossentropy
+shuffle: true
+# multi_gpu: 2
+# max_examples: 100
+
+#use online image transformations by specifying arguments to ImageDataGenerator
+img_gen_params:
+  #zoom_range: 0.15
+  width_shift_range: 0.125
+  height_shift_range: 0.125
+  horizontal_flip: true
+  rotation_range: 15
+  featurewise_std_normalization: true
+  featurewise_center: true
+  #zca_whitening: true
+
+## Ensemble Parameters ##
+ensemble_method: 
+  class_name: Bagging
+  params:
+    aggregator: Averaging
+    size: 20
+
+### BEST SO FAR:
+
+  # 0:
+  #   class_name: Adam
+  #   config:
+  #     learning_rate:
+  #       0:  0.001
+  #       256: 0.0001
