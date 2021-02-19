@@ -32,6 +32,8 @@ def main(args=None, params=None):
                         help="Send results to Weights and Biases")
     parser.add_argument('--wandb-project', type=str, help="Weights and Biases project name")
     parser.add_argument('--wandb-group', type=str, help="Weights and Biases group name")
+    parser.add_argument('--distil', action="store_true",
+                        help="Create a distilled network from the Ensemble")
     args = parser.parse_args()
     logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
     logging.info(("using toupee version {0}".format(tp.version)))
@@ -47,7 +49,8 @@ def main(args=None, params=None):
         group_id = wandb.util.generate_id()
         wandb_group = args.wandb_group or f"{dataset_name}-{params.ensemble_method['class_name']}-{group_id}"
         wandb_params = {"project": wandb_project, "group": wandb_group}
-    method = tp.ensembles.create(params=params, data=data, wandb=wandb_params, adversarial_testing=args.adversarial_testing)
+    method = tp.ensembles.create(params=params, data=data, wandb=wandb_params, adversarial_testing=args.adversarial_testing,
+                                    distil=args.distil)
     metrics = method.fit()
     logging.info('\n{:*^40}'.format(' Ensemble trained in %.2fm ' % (metrics['time'] / 60.)))
     logging.info(metrics['ensemble']['classification_report'])
@@ -71,6 +74,9 @@ def main(args=None, params=None):
         logging.info(f"{metric_name}: {metrics['members'][metric_name].tolist()}")
     logging.info('\n{:*^40}'.format(" Aggregate Metrics "))
     tp.log_metrics(metrics["ensemble"])
+    if args.distil:
+        logging.info('\n{:*^40}'.format(" Distilled Model Metrics "))
+        tp.log_metrics(metrics["distilled_model"])
 
     if args.save_file:
         method.save(args.save_file)

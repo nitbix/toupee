@@ -29,7 +29,7 @@ import toupee as tp
 class EnsembleMethod:
     """ Abstract representation of an Ensemble from which all other methods are derived """
     def __init__(self, data, size, model_params, aggregator, model_factory=tp.model.Model, saved_ensemble=None, wandb=None,
-                 adversarial_testing=False, **kwargs):
+                 adversarial_testing=False, distil=False, **kwargs):
         self.data = data
         self.size = size
         self.model_params = model_params
@@ -37,6 +37,7 @@ class EnsembleMethod:
         self.aggregator = tp.ensembles.get_aggregator(aggregator)
         self.model_factory = model_factory
         self.wandb = wandb
+        self.distil = distil
         self.adversarial_testing = adversarial_testing
         self.model_weights = [1. / float(self.size) for _ in range(self.size)]
         self._fit_loop_info = {
@@ -123,11 +124,25 @@ class EnsembleMethod:
         if self.aggregator.is_fittable:
             #TODO: fit aggregator
             raise NotImplementedError()
-        return {'ensemble': self.evaluate(self.data.get_testing_handle()),
+        metrics = {'ensemble': self.evaluate(self.data.get_testing_handle()),
                 'members': m_summary,
                 'round_cumulative': cumulative_results,
                 'time': end_time - start_time
         }
+        if self.distil:
+            logging.info("Training distilled model")
+            if self.wandb:
+                run = wandb.init(project=self.wandb["project"], reinit=True,
+                            config={"type": "ensemble", "params": self.model_params.__dict__},
+                            group=self.wandb["group"],
+                            name=f"distilled-model")
+            distilled_data = self.data.distillation_dataset(self)
+            self.distilled_model = self.model_factory(params=self.model_params)
+            self.distilled_model.fit(distilled_data, log_wandb=self.wandb)
+            if self.wandb:
+                run.finish()
+            metrics['distilled_model'] = self.distilled_model.test_metrics
+        return metrics
     
     def _fit_call(self, model):
         """ Wrapper for calling the model fitting """
