@@ -81,6 +81,6 @@ def evaluate(model, test_data, adversarial_gradient_source=None):
             adversarial_x = x + epsilon * adversarial_perturbation
             y_adv = model.predict_classes(adversarial_x)
             y_adv_onehot = model.predict_proba(adversarial_x)
-            adversarial_scores[epsilon] = tp.utils.eval_scores(y_true, y_adv, y_true_onehot, y_adv_onehot)
+            adversarial_scores[str(epsilon)] = tp.utils.eval_scores(y_true, y_adv, y_true_onehot, y_adv_onehot)
         scores['adversarial'] = adversarial_scores
     return scores

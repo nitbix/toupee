@@ -38,7 +38,7 @@ img_gen_params:
 ensemble_method:
   class_name: DIB
   params:
-    subsequent_epochs: 1
+    subsequent_epochs: 10
     insert_after: concatenate_34
     new_layers:
       - class_name: BatchNormalization
