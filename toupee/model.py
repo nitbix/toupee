@@ -94,10 +94,13 @@ class Model:
     """ Representation of a model """
     #TODO: Frozen layers
     #TODO: Get model id and use different tb log dir for each model
-    def __init__(self, params):
+    def __init__(self, params, model_yaml=None):
         self.params = params
-        with open(params.model_file, 'r') as model_file:
-            self.model_yaml = model_file.read()
+        if not model_yaml:
+            with open(params.model_file, 'r') as model_file:
+                self.model_yaml = model_file.read()
+        else:
+            self.model_yaml = model_yaml
         self._model = tf.keras.models.model_from_yaml(self.model_yaml)
         if params.model_weights:
             self._model.load_weights(params.model_weights)
@@ -137,12 +140,16 @@ class Model:
         model_config['layers'] = new_layers
         self._model = tf.keras.Model.from_config(model_config)
         self.model_yaml = self._model.to_yaml()
+        return inbound_layer
 
-    def copy_weights(self, other_model):
+    def copy_weights(self, other_model, early_stop=False):
         """ Copy weights from another model, up to the last layer with the same name """
         for this_layer, other_layer in zip(self._model.layers, other_model._model.layers):
             if this_layer.name != other_layer.name:
-                break
+                if early_stop:
+                    break
+                else:
+                    continue
             this_layer.set_weights(other_layer.get_weights())
 
     def fit(self, data: tp.data.Dataset, epochs=None, verbose=None, log_wandb:bool=False,
