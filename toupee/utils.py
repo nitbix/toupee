@@ -121,7 +121,7 @@ def replace_inbound_layer(layer_list, old_value, new_value):
         a_acc = []
         for b in a:
             new_b = b
-            b[0] = b[0].replace(old_value, new_value)
+            b[0] = new_value if b[0] == old_value else b[0]
             a_acc.append(new_b)
         new_list.append(a_acc)
     return new_list

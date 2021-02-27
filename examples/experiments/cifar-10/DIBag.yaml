@@ -38,7 +38,7 @@ img_gen_params:
 
 ## Ensemble Parameters ##
 ensemble_method:
-  class_name: DIB
+  class_name: DIBag
   params:
     subsequent_epochs: 30
     optimizer:

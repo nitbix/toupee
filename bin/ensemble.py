@@ -28,6 +28,8 @@ def main(args=None, params=None):
                         help='number of epochs to run')
     parser.add_argument('--adversarial-testing', action="store_true",
                         help="Test for adversarial robustness")
+    parser.add_argument('--tensorboard', action="store_true",
+                        help="Save training graphs to TensorBoard")
     parser.add_argument('--wandb', action="store_true",
                         help="Send results to Weights and Biases")
     parser.add_argument('--wandb-project', type=str, help="Weights and Biases project name")
@@ -50,7 +52,7 @@ def main(args=None, params=None):
         wandb_group = args.wandb_group or f"{dataset_name}-{params.ensemble_method['class_name']}-{group_id}"
         wandb_params = {"project": wandb_project, "group": wandb_group}
     method = tp.ensembles.create(params=params, data=data, wandb=wandb_params, adversarial_testing=args.adversarial_testing,
-                                    distil=args.distil)
+                                    distil=args.distil, tensorboard=args.tensorboard)
     metrics = method.fit()
     logging.info('\n{:*^40}'.format(' Ensemble trained in %.2fm ' % (metrics['time'] / 60.)))
     logging.info(metrics['ensemble']['classification_report'])

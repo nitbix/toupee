@@ -40,7 +40,7 @@ def calibration(y_true, y_pred, n_bins=10):
     mce_bin = []
     rmsce_bin = []
     for a_class in range(y_true.shape[1]):
-        prob_true, prob_pred = calibration_curve(y_true[a_class], y_pred[a_class], n_bins)
+        prob_true, prob_pred = calibration_curve(y_true=y_true[a_class], y_prob=y_pred[a_class], n_bins=n_bins)
         bin_sizes = np.histogram(a=y_pred[a_class], range=(0, 1), bins=len(prob_true))[0]
         ece_bin.append(ece_binary(prob_true, prob_pred, bin_sizes))
         mce_bin.append(mce_binary(prob_true, prob_pred, bin_sizes))

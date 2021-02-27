@@ -23,10 +23,12 @@ def main(args=None, params=None):
                         help='the file where the trained MLP is to be saved')
     parser.add_argument('--epochs', type=int, nargs='?',
                         help='number of epochs to run')
+    parser.add_argument('--tensorboard', action="store_true",
+                        help="Save training graphs to TensorBoard")
+    parser.add_argument('--adversarial-testing', action="store_true",
+                        help="Test for adversarial robustness")\
     parser.add_argument('--wandb', action="store_true",
                         help="Send results to Weights and Biases")
-    parser.add_argument('--adversarial-testing', action="store_true",
-                        help="Test for adversarial robustness")
     parser.add_argument('--wandb-project', type=str, help="Weights and Biases project name")
     parser.add_argument('--wandb-group', type=str, help="Weights and Biases group name")
     args = parser.parse_args(args)
@@ -47,7 +49,8 @@ def main(args=None, params=None):
                    name='model-0')
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     base_model = tp.model.Model(params=params)
-    base_model.fit(data=data, log_wandb=args.wandb, adversarial_testing=args.adversarial_testing)
+    base_model.fit(data=data, log_wandb=args.wandb, adversarial_testing=args.adversarial_testing,
+                    tensorboard=args.tensorboard)
     tp.log_metrics(base_model.test_metrics)
 
     if args.save_file:
