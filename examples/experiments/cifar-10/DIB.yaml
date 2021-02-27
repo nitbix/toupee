@@ -41,14 +41,14 @@ ensemble_method:
   class_name: DIB
   params:
     subsequent_epochs: 30
-    optimizer:
+    subsequent_optimizer:
       0:
         class_name: Adam
         config:
           learning_rate:
             0:  0.001
-            20: 0.0001
-            50: 0.00001
+            10: 0.0001
+            20: 0.00001
     insert_after: concatenate_34
     new_layers:
       - class_name: BatchNormalization

@@ -261,22 +261,23 @@ class AdaBoost(Simple):
         self.data = self.data.resample()
 
 
-
 class Incremental(DynamicMembers):
     """
     Incrementally built Ensemble template
     """
-    def __init__(self, subsequent_epochs, insert_after, new_layers, **kwargs):
+    def __init__(self, subsequent_epochs, insert_after, new_layers, subsequent_optimizer=None, **kwargs):
         super().__init__(**kwargs)
         self.subsequent_epochs = subsequent_epochs
+        self.subsequent_optimizer = subsequent_optimizer
         self.insert_after = insert_after
         self.new_layers = new_layers
-
 
     def _members(self):
         """ Generator that creates new members on the fly by making the previous member bigger """
         for _ in range(self.size):
-            new_member = self.model_factory(params=self.model_params, model_yaml=self.members[-1].model_yaml if self.members else None)
+            new_member = self.model_factory(params=self.model_params,
+                                            model_yaml=self.members[-1].model_yaml if self.members else None,
+                                            optimizer=self.subsequent_optimizer if self.members else None)
             if self.members:
                 self.insert_after = new_member.inject_layers(self.new_layers, self.insert_after)
                 new_member.copy_weights(self.members[-1])

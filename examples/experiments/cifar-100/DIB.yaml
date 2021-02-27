@@ -38,6 +38,14 @@ ensemble_method:
   class_name: DIB
   params:
     subsequent_epochs: 30
+    subsequent_optimizer:
+      0:
+        class_name: Adam
+        config:
+          learning_rate:
+            0:  0.001
+            10: 0.0001
+            20: 0.00001
     insert_after: concatenate_34
     new_layers:
       - class_name: BatchNormalization
@@ -68,7 +76,7 @@ ensemble_method:
           scale: true
           trainable: true
         inbound_nodes:
-        - - - concatenate_34
+        - - - PREDECESSOR
             - 0
             - 0
             - {}
@@ -130,7 +138,7 @@ ensemble_method:
           name: concatenate_35
           trainable: true
         inbound_nodes:
-        - - - concatenate_34
+        - - - PREDECESSOR
             - 0
             - 0
             - &id040 {}

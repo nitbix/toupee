@@ -104,7 +104,8 @@ class Model:
         self._model = tf.keras.models.model_from_yaml(self.model_yaml)
         if params.model_weights:
             self._model.load_weights(params.model_weights)
-        self._optimizer_schedule = OptimizerSchedule(params.optimizer, self.params.epochs)
+        self.optimizer = optimizer or params.optimizer
+        self._optimizer_schedule = OptimizerSchedule(self.optimizer, self.params.epochs)
         self._loss = tf.keras.losses.deserialize(params.loss)
         self.params = params
         self._training_metrics = ['accuracy']
