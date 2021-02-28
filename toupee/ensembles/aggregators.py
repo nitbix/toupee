@@ -42,7 +42,7 @@ class Averaging(Aggregator):
         proba = np.array(Y)
         size = Y.shape[0]
         weights = weights[:size]
-        weights = weights / sum(weights) if weights is not None else np.ones(size) / float(size)
+        weights = np.asarray(weights) / sum(weights) if weights is not None else np.ones(size) / float(size)
         assert math.isclose(sum(weights), 1.0)
         avg = np.sum([proba[i] * weights[i] for i in range(size)], axis=0)
         return np.clip(avg, 0., 1.)
