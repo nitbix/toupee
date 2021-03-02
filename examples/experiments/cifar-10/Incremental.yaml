@@ -19,7 +19,7 @@ optimizer:
         20: 0.0001
         50: 0.00001
 epochs: 100
-batch_size: 256
+batch_size: 128
 loss: categorical_crossentropy
 shuffle: true
 # multi_gpu: 2
@@ -150,7 +150,7 @@ ensemble_method:
             - 0
             - *id040
         name: concatenate_35
-    size: 63
+    size: 30
 
 ### BEST SO FAR:
 

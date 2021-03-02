@@ -29,7 +29,7 @@ optimizer:
   #       250: 0.001
   #     momentum: 0.9
   #     decay: 0.0005
-epochs: 5
+epochs: 100
 batch_size: 256
 loss: categorical_crossentropy
 shuffle: true
@@ -52,7 +52,7 @@ ensemble_method:
   class_name: Bagging
   params:
     aggregator: Averaging
-    size: 20
+    size: 4
 
 ### BEST SO FAR:
 
