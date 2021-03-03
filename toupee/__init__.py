@@ -24,3 +24,5 @@ PRINTABLE_METRICS = ['accuracy_score',
                      ]
 
 ADVERSARIAL_EPSILONS = [0.1, 0.01, 0.001]
+
+config.setup_yaml()

@@ -130,6 +130,7 @@ class Dataset:
         self.files['valid'] = validation_file or DEFAULT_VALIDATION_FILE
         self.files['test'] = testing_file or DEFAULT_TESTING_FILE
         if src_dir:
+            src_dir = os.path.expanduser(src_dir)
             self.files = dict_map(self.files, lambda f_name: os.path.join(src_dir, f_name))
         if data_format:
             self.files = dict_map(self.files, lambda f_name: f_name + '.' + data_format)
