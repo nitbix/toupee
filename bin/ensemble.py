@@ -25,7 +25,9 @@ def main(args=None, params=None):
     parser.add_argument('save_file', nargs='?',
                         help='the file where the trained MLP is to be saved')
     parser.add_argument('--epochs', type=int, nargs='?',
-                        help='number of epochs to run')
+                        help='Override number of epochs to run')
+    parser.add_argument('--size', type=int, nargs='?',
+                        help='Override Ensemble size')
     parser.add_argument('--adversarial-testing', action="store_true",
                         help="Test for adversarial robustness")
     parser.add_argument('--tensorboard', action="store_true",
@@ -45,6 +47,8 @@ def main(args=None, params=None):
         params.epochs = args.epochs
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     wandb_params = None
+    if args.size:
+        params.ensemble_method['params']['size'] = args.size
     if args.wandb:
         dataset_name = os.path.basename(os.path.normpath(params.dataset))
         wandb_project = args.wandb_project or f"toupee-{dataset_name}"
