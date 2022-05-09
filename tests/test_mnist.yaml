@@ -1,9 +1,9 @@
 ---
 ## MLP Parameters ##
-dataset: tests/mnist/
+dataset: mnist/
 data_format: npz
 convert_labels_to_one_hot: true
-model_file: tests/test_mnist_cnn.model
+model_file: test_mnist_cnn.model
 reduce_lr_on_plateau:
   factor: 0.1
   patience: 5

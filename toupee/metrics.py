@@ -40,7 +40,7 @@ def calibration(y_true, y_pred, n_bins=10):
     mce_bin = []
     rmsce_bin = []
     for a_class in range(y_true.shape[1]):
-        prob_true, prob_pred = calibration_curve(y_true[a_class], y_pred[a_class], n_bins)
+        prob_true, prob_pred = calibration_curve(y_true=y_true[a_class], y_prob=y_pred[a_class], n_bins=n_bins)
         bin_sizes = np.histogram(a=y_pred[a_class], range=(0, 1), bins=len(prob_true))[0]
         ece_bin.append(ece_binary(prob_true, prob_pred, bin_sizes))
         mce_bin.append(mce_binary(prob_true, prob_pred, bin_sizes))
@@ -81,6 +81,6 @@ def evaluate(model, test_data, adversarial_gradient_source=None):
             adversarial_x = x + epsilon * adversarial_perturbation
             y_adv = model.predict_classes(adversarial_x)
             y_adv_onehot = model.predict_proba(adversarial_x)
-            adversarial_scores[epsilon] = tp.utils.eval_scores(y_true, y_adv, y_true_onehot, y_adv_onehot)
+            adversarial_scores[str(epsilon)] = tp.utils.eval_scores(y_true, y_adv, y_true_onehot, y_adv_onehot)
         scores['adversarial'] = adversarial_scores
     return scores

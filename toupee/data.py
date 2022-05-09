@@ -16,6 +16,7 @@ __docformat__ = 'restructedtext en'
 import os
 import sys
 import math
+import copy
 
 from pathlib import Path
 import numpy as np # type: ignore
@@ -129,6 +130,7 @@ class Dataset:
         self.files['valid'] = validation_file or DEFAULT_VALIDATION_FILE
         self.files['test'] = testing_file or DEFAULT_TESTING_FILE
         if src_dir:
+            src_dir = os.path.expanduser(src_dir)
             self.files = dict_map(self.files, lambda f_name: os.path.join(src_dir, f_name))
         if data_format:
             self.files = dict_map(self.files, lambda f_name: f_name + '.' + data_format)
@@ -145,8 +147,10 @@ class Dataset:
         self.n_classes = self.raw_data['train'][1].shape[1]
         if max_examples:
             self.raw_data = dict_map(self.raw_data, lambda d: (d[0][:max_examples], d[1][:max_examples]))
-        self.size = dict_map(self.raw_data, lambda data: data[0].shape[0])
+        self._process(**kwargs)
 
+    def _process(self, **kwargs):
+        self.size = dict_map(self.raw_data, lambda data: data[0].shape[0])
         # Keras' fit() will expect that if specifying a steps_per_epoch, all batches will be the same size.
         # Here, we set it to None so that when the dataset is not a generator we are not causing this to happen.
         # Later, it will be set to a value wherever (if) the dataset becomes a generator.
@@ -205,6 +209,29 @@ class Dataset:
         self.resample_replace = replace
         self.__class__ = ResamplingDataset
         return self
+    
+    def copy_with_new_data(self, new_data):
+        """ Create a new copy but with new data. Useful for distillation and post-processing. """
+        new_dataset = copy.copy(self)
+        new_dataset.raw_data
+        new_dataset._process(**self.kwargs)
+        return new_dataset
+
+    def map(self, f, columns=None):
+        """ Map a function that takes a numpy array over the entire dataset. Optionally select which columns. """
+        all_cols = range(len(self.raw_data['train']))
+        if not columns:
+            columns = all_cols
+        new_data = dict_map(self.raw_data, lambda x: tuple([f(x[col]) if col in columns else x[col] for col in all_cols]))
+        return self.copy_with_new_data(new_data)
+
+    def map_splits(self, f):
+        """ Map a function that operates on a train/valid/test split to all three. """
+        return self.copy_with_new_data(dict_map(self.raw_data, f))
+
+
+    def distillation_dataset(self, model):
+        return self.map_splits(lambda raw_data: (raw_data[0], model.predict_proba(raw_data[0])))
 
 
 class ResamplingDataset(Dataset):

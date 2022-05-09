@@ -1,10 +1,9 @@
 ---
 ## MLP Parameters ##
-#dataset: /datasets/test_data/cifar10-th/
-dataset: ../cifar-10-new-loaded/
+dataset: ../cifar-100-new-loaded/
 data_format: npz
 convert_labels_to_one_hot: true
-model_file: examples/experiments/cifar-10/densenet121small.model
+model_file: examples/experiments/cifar-100/densenet121small.model
 reduce_lr_on_plateau:
   factor: 0.1
   patience: 5
@@ -22,8 +21,6 @@ epochs: 100
 batch_size: 128
 loss: categorical_crossentropy
 shuffle: true
-# multi_gpu: 2
-# max_examples: 2000
 
 #use online image transformations by specifying arguments to ImageDataGenerator
 img_gen_params:
@@ -38,7 +35,7 @@ img_gen_params:
 
 ## Ensemble Parameters ##
 ensemble_method:
-  class_name: DIB
+  class_name: Incremental
   params:
     subsequent_epochs: 30
     subsequent_optimizer:
@@ -151,12 +148,3 @@ ensemble_method:
             - *id040
         name: concatenate_35
     size: 30
-
-### BEST SO FAR:
-
-  # 0:
-  #   class_name: Adam
-  #   config:
-  #     learning_rate:
-  #       0:  0.001
-  #       256: 0.0001

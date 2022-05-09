@@ -25,13 +25,19 @@ def main(args=None, params=None):
     parser.add_argument('save_file', nargs='?',
                         help='the file where the trained MLP is to be saved')
     parser.add_argument('--epochs', type=int, nargs='?',
-                        help='number of epochs to run')
+                        help='Override number of epochs to run')
+    parser.add_argument('--size', type=int, nargs='?',
+                        help='Override Ensemble size')
     parser.add_argument('--adversarial-testing', action="store_true",
                         help="Test for adversarial robustness")
+    parser.add_argument('--tensorboard', action="store_true",
+                        help="Save training graphs to TensorBoard")
     parser.add_argument('--wandb', action="store_true",
                         help="Send results to Weights and Biases")
     parser.add_argument('--wandb-project', type=str, help="Weights and Biases project name")
     parser.add_argument('--wandb-group', type=str, help="Weights and Biases group name")
+    parser.add_argument('--distil', action="store_true",
+                        help="Create a distilled network from the Ensemble")
     args = parser.parse_args()
     logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
     logging.info(("using toupee version {0}".format(tp.version)))
@@ -41,13 +47,16 @@ def main(args=None, params=None):
         params.epochs = args.epochs
     data = tp.data.Dataset(src_dir=params.dataset, **params.__dict__)
     wandb_params = None
+    if args.size:
+        params.ensemble_method['params']['size'] = args.size
     if args.wandb:
         dataset_name = os.path.basename(os.path.normpath(params.dataset))
         wandb_project = args.wandb_project or f"toupee-{dataset_name}"
         group_id = wandb.util.generate_id()
         wandb_group = args.wandb_group or f"{dataset_name}-{params.ensemble_method['class_name']}-{group_id}"
         wandb_params = {"project": wandb_project, "group": wandb_group}
-    method = tp.ensembles.create(params=params, data=data, wandb=wandb_params, adversarial_testing=args.adversarial_testing)
+    method = tp.ensembles.create(params=params, data=data, wandb=wandb_params, adversarial_testing=args.adversarial_testing,
+                                    distil=args.distil, tensorboard=args.tensorboard)
     metrics = method.fit()
     logging.info('\n{:*^40}'.format(' Ensemble trained in %.2fm ' % (metrics['time'] / 60.)))
     logging.info(metrics['ensemble']['classification_report'])
@@ -71,6 +80,9 @@ def main(args=None, params=None):
         logging.info(f"{metric_name}: {metrics['members'][metric_name].tolist()}")
     logging.info('\n{:*^40}'.format(" Aggregate Metrics "))
     tp.log_metrics(metrics["ensemble"])
+    if args.distil:
+        logging.info('\n{:*^40}'.format(" Distilled Model Metrics "))
+        tp.log_metrics(metrics["distilled_model"])
 
     if args.save_file:
         method.save(args.save_file)

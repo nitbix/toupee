@@ -114,3 +114,14 @@ def log_metrics(metrics) -> None:
         for epsilon in metrics['adversarial']:
             logging.info(f"** Epsilon = {epsilon}")
             _log_metrics(metrics['adversarial'][epsilon])
+
+def replace_inbound_layer(layer_list, old_value, new_value):
+    new_list = []
+    for a in layer_list:
+        a_acc = []
+        for b in a:
+            new_b = b
+            b[0] = new_value if b[0] == old_value else b[0]
+            a_acc.append(new_b)
+        new_list.append(a_acc)
+    return new_list

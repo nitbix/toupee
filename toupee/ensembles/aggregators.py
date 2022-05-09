@@ -10,6 +10,7 @@ __docformat__ = 'restructedtext en'
 
 import numpy as np # type: ignore
 import toupee as tp
+import math
 
 #TODO: Voting
 #TODO: Stacking
@@ -40,8 +41,11 @@ class Averaging(Aggregator):
         """ Calling interface to aggregate by average with optional weights """
         proba = np.array(Y)
         size = Y.shape[0]
-        weights = weights if weights is not None else np.ones(size) / float(size)
-        return np.sum([proba[i] * weights[i] for i in range(size)], axis=0)
+        weights = weights[:size]
+        weights = np.asarray(weights) / sum(weights) if weights is not None else np.ones(size) / float(size)
+        assert math.isclose(sum(weights), 1.0)
+        avg = np.sum([proba[i] * weights[i] for i in range(size)], axis=0)
+        return np.clip(avg, 0., 1.)
 
 
 class MajorityVoting(Aggregator):

@@ -23,7 +23,7 @@ optimizer:
   # 100:
   #   class_name: SGD
   #   config:
-  #     learning_rate: 
+  #     learning_rate:
   #       0: 0.1
   #       150: 0.01
   #       250: 0.001
@@ -48,9 +48,10 @@ img_gen_params:
   #zca_whitening: true
 
 ## Ensemble Parameters ##
-ensemble_method: 
-  class_name: AdaBoost
+ensemble_method:
+  class_name: Bagging
   params:
+    aggregator: Averaging
     size: 4
 
 ### BEST SO FAR:

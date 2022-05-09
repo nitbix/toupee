@@ -9,6 +9,7 @@ All code released under Apachev2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import yaml
+from yamlinclude import YamlIncludeConstructor # type: ignore
 import toupee.parameters as parameters
 import os
 
@@ -50,9 +51,15 @@ Loader.add_constructor('!include', Loader.include)
 
 def load_parameters(filename: str) -> parameters.Parameters:
     """ Loads a parameters file """
-    with open(filename) as f:
-        r = yaml.load(f, Loader=yaml.FullLoader)
+    filename = os.path.expanduser(filename)
+    prev_dir = os.getcwd()
+    os.chdir(os.path.dirname(filename))
+    with open(os.path.basename(filename)) as f:
+        r = yaml.load(f, Loader=Loader)
     for d in defaults:
         if d not in r:
             r[d] = defaults[d]
     return parameters.Parameters(**r)
+
+def setup_yaml():
+    YamlIncludeConstructor.add_to_loader_class(loader_class=Loader)
