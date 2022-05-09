@@ -43,7 +43,8 @@ where `x` is the input data and `y` is the expected classification output.
 
 This is the file given as an argument to `base_model.py`, `ensemble.py` or
 `distilled_ensemble.py`. It is a yaml description of the experiment.
-Here is an example experiment file:
+Here is an example experiment file to train 10 DenseNets on CIFAR-100 using
+Bagging:
 
 ```
 ---
