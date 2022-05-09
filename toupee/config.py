@@ -9,7 +9,7 @@ All code released under Apachev2.0 licensing.
 __docformat__ = 'restructedtext en'
 
 import yaml
-from yamlinclude import YamlIncludeConstructor
+from yamlinclude import YamlIncludeConstructor # type: ignore
 import toupee.parameters as parameters
 import os
 
