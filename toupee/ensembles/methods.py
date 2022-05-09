@@ -33,7 +33,7 @@ class EnsembleMethod:
         self.data = data
         self.size = size
         self.model_params = model_params
-        self.members: list[Any] = []
+        self.members: List[Any] = []
         self.aggregator = tp.ensembles.get_aggregator(aggregator)
         self.model_factory = model_factory
         self.wandb = wandb
