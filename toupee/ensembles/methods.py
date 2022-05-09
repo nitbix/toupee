@@ -33,7 +33,7 @@ class EnsembleMethod:
         self.data = data
         self.size = size
         self.model_params = model_params
-        self.members = []
+        self.members: list[Any] = []
         self.aggregator = tp.ensembles.get_aggregator(aggregator)
         self.model_factory = model_factory
         self.wandb = wandb
@@ -144,7 +144,7 @@ class EnsembleMethod:
                 run.finish()
             metrics['distilled_model'] = self.distilled_model.test_metrics
         return metrics
-    
+
     def _fit_call(self, model):
         """ Wrapper for calling the model fitting """
         model.fit(self.data, log_wandb=self.wandb, tensorboard=self.tensorboard)
@@ -240,7 +240,7 @@ class AdaBoost(Simple):
         y_true = np.concatenate(y_true)
         y_pred_p = np.concatenate(y_pred_p)
         y_pred = np.argmax(y_pred_p, axis=1)
-        if self.variant == 'MA': 
+        if self.variant == 'MA':
             y_pred_weights = np.max(y_pred_p, axis=1)
         else:
             y_pred_weights = 1.
@@ -322,7 +322,7 @@ class DIB(Incremental):
         y_true = np.concatenate(y_true)
         y_pred_p = np.concatenate(y_pred_p)
         y_pred = np.argmax(y_pred_p, axis=1)
-        if self.variant == 'MA': 
+        if self.variant == 'MA':
             y_pred_weights = np.max(y_pred_p, axis=1)
         else:
             y_pred_weights = 1.

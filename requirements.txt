@@ -8,3 +8,4 @@ scikit-learn>=0.22.2
 mypy>=0.782
 wandb
 pyyaml-include
+types-PyYAML
