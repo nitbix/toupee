@@ -2,7 +2,7 @@ import sys
 import os
 import argparse
 import numpy as np # type: ignore
-import tensorflow as tf # type: ignore
+from torchvision import datasets
 from toupee.utils import dict_map
 
 
@@ -19,30 +19,55 @@ def _preprocess_mnist(data:dict) -> dict:
     data = dict_map(data, lambda d: (np.expand_dims(d[0], axis=3), d[1]))
     return dict_map(data, lambda d: (_rgb_to_float(d[0]), d[1]))
 
+
 def download_cifar10() -> dict:
-    data = tf.keras.datasets.cifar10.load_data()
+    train_data = datasets.CIFAR10(root='/tmp/data', train=True, download=True)
+    test_data = datasets.CIFAR10(root='/tmp/data', train=False, download=True)
+
+    # Convert to numpy arrays
+    train_x = np.array(train_data.data)
+    train_y = np.array(train_data.targets)
+    test_x = np.array(test_data.data)
+    test_y = np.array(test_data.targets)
+
     return _preprocess_cifar({
-        'train': data[0],
-        'valid': data[1],
-        'test' : data[1]
+        'train': (train_x, train_y),
+        'valid': (test_x, test_y),
+        'test' : (test_x, test_y)
     })
 
 
 def download_cifar100() -> dict:
-    data = tf.keras.datasets.cifar100.load_data()
+    train_data = datasets.CIFAR100(root='/tmp/data', train=True, download=True)
+    test_data = datasets.CIFAR100(root='/tmp/data', train=False, download=True)
+
+    # Convert to numpy arrays
+    train_x = np.array(train_data.data)
+    train_y = np.array(train_data.targets)
+    test_x = np.array(test_data.data)
+    test_y = np.array(test_data.targets)
+
     return _preprocess_cifar({
-        'train': data[0],
-        'valid': data[1],
-        'test' : data[1]
+        'train': (train_x, train_y),
+        'valid': (test_x, test_y),
+        'test' : (test_x, test_y)
     })
 
 
 def download_mnist() -> dict:
-    data = tf.keras.datasets.mnist.load_data()
+    train_data = datasets.MNIST(root='/tmp/data', train=True, download=True)
+    test_data = datasets.MNIST(root='/tmp/data', train=False, download=True)
+
+    # Convert to numpy arrays
+    train_x = np.array(train_data.data)
+    train_y = np.array(train_data.targets)
+    test_x = np.array(test_data.data)
+    test_y = np.array(test_data.targets)
+
     return _preprocess_mnist({
-        'train': data[0],
-        'valid': data[1],
-        'test' : data[1]
+        'train': (train_x, train_y),
+        'valid': (test_x, test_y),
+        'test' : (test_x, test_y)
     })
 
 

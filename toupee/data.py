@@ -17,11 +17,15 @@ import os
 import sys
 import math
 import copy
+from typing import Optional, Tuple, Dict, Any, Callable
 
 from pathlib import Path
 import numpy as np # type: ignore
 
-import tensorflow as tf # type: ignore
+import torch
+from torch.utils.data import Dataset as TorchDataset, DataLoader
+from torchvision import transforms
+
 from toupee.utils import dict_map
 
 KNOWN_DATA_TYPES = [".tfrecord", ".h5", ".npz"]
@@ -30,6 +34,7 @@ DEFAULT_TRAINING_FILE = 'train'
 DEFAULT_VALIDATION_FILE = 'valid'
 DEFAULT_TESTING_FILE = 'test'
 
+
 def get_data_format(filename: str) -> str:
     """ Identifies the extension of the dataset """
     extension = Path(filename).suffix
@@ -37,10 +42,12 @@ def get_data_format(filename: str) -> str:
         raise ValueError("Unknown data type %s" % extension)
     return extension
 
+
 def one_hot_numpy(dataset):
     """ Convert a numpy array of Y labels into one-hot encodings """
     n_classes = dataset.max() + 1
     return np.eye(n_classes)[dataset.reshape(-1)]
+
 
 def _load_h5(filename, **kwargs):
     """ Load an HDF5 file """
@@ -74,55 +81,212 @@ def load(filename: str, **kwargs) -> tuple:
     return mapper[get_data_format(filename)](filename, **kwargs)
 
 
-def _np_to_tf(data:tuple, batch_size:int, shuffle:bool=False, shuffle_buffer:int=None, gen_flow=None, **kwargs):
-    """ Convert an np dataset to a tfrecord """
-    if gen_flow:
-        dataset = tf.data.Dataset.from_generator(
-            lambda: gen_flow,
-            #img_gen.flow, args=[data[0], data[1], batch_size, shuffle], #TODO: figure out how to make them named
-            output_types=(tf.float32, tf.float32),
-            output_shapes=((None,) + data[0].shape[1:],
-                           (None,) + data[1].shape[1:])
-        )
-        dataset = dataset.unbatch()
-    else:
-        dataset = tf.data.Dataset.from_tensor_slices(data)
-    dataset = dataset.batch(batch_size)
-    if shuffle and not gen_flow: # gen_flow already does shuffling
-        shuffle_buffer = shuffle_buffer or data[0].shape[0]
-        dataset = dataset.shuffle(shuffle_buffer)
-    return dataset
+class ToupeeDataset(TorchDataset):
+    """
+    PyTorch Dataset wrapper for toupee data.
+
+    Handles numpy arrays and optional transforms. Converts from NHWC (Keras default)
+    to NCHW (PyTorch default) format for image data.
+    """
+
+    def __init__(self, x: np.ndarray, y: np.ndarray, transform: Optional[Callable] = None,
+                 to_channels_first: bool = True):
+        """
+        Args:
+            x: Input data as numpy array
+            y: Labels as numpy array
+            transform: Optional torchvision transform to apply
+            to_channels_first: If True, permute image data from NHWC to NCHW
+        """
+        self.x = x.astype(np.float32)
+        self.y = y.astype(np.float32)
+        self.transform = transform
+        self.to_channels_first = to_channels_first
+        # Check if data is image-like (4D: N, H, W, C)
+        self.is_image = len(self.x.shape) == 4
+
+    def __len__(self) -> int:
+        return len(self.x)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        x = self.x[idx]
+        y = self.y[idx]
+
+        # Convert to tensor
+        x = torch.from_numpy(x)
+        y = torch.from_numpy(y)
+
+        # Convert NHWC to NCHW for image data
+        if self.is_image and self.to_channels_first:
+            x = x.permute(2, 0, 1)  # HWC -> CHW
+
+        # Apply transforms
+        if self.transform:
+            x = self.transform(x)
+
+        return x, y
 
 
-def convert_to_tf(data:tuple, data_format:str, **kwargs):
-    """ Convert current data to tf """
-    mapper = {'.npz': _np_to_tf,
-             }
-    return mapper[data_format](data, **kwargs)
+class ImageAugmentation:
+    """
+    Image augmentation class that mimics Keras ImageDataGenerator functionality.
+
+    Uses torchvision transforms internally.
+    """
+
+    def __init__(self, params: Dict[str, Any], training_data: np.ndarray):
+        """
+        Args:
+            params: Dictionary of augmentation parameters matching Keras ImageDataGenerator
+            training_data: Training data used to compute mean/std for normalization
+        """
+        self.params = params
+        self.mean: Optional[np.ndarray] = None
+        self.std: Optional[np.ndarray] = None
+
+        # Compute featurewise statistics if needed
+        if params.get('featurewise_center', False) or params.get('featurewise_std_normalization', False):
+            self._fit(training_data)
+
+        # Build transform pipeline
+        self.train_transform = self._build_train_transform()
+        self.eval_transform = self._build_eval_transform()
+
+    def _fit(self, data: np.ndarray):
+        """Compute mean and std from training data."""
+        # Data is in NHWC format
+        # Compute per-channel mean and std
+        if len(data.shape) == 4:
+            # Image data: compute over N, H, W dimensions
+            self.mean = data.mean(axis=(0, 1, 2))
+            self.std = data.std(axis=(0, 1, 2))
+        else:
+            self.mean = data.mean(axis=0)
+            self.std = data.std(axis=0)
+
+        # Avoid division by zero
+        self.std = np.where(self.std == 0, 1.0, self.std)
+
+    def _build_train_transform(self) -> transforms.Compose:
+        """Build training augmentation transform."""
+        transform_list = []
+
+        # Random affine transforms
+        translate = None
+        if 'width_shift_range' in self.params or 'height_shift_range' in self.params:
+            width_shift = self.params.get('width_shift_range', 0)
+            height_shift = self.params.get('height_shift_range', 0)
+            translate = (width_shift, height_shift)
+
+        rotation = self.params.get('rotation_range', 0)
+
+        if translate or rotation:
+            transform_list.append(
+                transforms.RandomAffine(
+                    degrees=rotation,
+                    translate=translate
+                )
+            )
+
+        # Random horizontal flip
+        if self.params.get('horizontal_flip', False):
+            transform_list.append(transforms.RandomHorizontalFlip())
+
+        # Random vertical flip
+        if self.params.get('vertical_flip', False):
+            transform_list.append(transforms.RandomVerticalFlip())
+
+        # Zoom (using RandomResizedCrop as approximation)
+        zoom_range = self.params.get('zoom_range', 0)
+        if zoom_range:
+            if isinstance(zoom_range, (int, float)):
+                zoom_range = (1 - zoom_range, 1 + zoom_range)
+            # Note: this is an approximation, proper zoom would need custom implementation
+
+        # Normalization
+        if self.mean is not None and self.std is not None:
+            # Convert to torch tensors for normalization
+            # Note: mean/std are per-channel, applied after CHW conversion
+            mean_tensor = torch.from_numpy(self.mean).float()
+            std_tensor = torch.from_numpy(self.std).float()
+            transform_list.append(NormalizeTensor(mean_tensor, std_tensor))
+
+        return transforms.Compose(transform_list) if transform_list else None
+
+    def _build_eval_transform(self) -> transforms.Compose:
+        """Build evaluation transform (normalization only)."""
+        transform_list = []
+
+        if self.mean is not None and self.std is not None:
+            mean_tensor = torch.from_numpy(self.mean).float()
+            std_tensor = torch.from_numpy(self.std).float()
+            transform_list.append(NormalizeTensor(mean_tensor, std_tensor))
+
+        return transforms.Compose(transform_list) if transform_list else None
+
+    def standardize(self, data: np.ndarray) -> np.ndarray:
+        """Standardize data using computed mean/std. Used for inference."""
+        if self.mean is not None:
+            data = data - self.mean
+        if self.std is not None:
+            data = data / self.std
+        return data
 
 
-def _resample_np(data:tuple, sample_size:int, weights, replace:bool) -> tuple:
+class NormalizeTensor:
+    """Normalize a tensor with mean and standard deviation."""
+
+    def __init__(self, mean: torch.Tensor, std: torch.Tensor):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        # tensor is CHW, mean/std are per-channel
+        # Reshape mean/std for broadcasting
+        if tensor.dim() == 3:  # CHW
+            mean = self.mean.view(-1, 1, 1)
+            std = self.std.view(-1, 1, 1)
+        else:
+            mean = self.mean
+            std = self.std
+        return (tensor - mean) / std
+
+
+def _resample_np(data: tuple, sample_size: int, weights, replace: bool) -> tuple:
     """ Rasampling specifically for np arrays """
     data_size = data[0].shape[0]
     indices = np.random.choice(range(data_size), size=sample_size, replace=replace, p=weights)
     return tuple(np.take(feature, indices, axis=0) for feature in data)
 
 
+def _create_dataloader(data: tuple, batch_size: int, shuffle: bool = False,
+                       transform: Optional[Callable] = None, **kwargs) -> DataLoader:
+    """Create a PyTorch DataLoader from numpy data."""
+    dataset = ToupeeDataset(data[0], data[1], transform=transform)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=kwargs.get('num_workers', 0),
+        pin_memory=kwargs.get('pin_memory', True),
+        drop_last=False
+    )
+
+
 class Dataset:
     """ Class to load a dataset """
     def __init__(self,
-                 src_dir:str=None,
-                 training_file:str=None,
-                 validation_file:str=None,
-                 testing_file:str=None,
-                 data_format:str="",
-                 shuffle:bool=False,
-                 img_gen_params:dict=None,
-                 max_examples:int=None,
+                 src_dir: str = None,
+                 training_file: str = None,
+                 validation_file: str = None,
+                 testing_file: str = None,
+                 data_format: str = "",
+                 shuffle: bool = False,
+                 img_gen_params: dict = None,
+                 max_examples: int = None,
                  **kwargs):
         self.files = {}
-        self.train_flow = None
-        self.img_gen = None
+        self.img_aug: Optional[ImageAugmentation] = None
         self.shuffle = shuffle
         if src_dir is None and training_file is None:
             raise ValueError("Must specify one of src_dir or training_file")
@@ -151,69 +315,104 @@ class Dataset:
 
     def _process(self, **kwargs):
         self.size = dict_map(self.raw_data, lambda data: data[0].shape[0])
-        # Keras' fit() will expect that if specifying a steps_per_epoch, all batches will be the same size.
-        # Here, we set it to None so that when the dataset is not a generator we are not causing this to happen.
-        # Later, it will be set to a value wherever (if) the dataset becomes a generator.
-        self.steps_per_epoch = dict_map(self.size, lambda size: None)
+        self.batch_size = kwargs.get('batch_size', 32)
+        # Calculate steps_per_epoch for training
+        self.steps_per_epoch = dict_map(self.size,
+                                        lambda size: math.ceil(float(size) / self.batch_size))
+
+        # Set up image augmentation if specified
         if self.img_gen_params:
-            self.steps_per_epoch = dict_map(self.size,
-                                            lambda size: math.ceil(float(size) / kwargs['batch_size']))
-            self.img_gen = tf.keras.preprocessing.image.ImageDataGenerator(**self.img_gen_params)
-            self.img_gen.fit(self.raw_data['train'][0])
-            self.train_flow = self.img_gen.flow(self.raw_data['train'][0],
-                                                self.raw_data['train'][1],
-                                                batch_size=kwargs['batch_size'],
-                                                shuffle=self.shuffle)
-            # Only standardize validation set because the test set is standardized in predict_proba
-            self.standardized_raw_data = dict_map(self.raw_data,
-                                                  lambda data: (self.img_gen.standardize(np.copy(data[0])),
-                                                                data[1]))
-            self.standardized_data = dict_map(
-                {k: self.standardized_raw_data[k] for k in  ('valid', 'test')},
-                lambda data: convert_to_tf(data=data,
-                                            data_format=self.data_format,
-                                            **kwargs))
-        self.data = dict_map({k: self.raw_data[k] for k in  ('valid', 'test')},
-                             lambda data: convert_to_tf(data=data,
-                                                        data_format=self.data_format,
-                                                        **kwargs))
-        self.data['train'] = convert_to_tf(data=self.raw_data['train'],
-                                           data_format=self.data_format,
-                                           shuffle=self.shuffle,
-                                           gen_flow=self.train_flow,
-                                           **kwargs)
+            self.img_aug = ImageAugmentation(self.img_gen_params, self.raw_data['train'][0])
+            train_transform = self.img_aug.train_transform
+            eval_transform = self.img_aug.eval_transform
+        else:
+            train_transform = None
+            eval_transform = None
+
+        # Filter kwargs to remove keys we pass explicitly
+        dataloader_kwargs = {k: v for k, v in kwargs.items()
+                            if k not in ('batch_size', 'shuffle')}
+
+        # Create DataLoaders
+        self.data = {}
+
+        # Training DataLoader with augmentation
+        self.data['train'] = _create_dataloader(
+            self.raw_data['train'],
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            transform=train_transform,
+            **dataloader_kwargs
+        )
+
+        # Validation DataLoader with normalization only
+        if self.raw_data.get('valid') is not None:
+            self.data['valid'] = _create_dataloader(
+                self.raw_data['valid'],
+                batch_size=self.batch_size,
+                shuffle=False,
+                transform=eval_transform,
+                **dataloader_kwargs
+            )
+
+        # Test DataLoader with normalization only
+        if self.raw_data.get('test') is not None:
+            self.data['test'] = _create_dataloader(
+                self.raw_data['test'],
+                batch_size=self.batch_size,
+                shuffle=False,
+                transform=eval_transform,
+                **dataloader_kwargs
+            )
+
+        # Also create standardized versions for compatibility
+        if self.img_aug:
+            self.standardized_raw_data = dict_map(
+                self.raw_data,
+                lambda data: (self.img_aug.standardize(np.copy(data[0])), data[1]) if data else None
+            )
+            self.standardized_data = {}
+            for split in ('valid', 'test'):
+                if self.standardized_raw_data.get(split) is not None:
+                    self.standardized_data[split] = _create_dataloader(
+                        self.standardized_raw_data[split],
+                        batch_size=self.batch_size,
+                        shuffle=False,
+                        **dataloader_kwargs
+                    )
+
         self.kwargs = kwargs
 
-    def get_training_handle(self) -> tuple:
-        """ Return the appropriate handle to pass to keras .fit """
+    def get_training_handle(self) -> DataLoader:
+        """ Return the DataLoader for training """
         return self.data['train']
 
-    def get_handle(self, split:str, standardized:bool=False):
-        """ Return the appropriate handle to pass to keras .fit as validation_data """
-        if standardized and self.img_gen:
-            return self.standardized_data[split]
+    def get_handle(self, split: str, standardized: bool = False) -> DataLoader:
+        """ Return the DataLoader for a given split """
+        if standardized and self.img_aug and hasattr(self, 'standardized_data'):
+            return self.standardized_data.get(split, self.data[split])
         return self.data[split]
 
-    def get_validation_handle(self, standardized:bool=False):
-        """ Return the appropriate handle to pass to keras .fit as validation_data """
+    def get_validation_handle(self, standardized: bool = False) -> DataLoader:
+        """ Return the DataLoader for validation """
         return self.get_handle(split='valid', standardized=standardized)
 
-    def get_testing_handle(self, standardized:bool=False):
-        """ Return the appropriate handle to pass to keras .evaluate """
+    def get_testing_handle(self, standardized: bool = False) -> DataLoader:
+        """ Return the DataLoader for testing """
         return self.get_handle(split='test', standardized=standardized)
 
-    def resample(self, sample_size:int=None, weights=None, replace:bool=True):
+    def resample(self, sample_size: int = None, weights=None, replace: bool = True):
         """ Promote the dataset to a resampling one """
         self.resample_size = sample_size or self.raw_data['train'][0].shape[0]
         self.resample_weights = weights
         self.resample_replace = replace
         self.__class__ = ResamplingDataset
         return self
-    
+
     def copy_with_new_data(self, new_data):
         """ Create a new copy but with new data. Useful for distillation and post-processing. """
         new_dataset = copy.copy(self)
-        new_dataset.raw_data
+        new_dataset.raw_data = new_data
         new_dataset._process(**self.kwargs)
         return new_dataset
 
@@ -229,7 +428,6 @@ class Dataset:
         """ Map a function that operates on a train/valid/test split to all three. """
         return self.copy_with_new_data(dict_map(self.raw_data, f))
 
-
     def distillation_dataset(self, model):
         return self.map_splits(lambda raw_data: (raw_data[0], model.predict_proba(raw_data[0])))
 
@@ -244,24 +442,35 @@ class ResamplingDataset(Dataset):
         """ Change the resampling weights """
         self.resample_weights = weights
 
-    def get_training_handle(self, resample=True):
-        """ Returns training tf.dataset, resampled every time from raw_data """
-        mapper = {'.h5': None,
-                  '.npz': _resample_np,
-                  '.tfrecord': None
-            }
+    def get_training_handle(self, resample=True) -> DataLoader:
+        """ Returns training DataLoader, resampled every time from raw_data """
+        # Filter kwargs to remove keys we pass explicitly
+        dataloader_kwargs = {k: v for k, v in self.kwargs.items()
+                            if k not in ('batch_size', 'shuffle')}
+
         if not resample:
-            return convert_to_tf(self.raw_data['train'],
-                                 data_format=self.data_format,
-                                 **self.kwargs) #this guarantees we do not apply transformations
-        resampled = mapper[self.data_format](self.raw_data['train'],
-                                             sample_size=self.resample_size,
-                                             weights=self.resample_weights,
-                                             replace=self.resample_replace)
-        resampled_flow = None
-        if self.img_gen:
-            #TODO: use the sample weights here?
-            resampled_flow = self.img_gen.flow(resampled[0],
-                                          resampled[1],
-                                          batch_size=self.kwargs['batch_size'])
-        return convert_to_tf(resampled, self.data_format, shuffle=self.shuffle, gen_flow=resampled_flow, **self.kwargs)
+            return _create_dataloader(
+                self.raw_data['train'],
+                batch_size=self.batch_size,
+                shuffle=False,
+                **dataloader_kwargs
+            )
+
+        # Resample the data
+        resampled = _resample_np(
+            self.raw_data['train'],
+            sample_size=self.resample_size,
+            weights=self.resample_weights,
+            replace=self.resample_replace
+        )
+
+        # Apply augmentation transform if available
+        transform = self.img_aug.train_transform if self.img_aug else None
+
+        return _create_dataloader(
+            resampled,
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            transform=transform,
+            **dataloader_kwargs
+        )
