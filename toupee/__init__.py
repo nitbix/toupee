@@ -1,10 +1,12 @@
 import toupee.data as data
 import toupee.model as model
+import toupee.model_builder as model_builder
 import toupee.ensembles as ensembles
 import toupee.parameters as parameters
 import toupee.config as config
 import toupee.utils as utils
 import toupee.adversarial as adversarial
+import toupee.metrics as metrics
 
 from toupee.utils import log_metrics
 

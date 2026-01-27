@@ -11,7 +11,6 @@ __docformat__ = 'restructedtext en'
 import time
 import logging
 import numpy as np # type: ignore
-import tensorflow as tf # type: ignore
 import pandas as pd # type: ignore
 import math
 import uuid

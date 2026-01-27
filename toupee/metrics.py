@@ -50,6 +50,15 @@ def calibration(y_true, y_pred, n_bins=10):
             'rmsce': np.mean(rmsce_bin)
     }
 
+
+def _to_numpy(tensor):
+    """Convert a tensor (PyTorch or numpy) to numpy array."""
+    if hasattr(tensor, 'numpy'):
+        # PyTorch tensor
+        return tensor.cpu().numpy() if hasattr(tensor, 'cpu') else tensor.numpy()
+    return np.asarray(tensor)
+
+
 def evaluate(model, test_data, adversarial_gradient_source=None):
     """ Evaluate model on some test data handle """
     #TODO: update for different data formats
@@ -60,13 +69,21 @@ def evaluate(model, test_data, adversarial_gradient_source=None):
     all_x = []
     all_adversarial = []
     for (x, y_true) in test_data:
-        all_x.append(x)
-        all_y_pred.append(model.predict_classes(x))
-        all_y_pred_onehot.append(model.predict_proba(x))
-        all_y_true.append(np.argmax(y_true.numpy(), axis=1))
-        all_y_true_onehot.append(y_true.numpy())
+        # Convert to numpy if needed (PyTorch DataLoader returns tensors)
+        x_np = _to_numpy(x)
+        y_true_np = _to_numpy(y_true)
+
+        # For image data, DataLoader returns NCHW, need NHWC for predict methods
+        if x_np.ndim == 4 and x_np.shape[1] in (1, 3, 4):  # Likely NCHW
+            x_np = np.transpose(x_np, (0, 2, 3, 1))  # NCHW -> NHWC
+
+        all_x.append(x_np)
+        all_y_pred.append(model.predict_classes(x_np))
+        all_y_pred_onehot.append(model.predict_proba(x_np))
+        all_y_true.append(np.argmax(y_true_np, axis=1))
+        all_y_true_onehot.append(y_true_np)
         if adversarial_gradient_source:
-            all_adversarial.append(tp.adversarial.FGSM(adversarial_gradient_source, x, y_true))
+            all_adversarial.append(tp.adversarial.FGSM(adversarial_gradient_source, x_np, y_true_np))
     x = np.concatenate(all_x)
     if adversarial_gradient_source:
         adversarial_perturbation = np.concatenate(all_adversarial)

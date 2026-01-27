@@ -53,13 +53,18 @@ def load_parameters(filename: str) -> parameters.Parameters:
     """ Loads a parameters file """
     filename = os.path.expanduser(filename)
     prev_dir = os.getcwd()
-    os.chdir(os.path.dirname(filename))
-    with open(os.path.basename(filename)) as f:
-        r = yaml.load(f, Loader=Loader)
-    for d in defaults:
-        if d not in r:
-            r[d] = defaults[d]
-    return parameters.Parameters(**r)
+    config_dir = os.path.dirname(filename)
+    if config_dir:
+        os.chdir(config_dir)
+    try:
+        with open(os.path.basename(filename)) as f:
+            r = yaml.load(f, Loader=Loader)
+        for d in defaults:
+            if d not in r:
+                r[d] = defaults[d]
+        return parameters.Parameters(**r)
+    finally:
+        os.chdir(prev_dir)
 
 def setup_yaml():
     YamlIncludeConstructor.add_to_loader_class(loader_class=Loader)
